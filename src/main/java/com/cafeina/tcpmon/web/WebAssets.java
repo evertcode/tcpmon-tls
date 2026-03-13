@@ -249,11 +249,6 @@ public final class WebAssets {
                     .editor-card {
                       padding: 12px;
                     }
-                    .route-grid {
-                      display: grid;
-                      grid-template-columns: 1.2fr 1fr;
-                      gap: 12px;
-                    }
                     .route-title {
                       display: flex;
                       justify-content: space-between;
@@ -278,12 +273,6 @@ public final class WebAssets {
                       font-size: 11px;
                       text-transform: uppercase;
                       letter-spacing: 0.04em;
-                    }
-                    .route-box {
-                      background: var(--surface-2);
-                      border: 1px solid var(--border);
-                      border-radius: 10px;
-                      padding: 10px;
                     }
                     .request-toolbar {
                       display: grid;
@@ -408,7 +397,6 @@ public final class WebAssets {
                     }
                     @media (max-width: 1180px) {
                       .layout,
-                      .route-grid,
                       .payload-grid {
                         grid-template-columns: 1fr;
                       }
@@ -616,27 +604,20 @@ public final class WebAssets {
                       const pending = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
                       document.getElementById('route-header').innerHTML = `
                         <section class="route-card">
-                          <div class="route-grid">
+                          <div class="route-title">
                             <div>
-                              <div class="route-title">
-                                <div>
-                                  <strong>${escapeHtml(activeRoute)}</strong>
-                                  <div class="muted">Route overview and recorded requests</div>
-                                </div>
-                                <span class="pill route">${escapeHtml(sessions.length)} requests</span>
-                              </div>
-                              <div class="route-meta-grid">
-                                <div><span class="label">Target</span><span class="mono">${escapeHtml(first.targetAddress || 'Unknown')}</span></div>
-                                <div><span class="label">Latest client</span><span class="mono">${escapeHtml(first.clientAddress || 'Unknown')}</span></div>
-                                <div><span class="label">Open</span>${escapeHtml(open)}</div>
-                                <div><span class="label">Pending</span>${escapeHtml(pending)}</div>
-                              </div>
+                              <strong>${escapeHtml(activeRoute)}</strong>
+                              <div class="muted">Route overview and recorded requests</div>
                             </div>
-                            <div class="route-box">
-                              <span class="label">Current selection</span>
-                              <div class="mono">${escapeHtml(activeSession || 'No request selected')}</div>
-                              <div class="muted" style="margin-top:8px;">Select a request below to inspect request body, response body, headers and event stream.</div>
-                            </div>
+                            <span class="pill route">${escapeHtml(sessions.length)} requests</span>
+                          </div>
+                          <div class="route-meta-grid">
+                            <div><span class="label">Listener</span><span class="mono">${escapeHtml(first.listenerAddress || 'Unknown')}</span></div>
+                            <div><span class="label">Target</span><span class="mono">${escapeHtml(first.targetAddress || 'Unknown')}</span></div>
+                            <div><span class="label">Latest client</span><span class="mono">${escapeHtml(first.clientAddress || 'Unknown')}</span></div>
+                            <div><span class="label">Selected request</span><span class="mono">${escapeHtml(activeSession || 'None')}</span></div>
+                            <div><span class="label">Open</span>${escapeHtml(open)}</div>
+                            <div><span class="label">Pending</span>${escapeHtml(pending)}</div>
                           </div>
                         </section>
                       `;

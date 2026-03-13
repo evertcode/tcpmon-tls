@@ -83,6 +83,7 @@ public final class SessionRecord {
         payload.put("endedAt", endedAt);
         payload.put("status", status);
         payload.put("clientAddress", clientAddress);
+        payload.put("listenerAddress", listenerAddress);
         payload.put("targetAddress", targetAddress);
         payload.put("eventCount", events.size());
         payload.put("pendingCount", pendingPayloads.size());
