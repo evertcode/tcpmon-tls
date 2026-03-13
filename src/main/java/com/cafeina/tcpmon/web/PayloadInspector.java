@@ -2,13 +2,19 @@ package com.cafeina.tcpmon.web;
 
 import com.cafeina.tcpmon.session.SessionEvent;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
 
 final class PayloadInspector {
     private static final Set<String> HTTP_METHODS = Set.of(
@@ -64,23 +70,27 @@ final class PayloadInspector {
         }
 
         List<Map<String, String>> headers = new ArrayList<>();
+        Map<String, String> headerMap = new LinkedHashMap<>();
         for (int index = 1; index < lines.length; index++) {
             String line = lines[index];
             int separator = line.indexOf(':');
             if (separator > 0) {
-                headers.add(Map.of(
-                        "name", line.substring(0, separator).trim(),
-                        "value", line.substring(separator + 1).trim()));
+                String name = line.substring(0, separator).trim();
+                String value = line.substring(separator + 1).trim();
+                headers.add(Map.of("name", name, "value", value));
+                headerMap.put(name.toLowerCase(Locale.ROOT), value);
             }
         }
 
-        byte[] bodyBytes = latin1.substring(headerEnd + 4).getBytes(StandardCharsets.ISO_8859_1);
+        byte[] wireBodyBytes = latin1.substring(headerEnd + 4).getBytes(StandardCharsets.ISO_8859_1);
+        byte[] decodedBodyBytes = decodeBody(wireBodyBytes, headerMap);
         decoded.put("isHttp", true);
         decoded.put("startLine", lines[0]);
         decoded.put("headers", headers);
         decoded.put("headersText", headersBlock);
-        decoded.put("bodyText", sanitize(new String(bodyBytes, StandardCharsets.UTF_8)));
-        decoded.put("bodyBase64", Base64.getEncoder().encodeToString(bodyBytes));
+        decoded.put("bodyText", sanitize(new String(decodedBodyBytes, StandardCharsets.UTF_8)));
+        decoded.put("bodyBase64", Base64.getEncoder().encodeToString(decodedBodyBytes));
+        decoded.put("wireBodyBase64", Base64.getEncoder().encodeToString(wireBodyBytes));
         return decoded;
     }
 
@@ -97,5 +107,79 @@ final class PayloadInspector {
 
     private static String sanitize(String value) {
         return value.replaceAll("[\\p{Cntrl}&&[^\r\n\t]]", ".");
+    }
+
+    private static byte[] decodeBody(byte[] bodyBytes, Map<String, String> headers) {
+        byte[] unchunked = headers.getOrDefault("transfer-encoding", "").toLowerCase(Locale.ROOT).contains("chunked")
+                ? decodeChunked(bodyBytes)
+                : bodyBytes;
+        String contentEncoding = headers.getOrDefault("content-encoding", "").toLowerCase(Locale.ROOT);
+        return switch (contentEncoding) {
+            case "gzip" -> decompress(unchunked, Compression.GZIP);
+            case "deflate" -> decompress(unchunked, Compression.DEFLATE);
+            case "br" -> "[brotli body not decoded]".getBytes(StandardCharsets.UTF_8);
+            default -> unchunked;
+        };
+    }
+
+    private static byte[] decodeChunked(byte[] bodyBytes) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        int offset = 0;
+        while (offset < bodyBytes.length) {
+            int lineEnd = indexOf(bodyBytes, offset, "\r\n".getBytes(StandardCharsets.ISO_8859_1));
+            if (lineEnd < 0) {
+                return bodyBytes;
+            }
+            String sizeLine = new String(bodyBytes, offset, lineEnd - offset, StandardCharsets.ISO_8859_1).trim();
+            int separator = sizeLine.indexOf(';');
+            String sizeToken = separator >= 0 ? sizeLine.substring(0, separator) : sizeLine;
+            int chunkSize;
+            try {
+                chunkSize = Integer.parseInt(sizeToken.trim(), 16);
+            } catch (NumberFormatException ignored) {
+                return bodyBytes;
+            }
+            offset = lineEnd + 2;
+            if (chunkSize == 0) {
+                break;
+            }
+            if (offset + chunkSize > bodyBytes.length) {
+                return bodyBytes;
+            }
+            output.write(bodyBytes, offset, chunkSize);
+            offset += chunkSize + 2;
+        }
+        return output.toByteArray();
+    }
+
+    private static byte[] decompress(byte[] bodyBytes, Compression compression) {
+        try (ByteArrayInputStream input = new ByteArrayInputStream(bodyBytes);
+             java.io.InputStream decompressor = compression == Compression.GZIP
+                     ? new GZIPInputStream(input)
+                     : new InflaterInputStream(input);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            decompressor.transferTo(output);
+            return output.toByteArray();
+        } catch (IOException ignored) {
+            return bodyBytes;
+        }
+    }
+
+    private static int indexOf(byte[] haystack, int start, byte[] needle) {
+        outer:
+        for (int index = start; index <= haystack.length - needle.length; index++) {
+            for (int probe = 0; probe < needle.length; probe++) {
+                if (haystack[index + probe] != needle[probe]) {
+                    continue outer;
+                }
+            }
+            return index;
+        }
+        return -1;
+    }
+
+    private enum Compression {
+        GZIP,
+        DEFLATE
     }
 }

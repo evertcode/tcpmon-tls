@@ -2,6 +2,8 @@ package com.cafeina.tcpmon.web;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.util.zip.GZIPOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -37,5 +39,43 @@ class PayloadInspectorTest {
 
         assertFalse((Boolean) decoded.get("isHttp"));
         assertTrue(decoded.containsKey("rawText"));
+    }
+
+    @Test
+    void decodesChunkedHttpBody() {
+        byte[] payload = ("HTTP/1.1 200 OK\r\n"
+                + "Transfer-Encoding: chunked\r\n\r\n"
+                + "4\r\nWiki\r\n"
+                + "5\r\npedia\r\n"
+                + "0\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1);
+
+        Map<String, Object> decoded = PayloadInspector.inspectBytes(payload);
+
+        assertTrue((Boolean) decoded.get("isHttp"));
+        assertEquals("Wikipedia", decoded.get("bodyText"));
+    }
+
+    @Test
+    void decodesGzipHttpBody() throws Exception {
+        byte[] compressed = gzip("hello gzip");
+        byte[] headers = ("HTTP/1.1 200 OK\r\n"
+                + "Content-Encoding: gzip\r\n"
+                + "Content-Length: " + compressed.length + "\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1);
+        byte[] payload = new byte[headers.length + compressed.length];
+        System.arraycopy(headers, 0, payload, 0, headers.length);
+        System.arraycopy(compressed, 0, payload, headers.length, compressed.length);
+
+        Map<String, Object> decoded = PayloadInspector.inspectBytes(payload);
+
+        assertTrue((Boolean) decoded.get("isHttp"));
+        assertEquals("hello gzip", decoded.get("bodyText"));
+    }
+
+    private static byte[] gzip(String body) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(output)) {
+            gzip.write(body.getBytes(StandardCharsets.UTF_8));
+        }
+        return output.toByteArray();
     }
 }
