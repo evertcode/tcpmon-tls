@@ -89,6 +89,7 @@ final class PayloadInspector {
         byte[] decodedBodyBytes = decodeBody(wireBodyBytes, headerMap);
         decoded.put("isHttp", true);
         decoded.put("startLine", lines[0]);
+        decoded.put("request", parseRequestLine(lines[0]));
         decoded.put("headers", headers);
         decoded.put("headersText", headersBlock);
         decoded.put("bodyText", sanitize(new String(decodedBodyBytes, StandardCharsets.UTF_8)));
@@ -106,6 +107,27 @@ final class PayloadInspector {
             return false;
         }
         return HTTP_METHODS.contains(startLine.substring(0, separator));
+    }
+
+    private static Map<String, Object> parseRequestLine(String startLine) {
+        if (startLine.startsWith("HTTP/")) {
+            return null;
+        }
+        String[] parts = startLine.split(" ", 3);
+        if (parts.length != 3) {
+            return null;
+        }
+        String target = parts[1];
+        int querySeparator = target.indexOf('?');
+        String path = querySeparator >= 0 ? target.substring(0, querySeparator) : target;
+        String query = querySeparator >= 0 ? target.substring(querySeparator + 1) : "";
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("method", parts[0]);
+        request.put("path", path);
+        request.put("query", query);
+        request.put("version", parts[2]);
+        return request;
     }
 
     private static String sanitize(String value) {

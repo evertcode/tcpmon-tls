@@ -29,4 +29,23 @@ class HttpMessageEditorTest {
         assertFalse(text.contains("Transfer-Encoding:"));
         assertTrue(text.endsWith("\r\n\r\n{\"ok\":true}"));
     }
+
+    @Test
+    void buildsRequestFromStructuredFields() throws Exception {
+        byte[] payload = HttpMessageEditor.buildHttpMessage(objectMapper.readTree("""
+                {
+                  "method": "GET",
+                  "path": "/search",
+                  "query": "q=test&page=2",
+                  "version": "HTTP/1.1",
+                  "headersText": "Host: example.com",
+                  "bodyText": ""
+                }
+                """));
+
+        String text = new String(payload, StandardCharsets.ISO_8859_1);
+        assertTrue(text.startsWith("GET /search?q=test&page=2 HTTP/1.1\r\n"));
+        assertTrue(text.contains("Host: example.com\r\n"));
+        assertFalse(text.contains("Content-Length:"));
+    }
 }

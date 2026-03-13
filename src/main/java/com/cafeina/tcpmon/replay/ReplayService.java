@@ -10,18 +10,22 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.timeout.ReadTimeoutException;
+import io.netty.handler.timeout.ReadTimeoutHandler;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ReplayService {
     private final ProxyConfig config;
@@ -33,6 +37,7 @@ public final class ReplayService {
     public Map<String, Object> replay(byte[] payload, ReplayDestination destination) throws Exception {
         EventLoopGroup group = new NioEventLoopGroup(1);
         CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger bytesReceived = new AtomicInteger();
         Instant startedAt = Instant.now();
         try {
             Endpoint endpoint = resolveEndpoint(destination);
@@ -47,25 +52,31 @@ public final class ReplayService {
                             if (sslContext != null) {
                                 channel.pipeline().addLast("ssl", newClientHandler(destination, endpoint, sslContext, channel.alloc()));
                             }
+                            channel.pipeline().addLast("read-timeout", new ReadTimeoutHandler(2));
                             channel.pipeline().addLast(new io.netty.channel.SimpleChannelInboundHandler<io.netty.buffer.ByteBuf>() {
                                 @Override
-                                public void channelActive(io.netty.channel.ChannelHandlerContext context) {
+                                public void channelActive(ChannelHandlerContext context) {
                                     context.writeAndFlush(Unpooled.wrappedBuffer(payload))
-                                            .addListener((ChannelFutureListener) future -> context.close());
+                                            .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
                                 }
 
                                 @Override
-                                protected void channelRead0(io.netty.channel.ChannelHandlerContext context, io.netty.buffer.ByteBuf msg) {
+                                protected void channelRead0(ChannelHandlerContext context, io.netty.buffer.ByteBuf msg) {
+                                    bytesReceived.addAndGet(msg.readableBytes());
                                     msg.skipBytes(msg.readableBytes());
                                 }
 
                                 @Override
-                                public void channelInactive(io.netty.channel.ChannelHandlerContext context) {
+                                public void channelInactive(ChannelHandlerContext context) {
                                     latch.countDown();
                                 }
 
                                 @Override
-                                public void exceptionCaught(io.netty.channel.ChannelHandlerContext context, Throwable cause) {
+                                public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
+                                    if (cause instanceof ReadTimeoutException) {
+                                        context.close();
+                                        return;
+                                    }
                                     latch.countDown();
                                     context.close();
                                 }
@@ -78,6 +89,7 @@ public final class ReplayService {
             return Map.of(
                     "status", "OK",
                     "bytesSent", payload.length,
+                    "bytesReceived", bytesReceived.get(),
                     "durationMillis", Duration.between(startedAt, Instant.now()).toMillis(),
                     "destination", destination.name().toLowerCase(),
                     "target", endpoint.host() + ":" + endpoint.port());

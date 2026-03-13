@@ -28,9 +28,30 @@ class PayloadInspectorTest {
         assertEquals("POST /api/items HTTP/1.1", decoded.get("startLine"));
         assertEquals("{\"ok\":true}", decoded.get("bodyText"));
         @SuppressWarnings("unchecked")
+        Map<String, Object> request = (Map<String, Object>) decoded.get("request");
+        assertEquals("POST", request.get("method"));
+        assertEquals("/api/items", request.get("path"));
+        assertEquals("", request.get("query"));
+        assertEquals("HTTP/1.1", request.get("version"));
+        @SuppressWarnings("unchecked")
         List<Map<String, String>> headers = (List<Map<String, String>>) decoded.get("headers");
         assertEquals("Host", headers.getFirst().get("name"));
         assertEquals("example.com", headers.getFirst().get("value"));
+    }
+
+    @Test
+    void parsesRequestQueryFromStartLine() {
+        byte[] payload = ("GET /search?q=test&page=2 HTTP/1.1\r\n"
+                + "Host: example.com\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1);
+
+        Map<String, Object> decoded = PayloadInspector.inspectBytes(payload);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> request = (Map<String, Object>) decoded.get("request");
+        assertEquals("GET", request.get("method"));
+        assertEquals("/search", request.get("path"));
+        assertEquals("q=test&page=2", request.get("query"));
+        assertEquals("HTTP/1.1", request.get("version"));
     }
 
     @Test

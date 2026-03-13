@@ -12,7 +12,7 @@ final class HttpMessageEditor {
     }
 
     static byte[] buildHttpMessage(JsonNode httpNode) {
-        String startLine = httpNode.path("startLine").asText("").trim();
+        String startLine = buildStartLine(httpNode);
         String headersText = httpNode.path("headersText").asText("");
         String bodyText = httpNode.path("bodyText").asText("");
         if (startLine.isBlank()) {
@@ -52,6 +52,24 @@ final class HttpMessageEditor {
         System.arraycopy(head, 0, payload, 0, head.length);
         System.arraycopy(body, 0, payload, head.length, body.length);
         return payload;
+    }
+
+    private static String buildStartLine(JsonNode httpNode) {
+        if (httpNode.hasNonNull("method") || httpNode.hasNonNull("path") || httpNode.hasNonNull("version")) {
+            String method = httpNode.path("method").asText("").trim();
+            String path = httpNode.path("path").asText("/").trim();
+            String query = httpNode.path("query").asText("").trim();
+            String version = httpNode.path("version").asText("HTTP/1.1").trim();
+            if (method.isBlank()) {
+                throw new IllegalArgumentException("HTTP method is required");
+            }
+            if (path.isBlank()) {
+                path = "/";
+            }
+            String target = query.isBlank() ? path : path + "?" + query;
+            return method + " " + target + " " + version;
+        }
+        return httpNode.path("startLine").asText("").trim();
     }
 
     private static String formatHeaderName(String normalized) {

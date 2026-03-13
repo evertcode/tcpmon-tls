@@ -114,6 +114,28 @@ public final class WebAssets {
                       border-radius: 12px;
                       padding: 12px;
                     }
+                    .request-grid {
+                      display: grid;
+                      grid-template-columns: 160px 1fr 220px 140px;
+                      gap: 10px;
+                    }
+                    .status-banner {
+                      margin: 0 0 16px;
+                      padding: 12px 14px;
+                      border-radius: 12px;
+                      border: 1px solid rgba(255,255,255,0.08);
+                      font-size: 13px;
+                    }
+                    .status-banner.success {
+                      background: rgba(79,209,197,0.12);
+                      color: #baf7f1;
+                      border-color: rgba(79,209,197,0.35);
+                    }
+                    .status-banner.error {
+                      background: rgba(246,173,85,0.12);
+                      color: #ffd7a5;
+                      border-color: rgba(246,173,85,0.35);
+                    }
                     .meta-grid {
                       display: grid;
                       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -149,6 +171,7 @@ public final class WebAssets {
                     @media (max-width: 900px) {
                       main { grid-template-columns: 1fr; }
                       .flow { grid-template-columns: 1fr; }
+                      .request-grid { grid-template-columns: 1fr; }
                     }
                   </style>
                 </head>
@@ -170,10 +193,17 @@ public final class WebAssets {
                   <script>
                     let activeSession = null;
                     let activeExchangeIndex = 0;
+                    let statusMessage = null;
 
                     async function fetchJson(url, options) {
                       const response = await fetch(url, options);
-                      return response.json();
+                      const data = await response.json();
+                      if (!response.ok) {
+                        const error = new Error(data.error || 'Request failed');
+                        error.payload = data;
+                        throw error;
+                      }
+                      return data;
                     }
 
                     async function refreshSessions() {
@@ -218,7 +248,9 @@ public final class WebAssets {
                       const exchangeList = renderExchangeList(exchanges);
                       const requestView = renderPayloadCard('Request', activeExchange.request || data.latestRequest, 'CLIENT_TO_TARGET');
                       const responseView = renderPayloadCard('Response', activeExchange.response || data.latestResponse, 'TARGET_TO_CLIENT');
+                      const banner = renderStatusBanner();
                       details.innerHTML = `
+                        ${banner}
                         <div class="meta-grid">
                           <div>
                             <div class="muted">${data.clientAddress} -> ${data.targetAddress}</div>
@@ -234,6 +266,20 @@ public final class WebAssets {
                         <h4>Events</h4>
                         ${events || '<div class="muted">No events yet.</div>'}
                         <div id="editor"></div>`;
+                    }
+
+                    function renderStatusBanner() {
+                      if (!statusMessage) {
+                        return '';
+                      }
+                      return `<div class="status-banner ${statusMessage.type}">${escapeHtml(statusMessage.text)}</div>`;
+                    }
+
+                    function setStatus(type, text) {
+                      statusMessage = { type, text };
+                      if (activeSession) {
+                        loadSession(activeSession);
+                      }
                     }
 
                     function renderExchangeList(exchanges) {
@@ -306,18 +352,39 @@ public final class WebAssets {
                     }
 
                     async function releasePending(pendingId) {
-                      await fetchJson('/api/pending/' + pendingId + '/forward', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-                      if (activeSession) await loadSession(activeSession);
+                      try {
+                        await fetchJson('/api/pending/' + pendingId + '/forward', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                        setStatus('success', `Pending payload ${pendingId} forwarded`);
+                      } catch (error) {
+                        setStatus('error', error.message);
+                      }
                     }
 
                     function showEdit(pendingId, decodedPayload, base64Value) {
                       const editor = document.getElementById('editor');
                       if (decodedPayload?.isHttp) {
+                        const request = decodedPayload.request || {};
                         editor.innerHTML = `
                           <h4>Edit pending HTTP payload ${pendingId}</h4>
                           <div class="editor-grid">
-                            <label class="muted">Start line</label>
-                            <input id="http-start-line" value="${escapeAttr(decodedPayload.startLine || '')}">
+                            <div class="request-grid">
+                              <div>
+                                <label class="muted">Method</label>
+                                <input id="http-method" value="${escapeAttr(request.method || '')}">
+                              </div>
+                              <div>
+                                <label class="muted">Path</label>
+                                <input id="http-path" value="${escapeAttr(request.path || '')}">
+                              </div>
+                              <div>
+                                <label class="muted">Query</label>
+                                <input id="http-query" value="${escapeAttr(request.query || '')}">
+                              </div>
+                              <div>
+                                <label class="muted">Version</label>
+                                <input id="http-version" value="${escapeAttr(request.version || 'HTTP/1.1')}">
+                              </div>
+                            </div>
                             <label class="muted">Headers</label>
                             <textarea id="http-headers">${escapeHtml(decodedPayload.headersText || '')}</textarea>
                             <label class="muted">Body</label>
@@ -340,39 +407,60 @@ public final class WebAssets {
 
                     async function submitEdited(pendingId) {
                       const content = document.getElementById('payload-editor').value;
-                      await fetchJson('/api/pending/' + pendingId + '/forward', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ encoding: 'utf8', content })
-                      });
-                      if (activeSession) await loadSession(activeSession);
+                      try {
+                        await fetchJson('/api/pending/' + pendingId + '/forward', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ encoding: 'utf8', content })
+                        });
+                        setStatus('success', `Pending payload ${pendingId} forwarded with edits`);
+                      } catch (error) {
+                        setStatus('error', error.message);
+                      }
                     }
 
                     async function submitStructuredHttp(pendingId) {
-                      const startLine = document.getElementById('http-start-line').value;
+                      const method = document.getElementById('http-method').value;
+                      const path = document.getElementById('http-path').value;
+                      const query = document.getElementById('http-query').value;
+                      const version = document.getElementById('http-version').value;
                       const headersText = document.getElementById('http-headers').value;
                       const bodyText = document.getElementById('http-body').value;
-                      await fetchJson('/api/pending/' + pendingId + '/forward', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          http: {
-                            startLine,
-                            headersText,
-                            bodyText
-                          }
-                        })
-                      });
-                      if (activeSession) await loadSession(activeSession);
+                      try {
+                        await fetchJson('/api/pending/' + pendingId + '/forward', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            http: {
+                              method,
+                              path,
+                              query,
+                              version,
+                              headersText,
+                              bodyText
+                            }
+                          })
+                        });
+                        setStatus('success', `Pending HTTP payload ${pendingId} forwarded with structured edits`);
+                      } catch (error) {
+                        setStatus('error', error.message);
+                      }
                     }
 
                     async function replayEvent(sessionId, eventId, destination) {
-                      const result = await fetchJson('/api/replay', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionId, eventId, destination })
-                      });
-                      alert(JSON.stringify(result, null, 2));
+                      try {
+                        const result = await fetchJson('/api/replay', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ sessionId, eventId, destination })
+                        });
+                        setStatus(
+                          'success',
+                          `Replay ${destination} completed: sent ${result.bytesSent} bytes, received ${result.bytesReceived ?? 0} bytes from ${result.target}`
+                        );
+                      } catch (error) {
+                        setStatus('error', error.message);
+                      }
                     }
 
                     refreshSessions();
