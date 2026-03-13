@@ -1,5 +1,7 @@
 package com.cafeina.tcpmon.web;
 
+import com.aayushatharva.brotli4j.Brotli4jLoader;
+import com.aayushatharva.brotli4j.decoder.BrotliInputStream;
 import com.cafeina.tcpmon.session.SessionEvent;
 
 import java.io.ByteArrayInputStream;
@@ -19,6 +21,7 @@ import java.util.zip.InflaterInputStream;
 final class PayloadInspector {
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
+    private static volatile boolean brotliLoaded;
 
     private PayloadInspector() {
     }
@@ -117,7 +120,7 @@ final class PayloadInspector {
         return switch (contentEncoding) {
             case "gzip" -> decompress(unchunked, Compression.GZIP);
             case "deflate" -> decompress(unchunked, Compression.DEFLATE);
-            case "br" -> "[brotli body not decoded]".getBytes(StandardCharsets.UTF_8);
+            case "br" -> decompressBrotli(unchunked);
             default -> unchunked;
         };
     }
@@ -162,6 +165,34 @@ final class PayloadInspector {
             return output.toByteArray();
         } catch (IOException ignored) {
             return bodyBytes;
+        }
+    }
+
+    private static byte[] decompressBrotli(byte[] bodyBytes) {
+        try {
+            ensureBrotliAvailable();
+        } catch (Throwable ignored) {
+            return "[brotli body not decoded: native library unavailable]".getBytes(StandardCharsets.UTF_8);
+        }
+
+        try (ByteArrayInputStream input = new ByteArrayInputStream(bodyBytes);
+             BrotliInputStream brotliInput = new BrotliInputStream(input);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            brotliInput.transferTo(output);
+            return output.toByteArray();
+        } catch (IOException ignored) {
+            return bodyBytes;
+        }
+    }
+
+    private static void ensureBrotliAvailable() {
+        if (!brotliLoaded) {
+            synchronized (PayloadInspector.class) {
+                if (!brotliLoaded) {
+                    Brotli4jLoader.ensureAvailability();
+                    brotliLoaded = true;
+                }
+            }
         }
     }
 

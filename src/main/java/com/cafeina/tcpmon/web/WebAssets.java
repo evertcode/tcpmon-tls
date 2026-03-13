@@ -102,6 +102,18 @@ public final class WebAssets {
                       max-height: 420px;
                       overflow: auto;
                     }
+                    .editor-grid {
+                      display: grid;
+                      gap: 10px;
+                    }
+                    .editor-grid input, .editor-grid textarea {
+                      width: 100%;
+                      background: #09131f;
+                      color: white;
+                      border: 1px solid rgba(255,255,255,0.1);
+                      border-radius: 12px;
+                      padding: 12px;
+                    }
                     .meta-grid {
                       display: grid;
                       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -194,7 +206,7 @@ public final class WebAssets {
                           : '';
                         const pending = event.pendingId
                           ? `<button onclick="releasePending('${event.pendingId}')">Forward original</button>
-                             <button onclick="showEdit('${event.pendingId}', '${event.details?.base64 || ''}')">Edit/Forward</button>`
+                             <button onclick='showEdit("${event.pendingId}", ${JSON.stringify(event.decoded || null)}, "${event.details?.base64 || ''}")'>Edit/Forward</button>`
                           : '';
                         return `<div class="panel" style="margin-bottom:12px">
                           <div><strong>${event.type}</strong> ${event.direction || ''}</div>
@@ -285,18 +297,42 @@ public final class WebAssets {
                         .replaceAll('>', '&gt;');
                     }
 
+                    function escapeAttr(value) {
+                      return String(value ?? '')
+                        .replaceAll('&', '&amp;')
+                        .replaceAll('"', '&quot;')
+                        .replaceAll('<', '&lt;')
+                        .replaceAll('>', '&gt;');
+                    }
+
                     async function releasePending(pendingId) {
                       await fetchJson('/api/pending/' + pendingId + '/forward', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                       if (activeSession) await loadSession(activeSession);
                     }
 
-                    function showEdit(pendingId, base64Value) {
+                    function showEdit(pendingId, decodedPayload, base64Value) {
                       const editor = document.getElementById('editor');
+                      if (decodedPayload?.isHttp) {
+                        editor.innerHTML = `
+                          <h4>Edit pending HTTP payload ${pendingId}</h4>
+                          <div class="editor-grid">
+                            <label class="muted">Start line</label>
+                            <input id="http-start-line" value="${escapeAttr(decodedPayload.startLine || '')}">
+                            <label class="muted">Headers</label>
+                            <textarea id="http-headers">${escapeHtml(decodedPayload.headersText || '')}</textarea>
+                            <label class="muted">Body</label>
+                            <textarea id="http-body">${escapeHtml(decodedPayload.bodyText || '')}</textarea>
+                            <div style="margin-top:12px">
+                              <button onclick="submitStructuredHttp('${pendingId}')">Forward edited HTTP</button>
+                            </div>
+                          </div>`;
+                        return;
+                      }
                       const decoded = atob(base64Value || '');
                       editor.innerHTML = `
                         <h4>Edit pending payload ${pendingId}</h4>
                         <p class="muted">Payload is sent as UTF-8 by default. Use hex/base64 manually if needed.</p>
-                        <textarea id="payload-editor">${decoded}</textarea>
+                        <textarea id="payload-editor">${escapeHtml(decoded)}</textarea>
                         <div style="margin-top:12px">
                           <button onclick="submitEdited('${pendingId}')">Forward edited</button>
                         </div>`;
@@ -308,6 +344,24 @@ public final class WebAssets {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ encoding: 'utf8', content })
+                      });
+                      if (activeSession) await loadSession(activeSession);
+                    }
+
+                    async function submitStructuredHttp(pendingId) {
+                      const startLine = document.getElementById('http-start-line').value;
+                      const headersText = document.getElementById('http-headers').value;
+                      const bodyText = document.getElementById('http-body').value;
+                      await fetchJson('/api/pending/' + pendingId + '/forward', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          http: {
+                            startLine,
+                            headersText,
+                            bodyText
+                          }
+                        })
                       });
                       if (activeSession) await loadSession(activeSession);
                     }

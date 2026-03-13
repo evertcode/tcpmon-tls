@@ -86,7 +86,9 @@ public final class ControlPlaneServer implements AutoCloseable {
         String pendingId = path.substring("/api/pending/".length(), path.length() - "/forward".length());
         JsonNode body = readJsonBody(exchange);
         byte[] replacement = null;
-        if (body.hasNonNull("content")) {
+        if (body.hasNonNull("http")) {
+            replacement = HttpMessageEditor.buildHttpMessage(body.path("http"));
+        } else if (body.hasNonNull("content")) {
             replacement = decodePayload(body.path("encoding").asText("utf8"), body.path("content").asText(""));
         }
         boolean released = sessionStore.releasePending(pendingId, replacement);
