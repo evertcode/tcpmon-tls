@@ -8,6 +8,7 @@ Actualmente el flujo más útil y probado es:
 - `HTTP local -> HTTP remoto`
 - `TLS local -> TLS remoto`
 - recaptura de requests desde la UI local
+- múltiples listeners/targets por proceso usando `routes[]`
 
 ## Qué hace
 
@@ -161,6 +162,78 @@ java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar \
 - `--config <ruta>`
 - `--init-config <ruta>`
 
+El archivo JSON soporta dos formas:
+
+- modo simple: `listener` + `target`
+- modo multi-route: `routes[]`
+
+## Multi-route en un solo proceso
+
+También puedes definir múltiples listeners, cada uno con su target propio, dentro del mismo proceso.
+
+Ejemplo:
+
+```json
+{
+  "routes": [
+    {
+      "id": "public-api",
+      "listener": {
+        "host": "127.0.0.1",
+        "port": 9000,
+        "mode": "PLAIN"
+      },
+      "target": {
+        "host": "jsonplaceholder.typicode.com",
+        "port": 443,
+        "mode": "TLS",
+        "sni": "jsonplaceholder.typicode.com",
+        "insecure": true,
+        "rewriteHostHeader": true
+      }
+    },
+    {
+      "id": "legacy-http",
+      "listener": {
+        "host": "127.0.0.1",
+        "port": 9001,
+        "mode": "PLAIN"
+      },
+      "target": {
+        "host": "example.org",
+        "port": 80,
+        "mode": "PLAIN"
+      }
+    }
+  ],
+  "ui": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "enabled": true
+  },
+  "sessionsDir": "./sessions",
+  "interceptMode": "NONE"
+}
+```
+
+Con este archivo:
+
+- `127.0.0.1:9000` apunta al target TLS definido en `public-api`
+- `127.0.0.1:9001` apunta al target plano definido en `legacy-http`
+- cada sesión queda etiquetada por `routeId`
+
+Arranque:
+
+```bash
+java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --config tcpmon.json
+```
+
+Notas:
+
+- cuando usas `routes[]`, esa lista define completamente los listeners/targets del proceso
+- los flags CLI actuales siguen siendo útiles para el modo de una sola ruta
+- la UI muestra `routeId` por sesión para distinguir de qué listener provino el tráfico
+
 ## Booleanos en CLI
 
 Las opciones booleanas aceptan ambos estilos:
@@ -226,6 +299,7 @@ Sin esta opción, muchos backends devolverán `403`, `421` o respuestas incorrec
 La UI muestra:
 
 - lista de sesiones
+- `routeId` por sesión
 - metadata TLS inbound/outbound
 - lista de exchanges HTTP detectados
 - request y response por exchange
@@ -288,11 +362,10 @@ Cuando una dirección está interceptada:
 
 ## Limitaciones actuales
 
-- el parser HTTP de la UI separa mensajes usando `Content-Length` o ausencia de body
+- el parser HTTP de la UI soporta `Content-Length`, `Transfer-Encoding: chunked`, `gzip`, `deflate` y `br`
 - no interpreta todavía:
-  - `Transfer-Encoding: chunked`
-  - cuerpos comprimidos `gzip` / `br`
   - WebSocket
+  - streaming HTTP incremental
 - la recaptura local a listener `TLS` con `client auth REQUIRE` no presenta certificado cliente todavía
 - la herramienta está optimizada para depuración local, no para throughput alto
 - la UI está enfocada en HTTP; para tráfico TCP genérico cae a vista raw
@@ -329,6 +402,5 @@ El proyecto ya tiene:
 
 Si vas a continuar el desarrollo, los siguientes pasos con más valor técnico serían:
 
-- soportar `chunked` y compresión en la UI
-- edición estructurada de requests HTTP
 - exportación/importación de exchanges
+- filtros y búsqueda por `routeId`

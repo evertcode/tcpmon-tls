@@ -61,6 +61,13 @@ public final class WebAssets {
                       cursor: pointer;
                     }
                     .session:hover, .session.active { border-color: var(--accent); }
+                    .session-header {
+                      display: flex;
+                      align-items: center;
+                      justify-content: space-between;
+                      gap: 12px;
+                      margin-bottom: 6px;
+                    }
                     .flow {
                       display: grid;
                       grid-template-columns: 1fr 1fr;
@@ -87,6 +94,11 @@ public final class WebAssets {
                       background: rgba(79,209,197,0.15);
                       color: var(--accent);
                       margin-bottom: 10px;
+                    }
+                    .tag.route {
+                      margin-bottom: 0;
+                      background: rgba(255,255,255,0.08);
+                      color: #d9e7f3;
                     }
                     .muted { color: var(--muted); font-size: 12px; }
                     .section-title {
@@ -213,7 +225,10 @@ public final class WebAssets {
                       for (const session of data.sessions) {
                         const card = document.createElement('div');
                         card.className = 'session' + (session.sessionId === activeSession ? ' active' : '');
-                        card.innerHTML = `<strong>${session.sessionId}</strong>
+                        card.innerHTML = `<div class="session-header">
+                            <strong>${session.sessionId}</strong>
+                            <span class="tag route">${session.routeId || 'default'}</span>
+                          </div>
                           <div class="muted">${session.clientAddress} -> ${session.targetAddress}</div>
                           <div class="muted">${session.status} | events: ${session.eventCount} | pending: ${session.pendingCount}</div>`;
                         card.onclick = () => loadSession(session.sessionId);
@@ -253,6 +268,7 @@ public final class WebAssets {
                         ${banner}
                         <div class="meta-grid">
                           <div>
+                            <div class="tag route">route ${data.routeId || 'default'}</div>
                             <div class="muted">${data.clientAddress} -> ${data.targetAddress}</div>
                             <div class="muted">status=${data.status}</div>
                           </div>
