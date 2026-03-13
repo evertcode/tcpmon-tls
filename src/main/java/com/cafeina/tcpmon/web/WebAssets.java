@@ -78,7 +78,7 @@ public final class WebAssets {
                     }
                     .layout {
                       display: grid;
-                      grid-template-columns: 360px minmax(0, 1fr);
+                      grid-template-columns: 280px minmax(0, 1fr);
                       min-height: 0;
                     }
                     .sidebar {
@@ -100,11 +100,6 @@ public final class WebAssets {
                     }
                     .toolbar {
                       display: grid;
-                      gap: 8px;
-                    }
-                    .toolbar-row {
-                      display: grid;
-                      grid-template-columns: 1fr 1fr auto;
                       gap: 8px;
                     }
                     input,
@@ -146,11 +141,11 @@ public final class WebAssets {
                       border-color: var(--border);
                       color: var(--text);
                     }
-                    .session-list {
+                    .route-list {
                       overflow: auto;
                       padding: 8px;
                     }
-                    .session-row {
+                    .route-row {
                       border: 1px solid var(--border);
                       border-radius: 10px;
                       padding: 10px;
@@ -158,11 +153,11 @@ public final class WebAssets {
                       background: var(--surface);
                       cursor: pointer;
                     }
-                    .session-row:hover {
+                    .route-row:hover {
                       border-color: var(--border-strong);
                       background: var(--surface-2);
                     }
-                    .session-row.active {
+                    .route-row.active {
                       border-color: rgba(15, 108, 189, 0.45);
                       background: var(--accent-soft);
                     }
@@ -175,16 +170,6 @@ public final class WebAssets {
                     }
                     .row-top {
                       margin-bottom: 6px;
-                    }
-                    .session-id {
-                      font: 12px var(--mono);
-                    }
-                    .session-path {
-                      font: 11px var(--mono);
-                      color: var(--text-muted);
-                      white-space: nowrap;
-                      overflow: hidden;
-                      text-overflow: ellipsis;
                     }
                     .pill {
                       display: inline-flex;
@@ -213,6 +198,17 @@ public final class WebAssets {
                       background: rgba(180, 35, 24, 0.08);
                       color: var(--danger);
                     }
+                    .route-line,
+                    .mono {
+                      font-family: var(--mono);
+                    }
+                    .route-line {
+                      font-size: 11px;
+                      color: var(--text-muted);
+                      white-space: nowrap;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                    }
                     .content {
                       display: grid;
                       grid-template-rows: auto auto auto 1fr auto;
@@ -237,8 +233,8 @@ public final class WebAssets {
                       border-color: rgba(180, 35, 24, 0.2);
                       background: rgba(180, 35, 24, 0.06);
                     }
-                    .header-card,
-                    .timeline-card,
+                    .route-card,
+                    .table-card,
                     .payload-card,
                     .events-card,
                     .editor-card {
@@ -247,32 +243,28 @@ public final class WebAssets {
                       border-radius: 12px;
                       box-shadow: var(--shadow);
                     }
-                    .header-card,
-                    .timeline-card,
+                    .route-card,
+                    .table-card,
                     .events-card,
                     .editor-card {
                       padding: 12px;
                     }
-                    .header-grid {
+                    .route-grid {
                       display: grid;
-                      grid-template-columns: 1.4fr 1fr;
+                      grid-template-columns: 1.2fr 1fr;
                       gap: 12px;
                     }
-                    .session-headline {
+                    .route-title {
                       display: flex;
                       justify-content: space-between;
                       align-items: start;
                       gap: 12px;
                     }
-                    .session-headline strong {
+                    .route-title strong {
                       display: block;
                       font-size: 15px;
                     }
-                    .session-headline code,
-                    .mono {
-                      font-family: var(--mono);
-                    }
-                    .session-meta-grid {
+                    .route-meta-grid {
                       display: grid;
                       grid-template-columns: repeat(2, minmax(0, 1fr));
                       gap: 8px 16px;
@@ -287,33 +279,44 @@ public final class WebAssets {
                       text-transform: uppercase;
                       letter-spacing: 0.04em;
                     }
-                    .tls-box {
+                    .route-box {
                       background: var(--surface-2);
                       border: 1px solid var(--border);
                       border-radius: 10px;
                       padding: 10px;
                     }
-                    .timeline-list {
-                      display: flex;
+                    .request-toolbar {
+                      display: grid;
+                      grid-template-columns: 1fr 160px auto;
                       gap: 8px;
-                      overflow: auto;
+                      margin-bottom: 10px;
                     }
-                    .timeline-item {
-                      min-width: 220px;
-                      padding: 10px;
-                      border: 1px solid var(--border);
-                      border-radius: 10px;
-                      background: var(--surface-2);
-                      cursor: pointer;
+                    table {
+                      width: 100%;
+                      border-collapse: collapse;
+                      font-size: 12px;
+                    }
+                    th,
+                    td {
                       text-align: left;
+                      padding: 9px 8px;
+                      border-bottom: 1px solid var(--border);
+                      vertical-align: top;
                     }
-                    .timeline-item.active {
-                      border-color: rgba(15, 108, 189, 0.45);
+                    th {
+                      color: var(--text-muted);
+                      font-size: 11px;
+                      text-transform: uppercase;
+                      letter-spacing: 0.04em;
+                    }
+                    tr.session-entry {
+                      cursor: pointer;
+                    }
+                    tr.session-entry:hover {
+                      background: var(--surface-2);
+                    }
+                    tr.session-entry.active {
                       background: var(--accent-soft);
-                    }
-                    .timeline-item strong {
-                      display: block;
-                      margin-bottom: 4px;
                     }
                     .payload-grid {
                       display: grid;
@@ -397,7 +400,7 @@ public final class WebAssets {
                     .empty {
                       display: grid;
                       place-items: center;
-                      min-height: 220px;
+                      min-height: 180px;
                       color: var(--text-muted);
                       border: 1px dashed var(--border);
                       border-radius: 12px;
@@ -405,18 +408,15 @@ public final class WebAssets {
                     }
                     @media (max-width: 1180px) {
                       .layout,
-                      .header-grid,
+                      .route-grid,
                       .payload-grid {
                         grid-template-columns: 1fr;
                       }
-                      .layout {
-                        grid-template-rows: auto 1fr;
-                      }
                     }
                     @media (max-width: 760px) {
-                      .toolbar-row,
+                      .request-toolbar,
                       .request-grid,
-                      .session-meta-grid {
+                      .route-meta-grid {
                         grid-template-columns: 1fr;
                       }
                     }
@@ -427,7 +427,7 @@ public final class WebAssets {
                     <header class="topbar">
                       <div class="topbar-title">
                         <strong>tcpmon-tls control plane</strong>
-                        <span class="muted">Sessions, exchanges, replay and pending edits</span>
+                        <span class="muted">Select route, inspect recorded requests, open one to view request and response.</span>
                       </div>
                       <div id="topbar-metrics" class="topbar-meta"></div>
                     </header>
@@ -435,32 +435,21 @@ public final class WebAssets {
                     <div class="layout">
                       <aside class="sidebar">
                         <div class="sidebar-section">
-                          <h2>Sessions</h2>
+                          <h2>Routes</h2>
                         </div>
                         <div class="sidebar-section">
                           <div class="toolbar">
-                            <input id="session-search" type="search" placeholder="Search session, route or host" oninput="renderSessionList()">
-                            <div class="toolbar-row">
-                              <select id="route-filter" onchange="renderSessionList()">
-                                <option value="">All routes</option>
-                              </select>
-                              <select id="status-filter" onchange="renderSessionList()">
-                                <option value="">All statuses</option>
-                                <option value="OPEN">Open</option>
-                                <option value="CLOSED">Closed</option>
-                                <option value="ERROR">Error</option>
-                              </select>
-                              <button class="secondary" onclick="refreshSessions(true)">Refresh</button>
-                            </div>
+                            <input id="route-search" type="search" placeholder="Search route or target" oninput="renderRouteList()">
+                            <button class="secondary" onclick="refreshSessions(true)">Refresh</button>
                           </div>
                         </div>
-                        <div id="sessions" class="session-list"></div>
+                        <div id="routes" class="route-list"></div>
                       </aside>
 
                       <main class="content">
                         <div id="status-banner"></div>
-                        <div id="session-header"></div>
-                        <div id="exchange-timeline"></div>
+                        <div id="route-header"></div>
+                        <div id="request-table"></div>
                         <div id="payloads"></div>
                         <div id="events-and-editor"></div>
                       </main>
@@ -469,6 +458,7 @@ public final class WebAssets {
 
                   <script>
                     let allSessions = [];
+                    let activeRoute = null;
                     let activeSession = null;
                     let activeExchangeIndex = 0;
                     let statusMessage = null;
@@ -488,22 +478,69 @@ public final class WebAssets {
                       const data = await fetchJson('/api/sessions');
                       allSessions = Array.isArray(data.sessions) ? data.sessions : [];
                       updateMetrics();
-                      updateRouteFilter();
-                      renderSessionList();
+                      renderRouteList();
 
                       if (!allSessions.length) {
+                        activeRoute = null;
                         activeSession = null;
                         renderEmptyState('No sessions yet.');
                         return;
                       }
 
-                      if (preserveSelection && activeSession && allSessions.some(session => session.sessionId === activeSession)) {
-                        return;
+                      const routes = groupedRoutes();
+                      if (!preserveSelection || !activeRoute || !routes.some(route => route.routeId === activeRoute)) {
+                        activeRoute = routes[0].routeId;
                       }
 
-                      if (!activeSession || !allSessions.some(session => session.sessionId === activeSession)) {
-                        await loadSession(allSessions[0].sessionId);
+                      const routeSessions = sessionsForActiveRoute();
+                      if (!preserveSelection || !activeSession || !routeSessions.some(session => session.sessionId === activeSession)) {
+                        activeSession = routeSessions[0] ? routeSessions[0].sessionId : null;
                       }
+
+                      renderRouteList();
+                      renderBanner();
+                      renderRouteHeader();
+                      renderRequestTable();
+                      if (activeSession) {
+                        await loadSessionDetails(activeSession);
+                      } else {
+                        renderDetailEmpty('No requests for the selected route.');
+                      }
+                    }
+
+                    function groupedRoutes() {
+                      const map = new Map();
+                      for (const session of allSessions) {
+                        const routeId = session.routeId || 'default';
+                        const current = map.get(routeId) || {
+                          routeId,
+                          sessions: [],
+                          targetAddress: session.targetAddress || '',
+                          clientAddress: session.clientAddress || '',
+                          status: 'CLOSED'
+                        };
+                        current.sessions.push(session);
+                        if (!current.targetAddress && session.targetAddress) current.targetAddress = session.targetAddress;
+                        if (!current.clientAddress && session.clientAddress) current.clientAddress = session.clientAddress;
+                        if (String(session.status || '').toUpperCase() === 'OPEN') current.status = 'OPEN';
+                        if (String(session.status || '').toUpperCase() === 'ERROR') current.status = 'ERROR';
+                        map.set(routeId, current);
+                      }
+                      return [...map.values()].sort((a, b) => a.routeId.localeCompare(b.routeId));
+                    }
+
+                    function filteredRoutes() {
+                      const query = document.getElementById('route-search').value.trim().toLowerCase();
+                      return groupedRoutes().filter(route => {
+                        if (!query) return true;
+                        return [route.routeId, route.targetAddress, route.clientAddress].join(' ').toLowerCase().includes(query);
+                      });
+                    }
+
+                    function sessionsForActiveRoute() {
+                      return allSessions
+                        .filter(session => (session.routeId || 'default') === activeRoute)
+                        .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
                     }
 
                     function updateMetrics() {
@@ -511,82 +548,52 @@ public final class WebAssets {
                       const pending = allSessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
                       const routes = new Set(allSessions.map(session => session.routeId || 'default')).size;
                       document.getElementById('topbar-metrics').innerHTML = `
-                        <span class="metric">${allSessions.length} sessions</span>
+                        <span class="metric">${allSessions.length} requests</span>
                         <span class="metric">${routes} routes</span>
                         <span class="metric">${open} open</span>
                         <span class="metric">${pending} pending</span>
                       `;
                     }
 
-                    function updateRouteFilter() {
-                      const select = document.getElementById('route-filter');
-                      const current = select.value;
-                      const routes = [...new Set(allSessions.map(session => session.routeId || 'default'))].sort();
-                      select.innerHTML = '<option value="">All routes</option>' +
-                        routes.map(route => `<option value="${escapeAttr(route)}">${escapeHtml(route)}</option>`).join('');
-                      if (routes.includes(current)) {
-                        select.value = current;
-                      }
-                    }
-
-                    function filteredSessions() {
-                      const query = document.getElementById('session-search').value.trim().toLowerCase();
-                      const route = document.getElementById('route-filter').value;
-                      const status = document.getElementById('status-filter').value;
-                      return allSessions.filter(session => {
-                        const routeId = session.routeId || 'default';
-                        if (route && routeId !== route) return false;
-                        if (status && String(session.status || '').toUpperCase() !== status) return false;
-                        if (!query) return true;
-                        const haystack = [
-                          session.sessionId,
-                          routeId,
-                          session.clientAddress,
-                          session.listenerAddress,
-                          session.targetAddress,
-                          session.status
-                        ].join(' ').toLowerCase();
-                        return haystack.includes(query);
-                      });
-                    }
-
-                    function renderSessionList() {
-                      const sessions = filteredSessions();
-                      const container = document.getElementById('sessions');
-                      if (!sessions.length) {
-                        container.innerHTML = '<div class="empty">No matching sessions.</div>';
+                    function renderRouteList() {
+                      const routes = filteredRoutes();
+                      const container = document.getElementById('routes');
+                      if (!routes.length) {
+                        container.innerHTML = '<div class="empty">No matching routes.</div>';
                         return;
                       }
-                      container.innerHTML = sessions.map(session => {
-                        const statusClass = String(session.status || 'closed').toLowerCase();
-                        return `<div class="session-row${session.sessionId === activeSession ? ' active' : ''}" onclick="loadSession('${session.sessionId}')">
+                      container.innerHTML = routes.map(route => {
+                        const pending = route.sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
+                        const statusClass = String(route.status || 'closed').toLowerCase();
+                        return `<div class="route-row${route.routeId === activeRoute ? ' active' : ''}" onclick="selectRoute('${route.routeId}')">
                           <div class="row-top">
-                            <span class="session-id">${escapeHtml(session.sessionId)}</span>
-                            <span class="pill route">${escapeHtml(session.routeId || 'default')}</span>
+                            <strong>${escapeHtml(route.routeId)}</strong>
+                            <span class="pill route">${escapeHtml(route.sessions.length)} req</span>
                           </div>
                           <div class="row-bottom">
-                            <span class="pill ${escapeHtml(statusClass)}">${escapeHtml(session.status || 'UNKNOWN')}</span>
-                            <span class="muted">${escapeHtml(session.eventCount || 0)} events / ${escapeHtml(session.pendingCount || 0)} pending</span>
+                            <span class="pill ${escapeHtml(statusClass)}">${escapeHtml(route.status)}</span>
+                            <span class="muted">${escapeHtml(pending)} pending</span>
                           </div>
-                          <div class="session-path">${escapeHtml(session.clientAddress || '')}</div>
-                          <div class="session-path">${escapeHtml(session.targetAddress || '')}</div>
+                          <div class="route-line">${escapeHtml(route.targetAddress || '')}</div>
                         </div>`;
                       }).join('');
                     }
 
-                    async function loadSession(sessionId) {
-                      activeSession = sessionId;
-                      renderSessionList();
-                      const data = await fetchJson('/api/sessions/' + sessionId);
-                      const exchanges = data.exchanges || [];
-                      if (activeExchangeIndex >= exchanges.length) activeExchangeIndex = 0;
-                      const activeExchange = exchanges[activeExchangeIndex] || {};
-
+                    function selectRoute(routeId) {
+                      activeRoute = routeId;
+                      activeSession = null;
+                      activeExchangeIndex = 0;
+                      const sessions = sessionsForActiveRoute();
+                      activeSession = sessions[0] ? sessions[0].sessionId : null;
+                      renderRouteList();
                       renderBanner();
-                      renderHeader(data);
-                      renderTimeline(exchanges);
-                      renderPayloads(activeExchange, data);
-                      renderEventsAndEditor(data);
+                      renderRouteHeader();
+                      renderRequestTable();
+                      if (activeSession) {
+                        loadSessionDetails(activeSession);
+                      } else {
+                        renderDetailEmpty('No requests for the selected route.');
+                      }
                     }
 
                     function renderBanner() {
@@ -598,54 +605,122 @@ public final class WebAssets {
                       el.innerHTML = `<div class="banner ${statusMessage.type}">${escapeHtml(statusMessage.text)}</div>`;
                     }
 
-                    function renderHeader(data) {
-                      document.getElementById('session-header').innerHTML = `
-                        <section class="header-card">
-                          <div class="header-grid">
+                    function renderRouteHeader() {
+                      const sessions = sessionsForActiveRoute();
+                      if (!activeRoute) {
+                        document.getElementById('route-header').innerHTML = '<div class="empty">Select a route.</div>';
+                        return;
+                      }
+                      const first = sessions[0] || {};
+                      const open = sessions.filter(session => String(session.status || '').toUpperCase() === 'OPEN').length;
+                      const pending = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
+                      document.getElementById('route-header').innerHTML = `
+                        <section class="route-card">
+                          <div class="route-grid">
                             <div>
-                              <div class="session-headline">
+                              <div class="route-title">
                                 <div>
-                                  <strong>${escapeHtml(data.routeId || 'default')} / ${escapeHtml(data.sessionId || '')}</strong>
-                                  <div class="muted mono">${escapeHtml(data.clientAddress || '')} -> ${escapeHtml(data.targetAddress || '')}</div>
+                                  <strong>${escapeHtml(activeRoute)}</strong>
+                                  <div class="muted">Route overview and recorded requests</div>
                                 </div>
-                                <span class="pill ${String(data.status || 'closed').toLowerCase()}">${escapeHtml(data.status || 'UNKNOWN')}</span>
+                                <span class="pill route">${escapeHtml(sessions.length)} requests</span>
                               </div>
-                              <div class="session-meta-grid">
-                                <div><span class="label">Client</span><span class="mono">${escapeHtml(data.clientAddress || '')}</span></div>
-                                <div><span class="label">Listener</span><span class="mono">${escapeHtml(data.listenerAddress || '')}</span></div>
-                                <div><span class="label">Target</span><span class="mono">${escapeHtml(data.targetAddress || '')}</span></div>
-                                <div><span class="label">Counts</span>${escapeHtml((data.events || []).length)} events / ${escapeHtml((data.pendingPayloads || []).length)} pending</div>
+                              <div class="route-meta-grid">
+                                <div><span class="label">Target</span><span class="mono">${escapeHtml(first.targetAddress || 'Unknown')}</span></div>
+                                <div><span class="label">Latest client</span><span class="mono">${escapeHtml(first.clientAddress || 'Unknown')}</span></div>
+                                <div><span class="label">Open</span>${escapeHtml(open)}</div>
+                                <div><span class="label">Pending</span>${escapeHtml(pending)}</div>
                               </div>
                             </div>
-                            <div class="tls-box">
-                              <span class="label">TLS</span>
-                              <pre>${escapeHtml(JSON.stringify({ inboundTls: data.inboundTls, outboundTls: data.outboundTls }, null, 2))}</pre>
+                            <div class="route-box">
+                              <span class="label">Current selection</span>
+                              <div class="mono">${escapeHtml(activeSession || 'No request selected')}</div>
+                              <div class="muted" style="margin-top:8px;">Select a request below to inspect request body, response body, headers and event stream.</div>
                             </div>
                           </div>
                         </section>
                       `;
                     }
 
-                    function renderTimeline(exchanges) {
-                      const el = document.getElementById('exchange-timeline');
-                      if (!exchanges.length) {
-                        el.innerHTML = '';
-                        return;
-                      }
-                      el.innerHTML = `
-                        <section class="timeline-card">
-                          <h3>Exchanges</h3>
-                          <div class="timeline-list">
-                            ${exchanges.map(exchange => `
-                              <button class="timeline-item${exchange.index === activeExchangeIndex ? ' active' : ''}" onclick="selectExchange(${exchange.index})">
-                                <strong>Exchange ${exchange.index + 1}</strong>
-                                <div class="muted">${escapeHtml(exchange.request?.decoded?.startLine || 'No request')}</div>
-                                <div class="muted">${escapeHtml(exchange.response?.decoded?.startLine || 'No response')}</div>
-                              </button>
-                            `).join('')}
+                    function renderRequestTable() {
+                      const sessions = sessionsForActiveRoute();
+                      document.getElementById('request-table').innerHTML = `
+                        <section class="table-card">
+                          <div class="request-toolbar">
+                            <input id="request-search" type="search" placeholder="Filter requests in this route" oninput="renderRequestTable()">
+                            <select id="request-status" onchange="renderRequestTable()">
+                              <option value="">All statuses</option>
+                              <option value="OPEN">Open</option>
+                              <option value="CLOSED">Closed</option>
+                              <option value="ERROR">Error</option>
+                            </select>
+                            <button class="secondary" onclick="refreshSessions(true)">Refresh</button>
                           </div>
+                          ${renderRequestTableRows(sessions)}
                         </section>
                       `;
+                    }
+
+                    function renderRequestTableRows(sessions) {
+                      const query = document.getElementById('request-search') ? document.getElementById('request-search').value.trim().toLowerCase() : '';
+                      const status = document.getElementById('request-status') ? document.getElementById('request-status').value : '';
+                      const filtered = sessions.filter(session => {
+                        if (status && String(session.status || '').toUpperCase() !== status) return false;
+                        if (!query) return true;
+                        return [
+                          session.sessionId,
+                          session.clientAddress,
+                          session.targetAddress,
+                          session.startedAt,
+                          session.status
+                        ].join(' ').toLowerCase().includes(query);
+                      });
+                      if (!filtered.length) {
+                        return '<div class="empty">No requests match the current filter.</div>';
+                      }
+                      return `
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Request</th>
+                              <th>Client</th>
+                              <th>Status</th>
+                              <th>Events</th>
+                              <th>Pending</th>
+                              <th>Started</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${filtered.map(session => `
+                              <tr class="session-entry${session.sessionId === activeSession ? ' active' : ''}" onclick="selectSession('${session.sessionId}')">
+                                <td class="mono">${escapeHtml(session.sessionId || '')}</td>
+                                <td class="mono">${escapeHtml(session.clientAddress || '')}</td>
+                                <td><span class="pill ${String(session.status || 'closed').toLowerCase()}">${escapeHtml(session.status || 'UNKNOWN')}</span></td>
+                                <td>${escapeHtml(session.eventCount || 0)}</td>
+                                <td>${escapeHtml(session.pendingCount || 0)}</td>
+                                <td>${escapeHtml(formatTime(session.startedAt))}</td>
+                              </tr>
+                            `).join('')}
+                          </tbody>
+                        </table>
+                      `;
+                    }
+
+                    async function selectSession(sessionId) {
+                      activeSession = sessionId;
+                      activeExchangeIndex = 0;
+                      renderRouteHeader();
+                      renderRequestTable();
+                      await loadSessionDetails(sessionId);
+                    }
+
+                    async function loadSessionDetails(sessionId) {
+                      const data = await fetchJson('/api/sessions/' + sessionId);
+                      const exchanges = data.exchanges || [];
+                      if (activeExchangeIndex >= exchanges.length) activeExchangeIndex = 0;
+                      const activeExchange = exchanges[activeExchangeIndex] || {};
+                      renderPayloads(activeExchange, data);
+                      renderEventsAndEditor(data);
                     }
 
                     function renderPayloads(activeExchange, data) {
@@ -701,15 +776,33 @@ public final class WebAssets {
                     }
 
                     function renderEventsAndEditor(data) {
+                      const exchanges = data.exchanges || [];
                       const events = data.events || [];
                       document.getElementById('events-and-editor').innerHTML = `
                         <section class="events-card">
-                          <h3>Events</h3>
+                          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;">
+                            <h3>Events</h3>
+                            <div class="muted">${escapeHtml(exchanges.length)} exchanges / ${escapeHtml(events.length)} events</div>
+                          </div>
+                          ${renderExchangeButtons(exchanges)}
                           <div class="events-list">
                             ${events.length ? events.map(event => renderEventRow(data.sessionId, event)).join('') : '<div class="empty">No events yet.</div>'}
                           </div>
                         </section>
                         <div id="editor"></div>
+                      `;
+                    }
+
+                    function renderExchangeButtons(exchanges) {
+                      if (exchanges.length <= 1) {
+                        return '';
+                      }
+                      return `
+                        <div class="actions" style="margin:0 0 10px;">
+                          ${exchanges.map(exchange => `
+                            <button class="${exchange.index === activeExchangeIndex ? 'primary' : 'secondary'}" onclick="selectExchange(${exchange.index})">Exchange ${exchange.index + 1}</button>
+                          `).join('')}
+                        </div>
                       `;
                     }
 
@@ -837,10 +930,10 @@ public final class WebAssets {
                       }
                     }
 
-                    function selectExchange(index) {
+                    async function selectExchange(index) {
                       activeExchangeIndex = index;
                       if (activeSession) {
-                        loadSession(activeSession);
+                        await loadSessionDetails(activeSession);
                       }
                     }
 
@@ -848,16 +941,27 @@ public final class WebAssets {
                       statusMessage = { type, text };
                       renderBanner();
                       if (activeSession) {
-                        loadSession(activeSession);
+                        loadSessionDetails(activeSession);
                       }
+                    }
+
+                    function renderDetailEmpty(message) {
+                      document.getElementById('payloads').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+                      document.getElementById('events-and-editor').innerHTML = '';
                     }
 
                     function renderEmptyState(message) {
                       document.getElementById('status-banner').innerHTML = '';
-                      document.getElementById('session-header').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
-                      document.getElementById('exchange-timeline').innerHTML = '';
+                      document.getElementById('route-header').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+                      document.getElementById('request-table').innerHTML = '';
                       document.getElementById('payloads').innerHTML = '';
                       document.getElementById('events-and-editor').innerHTML = '';
+                    }
+
+                    function formatTime(value) {
+                      if (!value) return '';
+                      const date = new Date(value);
+                      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
                     }
 
                     function escapeHtml(value) {
