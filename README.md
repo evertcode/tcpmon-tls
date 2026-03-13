@@ -1,6 +1,25 @@
 # tcpmon-tls
 
-`tcpmon-tls` es una aplicación Java para monitorear tráfico TCP con soporte TLS, pensada para casos de uso tipo `tcpmon` pero enfocada en depuración local de integraciones HTTP/HTTPS.
+Proxy estilo `tcpmon` para depuración moderna de tráfico HTTP/TLS.
+
+`tcpmon-tls` es una herramienta Java para depurar integraciones locales y remotas sobre TCP, TLS y HTTP/HTTPS. Permite inspeccionar `request/response`, interceptar tráfico, editar requests HTTP, reenviar al target, recapturar por el listener local y operar múltiples rutas en un solo proceso.
+
+## Highlights
+
+- múltiples listeners y targets por proceso usando `routes[]`
+- inspección de `request/response` HTTP desde una UI web local
+- interceptación, edición estructurada y reenvío de requests
+- replay al target y recapture por el listener local
+- soporte para `TLS` y `mTLS` inbound/outbound
+- configuración por `JSON` y empaquetado como `jar` ejecutable
+
+## Casos de uso típicos
+
+- depurar `HTTP local -> HTTPS remoto`
+- inspeccionar requests y responses sin modificar el cliente
+- reproducir errores de integración desde tráfico ya capturado
+- probar conectividad `TLS/mTLS` hacia backends remotos
+- correr varias rutas locales contra distintos destinos
 
 Actualmente el flujo más útil y probado es:
 
@@ -8,7 +27,6 @@ Actualmente el flujo más útil y probado es:
 - `HTTP local -> HTTP remoto`
 - `TLS local -> TLS remoto`
 - recaptura de requests desde la UI local
-- múltiples listeners/targets por proceso usando `routes[]`
 
 ## Qué hace
 
