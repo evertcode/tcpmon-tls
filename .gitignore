@@ -1,4 +1,5 @@
 /target/
 /sessions/
+tcpmon.json
 /.idea/
 *.iml
