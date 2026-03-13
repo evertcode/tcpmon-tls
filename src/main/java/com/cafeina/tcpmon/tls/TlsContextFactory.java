@@ -2,6 +2,7 @@ package com.cafeina.tcpmon.tls;
 
 import com.cafeina.tcpmon.ClientAuthMode;
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
 import com.cafeina.tcpmon.TlsMaterial;
 import io.netty.buffer.ByteBufAllocator;
@@ -27,7 +28,15 @@ public final class TlsContextFactory {
     }
 
     public static SslContext buildServerContext(ProxyConfig config) throws GeneralSecurityException, IOException {
-        TlsMaterial material = config.listener().tlsMaterial();
+        return buildServerContext(config, config.listener());
+    }
+
+    public static SslContext buildServerContext(ProxyConfig config, RouteConfig route) throws GeneralSecurityException, IOException {
+        return buildServerContext(config, route.listener());
+    }
+
+    public static SslContext buildServerContext(ProxyConfig config, com.cafeina.tcpmon.ListenerConfig listener) throws GeneralSecurityException, IOException {
+        TlsMaterial material = listener.tlsMaterial();
         SslContextBuilder builder;
         if (material.certificateFile() != null && material.privateKeyFile() != null) {
             builder = SslContextBuilder.forServer(material.certificateFile().toFile(), material.privateKeyFile().toFile());
@@ -51,12 +60,19 @@ public final class TlsContextFactory {
                         material.trustStoreType()));
             }
         }
-        builder.clientAuth(toNettyClientAuth(config.listener().clientAuthMode()));
+        builder.clientAuth(toNettyClientAuth(listener.clientAuthMode()));
         return builder.build();
     }
 
     public static SslContext buildClientContext(ProxyConfig config) throws GeneralSecurityException, IOException {
-        TargetConfig target = config.target();
+        return buildClientContext(config, config.target());
+    }
+
+    public static SslContext buildClientContext(ProxyConfig config, RouteConfig route) throws GeneralSecurityException, IOException {
+        return buildClientContext(config, route.target());
+    }
+
+    public static SslContext buildClientContext(ProxyConfig config, TargetConfig target) throws GeneralSecurityException, IOException {
         TlsMaterial material = target.tlsMaterial();
         SslContextBuilder builder = SslContextBuilder.forClient();
         applySharedSettings(builder, config.enabledProtocols(), config.enabledCiphers());
@@ -84,11 +100,19 @@ public final class TlsContextFactory {
     }
 
     public static SslHandler newClientHandler(ProxyConfig config, SslContext context, ByteBufAllocator allocator) {
-        String sniHost = config.target().sniHost() == null || config.target().sniHost().isBlank()
-                ? config.target().host()
-                : config.target().sniHost();
-        SslHandler handler = context.newHandler(allocator, sniHost, config.target().port());
-        if (config.target().verifyHostname()) {
+        return newClientHandler(config.target(), context, allocator);
+    }
+
+    public static SslHandler newClientHandler(RouteConfig route, SslContext context, ByteBufAllocator allocator) {
+        return newClientHandler(route.target(), context, allocator);
+    }
+
+    public static SslHandler newClientHandler(TargetConfig target, SslContext context, ByteBufAllocator allocator) {
+        String sniHost = target.sniHost() == null || target.sniHost().isBlank()
+                ? target.host()
+                : target.sniHost();
+        SslHandler handler = context.newHandler(allocator, sniHost, target.port());
+        if (target.verifyHostname()) {
             SSLParameters parameters = handler.engine().getSSLParameters();
             parameters.setEndpointIdentificationAlgorithm("HTTPS");
             handler.engine().setSSLParameters(parameters);

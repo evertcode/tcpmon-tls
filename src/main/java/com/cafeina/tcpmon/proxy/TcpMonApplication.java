@@ -1,6 +1,7 @@
 package com.cafeina.tcpmon.proxy;
 
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.replay.ReplayService;
 import com.cafeina.tcpmon.session.SessionStore;
 import com.cafeina.tcpmon.util.JsonSupport;
@@ -31,14 +32,17 @@ public final class TcpMonApplication implements AutoCloseable {
         }
 
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
-        System.out.printf(
-                "tcpmon-tls listening on %s:%d (%s) -> %s:%d (%s)%n",
-                config.listener().host(),
-                config.listener().port(),
-                config.listener().transportMode(),
-                config.target().host(),
-                config.target().port(),
-                config.target().transportMode());
+        for (RouteConfig route : config.routes()) {
+            System.out.printf(
+                    "route %s listening on %s:%d (%s) -> %s:%d (%s)%n",
+                    route.id(),
+                    route.listener().host(),
+                    route.listener().port(),
+                    route.listener().transportMode(),
+                    route.target().host(),
+                    route.target().port(),
+                    route.target().transportMode());
+        }
         if (config.ui().enabled()) {
             System.out.printf("control plane: http://%s:%d/%n", config.ui().host(), config.ui().port());
         }

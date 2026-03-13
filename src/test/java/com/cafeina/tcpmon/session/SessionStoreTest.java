@@ -19,7 +19,7 @@ class SessionStoreTest {
     @Test
     void releasesPendingPayloadWithEditedContent() throws Exception {
         SessionStore store = new SessionStore(tempDir, JsonSupport.objectMapper());
-        String sessionId = store.openSession("client", "listener", "target");
+        String sessionId = store.openSession("default", "client", "listener", "target");
         AtomicReference<byte[]> forwarded = new AtomicReference<>();
 
         PendingPayload pending = store.addPending(

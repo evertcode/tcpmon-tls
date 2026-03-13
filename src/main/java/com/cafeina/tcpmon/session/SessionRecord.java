@@ -8,6 +8,7 @@ import java.util.Map;
 
 public final class SessionRecord {
     private final String sessionId;
+    private final String routeId;
     private final Instant startedAt;
     private final String clientAddress;
     private final String listenerAddress;
@@ -19,8 +20,9 @@ public final class SessionRecord {
     private Instant endedAt;
     private String status = "OPEN";
 
-    public SessionRecord(String sessionId, Instant startedAt, String clientAddress, String listenerAddress, String targetAddress) {
+    public SessionRecord(String sessionId, String routeId, Instant startedAt, String clientAddress, String listenerAddress, String targetAddress) {
         this.sessionId = sessionId;
+        this.routeId = routeId;
         this.startedAt = startedAt;
         this.clientAddress = clientAddress;
         this.listenerAddress = listenerAddress;
@@ -59,6 +61,7 @@ public final class SessionRecord {
     public synchronized Map<String, Object> snapshot() {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sessionId", sessionId);
+        payload.put("routeId", routeId);
         payload.put("startedAt", startedAt);
         payload.put("endedAt", endedAt);
         payload.put("status", status);
@@ -75,6 +78,7 @@ public final class SessionRecord {
     public synchronized Map<String, Object> summary() {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sessionId", sessionId);
+        payload.put("routeId", routeId);
         payload.put("startedAt", startedAt);
         payload.put("endedAt", endedAt);
         payload.put("status", status);
@@ -87,5 +91,9 @@ public final class SessionRecord {
 
     public synchronized SessionEvent eventById(String eventId) {
         return events.stream().filter(event -> event.eventId().equals(eventId)).findFirst().orElse(null);
+    }
+
+    public synchronized String routeId() {
+        return routeId;
     }
 }

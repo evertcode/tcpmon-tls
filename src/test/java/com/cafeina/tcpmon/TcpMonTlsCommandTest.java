@@ -124,4 +124,64 @@ class TcpMonTlsCommandTest {
         assertTrue(config.target().rewriteHostHeader());
         assertTrue(config.ui().enabled());
     }
+
+    @Test
+    void loadsMultipleRoutesFromJsonFile() throws Exception {
+        Path configPath = tempDir.resolve("tcpmon-routes.json");
+        Files.writeString(configPath, """
+                {
+                  "routes": [
+                    {
+                      "id": "public-http",
+                      "listener": {
+                        "host": "127.0.0.1",
+                        "port": 9000,
+                        "mode": "PLAIN"
+                      },
+                      "target": {
+                        "host": "jsonplaceholder.typicode.com",
+                        "port": 443,
+                        "mode": "TLS",
+                        "sni": "jsonplaceholder.typicode.com",
+                        "insecure": true,
+                        "rewriteHostHeader": true
+                      }
+                    },
+                    {
+                      "id": "internal-http",
+                      "listener": {
+                        "host": "127.0.0.1",
+                        "port": 9001,
+                        "mode": "PLAIN"
+                      },
+                      "target": {
+                        "host": "example.org",
+                        "port": 80,
+                        "mode": "PLAIN"
+                      }
+                    }
+                  ],
+                  "ui": {
+                    "host": "127.0.0.1",
+                    "port": 8081,
+                    "enabled": true
+                  }
+                }
+                """);
+
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+        CommandLine commandLine = new CommandLine(command);
+        commandLine.parseArgs("--config", configPath.toString());
+
+        ProxyConfig config = command.toConfig();
+        assertEquals(2, config.routes().size());
+        assertEquals("public-http", config.routes().get(0).id());
+        assertEquals(9000, config.routes().get(0).listener().port());
+        assertEquals("jsonplaceholder.typicode.com", config.routes().get(0).target().host());
+        assertTrue(config.routes().get(0).target().rewriteHostHeader());
+        assertEquals("internal-http", config.routes().get(1).id());
+        assertEquals(9001, config.routes().get(1).listener().port());
+        assertEquals("example.org", config.routes().get(1).target().host());
+        assertEquals(8081, config.ui().port());
+    }
 }

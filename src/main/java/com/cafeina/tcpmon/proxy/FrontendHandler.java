@@ -2,6 +2,7 @@ package com.cafeina.tcpmon.proxy;
 
 import com.cafeina.tcpmon.Direction;
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.session.PendingPayload;
 import com.cafeina.tcpmon.session.SessionStore;
 import com.cafeina.tcpmon.tls.TlsContextFactory;
@@ -25,13 +26,15 @@ import java.util.Map;
 
 final class FrontendHandler extends ChannelInboundHandlerAdapter {
     private final ProxyConfig config;
+    private final RouteConfig route;
     private final SessionStore sessionStore;
     private final SslContext outboundSslContext;
     private volatile Channel outboundChannel;
     private volatile String sessionId;
 
-    FrontendHandler(ProxyConfig config, SessionStore sessionStore, SslContext outboundSslContext) {
+    FrontendHandler(ProxyConfig config, RouteConfig route, SessionStore sessionStore, SslContext outboundSslContext) {
         this.config = config;
+        this.route = route;
         this.sessionStore = sessionStore;
         this.outboundSslContext = outboundSslContext;
     }
@@ -43,18 +46,19 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         InetSocketAddress client = (InetSocketAddress) inboundChannel.remoteAddress();
         InetSocketAddress listener = (InetSocketAddress) inboundChannel.localAddress();
         this.sessionId = sessionStore.openSession(
+                route.id(),
                 client.getHostString() + ":" + client.getPort(),
                 listener.getHostString() + ":" + listener.getPort(),
-                config.target().host() + ":" + config.target().port());
+                route.target().host() + ":" + route.target().port());
         sessionStore.recordLifecycle(sessionId, "CLIENT_CONNECTED", Map.of("client", client.toString()));
 
         Bootstrap bootstrap = new Bootstrap()
                 .group(inboundChannel.eventLoop())
                 .channel(NioSocketChannel.class)
                 .option(ChannelOption.AUTO_READ, true)
-                .handler(new OutboundInitializer(inboundChannel, sessionId, config, sessionStore, outboundSslContext));
+                .handler(new OutboundInitializer(inboundChannel, sessionId, config, route, sessionStore, outboundSslContext));
 
-        bootstrap.connect(config.target().host(), config.target().port()).addListener((ChannelFutureListener) future -> {
+        bootstrap.connect(route.target().host(), route.target().port()).addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
                 outboundChannel = future.channel();
                 sessionStore.recordLifecycle(sessionId, "TARGET_CONNECTED", Map.of("target", future.channel().remoteAddress().toString()));
@@ -77,8 +81,8 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         byte[] payload = new byte[buffer.readableBytes()];
         buffer.readBytes(payload);
         buffer.release();
-        HttpRequestRewriter.RewriteResult rewriteResult = config.target().rewriteHostHeader()
-                ? HttpRequestRewriter.rewriteHostHeader(payload, config.target().host(), config.target().port())
+        HttpRequestRewriter.RewriteResult rewriteResult = route.target().rewriteHostHeader()
+                ? HttpRequestRewriter.rewriteHostHeader(payload, route.target().host(), route.target().port())
                 : new HttpRequestRewriter.RewriteResult(payload, false);
         byte[] outboundPayload = rewriteResult.payload();
 
@@ -163,13 +167,15 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         private final Channel inboundChannel;
         private final String sessionId;
         private final ProxyConfig config;
+        private final RouteConfig route;
         private final SessionStore sessionStore;
         private final SslContext outboundSslContext;
 
-        private OutboundInitializer(Channel inboundChannel, String sessionId, ProxyConfig config, SessionStore sessionStore, SslContext outboundSslContext) {
+        private OutboundInitializer(Channel inboundChannel, String sessionId, ProxyConfig config, RouteConfig route, SessionStore sessionStore, SslContext outboundSslContext) {
             this.inboundChannel = inboundChannel;
             this.sessionId = sessionId;
             this.config = config;
+            this.route = route;
             this.sessionStore = sessionStore;
             this.outboundSslContext = outboundSslContext;
         }
@@ -177,7 +183,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         @Override
         protected void initChannel(io.netty.channel.socket.SocketChannel channel) {
             if (outboundSslContext != null) {
-                channel.pipeline().addLast("ssl", TlsContextFactory.newClientHandler(config, outboundSslContext, channel.alloc()));
+                channel.pipeline().addLast("ssl", TlsContextFactory.newClientHandler(route, outboundSslContext, channel.alloc()));
             }
             channel.pipeline().addLast("backend", new BackendHandler(inboundChannel, sessionId, config, sessionStore));
         }

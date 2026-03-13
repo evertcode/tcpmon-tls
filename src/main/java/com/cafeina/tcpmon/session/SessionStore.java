@@ -41,13 +41,14 @@ public final class SessionStore implements AutoCloseable {
         }
     }
 
-    public String openSession(String clientAddress, String listenerAddress, String targetAddress) {
+    public String openSession(String routeId, String clientAddress, String listenerAddress, String targetAddress) {
         String sessionId = "s-" + ids.incrementAndGet() + "-" + UUID.randomUUID().toString().substring(0, 8);
-        SessionRecord record = new SessionRecord(sessionId, Instant.now(), clientAddress, listenerAddress, targetAddress);
+        SessionRecord record = new SessionRecord(sessionId, routeId, Instant.now(), clientAddress, listenerAddress, targetAddress);
         sessions.put(sessionId, record);
         appendLog(Map.of(
                 "kind", "session-open",
                 "sessionId", sessionId,
+                "routeId", routeId,
                 "clientAddress", clientAddress,
                 "listenerAddress", listenerAddress,
                 "targetAddress", targetAddress,
@@ -148,6 +149,11 @@ public final class SessionStore implements AutoCloseable {
     public SessionEvent findEvent(String sessionId, String eventId) {
         SessionRecord record = sessions.get(sessionId);
         return record == null ? null : record.eventById(eventId);
+    }
+
+    public String routeIdForSession(String sessionId) {
+        SessionRecord record = sessions.get(sessionId);
+        return record == null ? null : record.routeId();
     }
 
     public List<PendingPayload> pendingPayloads(String sessionId) {

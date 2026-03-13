@@ -117,10 +117,15 @@ public final class ControlPlaneServer implements AutoCloseable {
             sendJson(exchange, 400, Map.of("error", "only client-to-target payloads can be replayed"));
             return;
         }
+        String routeId = sessionStore.routeIdForSession(sessionId);
+        if (routeId == null) {
+            sendJson(exchange, 404, Map.of("error", "session route not found"));
+            return;
+        }
         String base64 = event.details().get("base64").toString();
         try {
             ReplayDestination destination = ReplayDestination.fromString(body.path("destination").asText("listener"));
-            Map<String, Object> result = replayService.replay(java.util.Base64.getDecoder().decode(base64), destination);
+            Map<String, Object> result = replayService.replay(java.util.Base64.getDecoder().decode(base64), routeId, destination);
             sendJson(exchange, 200, result);
         } catch (Exception exception) {
             sendJson(exchange, 500, Map.of("error", exception.toString()));

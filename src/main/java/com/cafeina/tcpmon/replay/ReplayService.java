@@ -1,6 +1,7 @@
 package com.cafeina.tcpmon.replay;
 
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TransportMode;
 import com.cafeina.tcpmon.tls.TlsContextFactory;
 import io.netty.bootstrap.Bootstrap;
@@ -34,14 +35,15 @@ public final class ReplayService {
         this.config = config;
     }
 
-    public Map<String, Object> replay(byte[] payload, ReplayDestination destination) throws Exception {
+    public Map<String, Object> replay(byte[] payload, String routeId, ReplayDestination destination) throws Exception {
         EventLoopGroup group = new NioEventLoopGroup(1);
         CountDownLatch latch = new CountDownLatch(1);
         AtomicInteger bytesReceived = new AtomicInteger();
         Instant startedAt = Instant.now();
         try {
-            Endpoint endpoint = resolveEndpoint(destination);
-            SslContext sslContext = resolveSslContext(destination);
+            RouteConfig route = config.route(routeId);
+            Endpoint endpoint = resolveEndpoint(route, destination);
+            SslContext sslContext = resolveSslContext(route, destination);
             Bootstrap bootstrap = new Bootstrap()
                     .group(group)
                     .channel(NioSocketChannel.class)
@@ -50,7 +52,7 @@ public final class ReplayService {
                         @Override
                         protected void initChannel(SocketChannel channel) {
                             if (sslContext != null) {
-                                channel.pipeline().addLast("ssl", newClientHandler(destination, endpoint, sslContext, channel.alloc()));
+                                channel.pipeline().addLast("ssl", newClientHandler(route, destination, endpoint, sslContext, channel.alloc()));
                             }
                             channel.pipeline().addLast("read-timeout", new ReadTimeoutHandler(2));
                             channel.pipeline().addLast(new io.netty.channel.SimpleChannelInboundHandler<io.netty.buffer.ByteBuf>() {
@@ -98,23 +100,23 @@ public final class ReplayService {
         }
     }
 
-    Endpoint resolveEndpoint(ReplayDestination destination) {
+    Endpoint resolveEndpoint(RouteConfig route, ReplayDestination destination) {
         return switch (destination) {
-            case LISTENER -> new Endpoint(config.listener().host(), config.listener().port());
-            case TARGET -> new Endpoint(config.target().host(), config.target().port());
+            case LISTENER -> new Endpoint(route.listener().host(), route.listener().port());
+            case TARGET -> new Endpoint(route.target().host(), route.target().port());
         };
     }
 
-    private SslContext resolveSslContext(ReplayDestination destination) throws Exception {
+    private SslContext resolveSslContext(RouteConfig route, ReplayDestination destination) throws Exception {
         return switch (destination) {
-            case TARGET -> config.target().transportMode() == TransportMode.TLS
-                    ? TlsContextFactory.buildClientContext(config)
+            case TARGET -> route.target().transportMode() == TransportMode.TLS
+                    ? TlsContextFactory.buildClientContext(config, route)
                     : null;
             case LISTENER -> {
-                if (config.listener().transportMode() != TransportMode.TLS) {
+                if (route.listener().transportMode() != TransportMode.TLS) {
                     yield null;
                 }
-                if (config.listener().clientAuthMode() == com.cafeina.tcpmon.ClientAuthMode.REQUIRE) {
+                if (route.listener().clientAuthMode() == com.cafeina.tcpmon.ClientAuthMode.REQUIRE) {
                     throw new IllegalStateException("Replay to a TLS listener with required client auth is not supported yet");
                 }
                 yield SslContextBuilder.forClient()
@@ -125,12 +127,13 @@ public final class ReplayService {
     }
 
     private io.netty.handler.ssl.SslHandler newClientHandler(
+            RouteConfig route,
             ReplayDestination destination,
             Endpoint endpoint,
             SslContext sslContext,
             ByteBufAllocator allocator) {
         return switch (destination) {
-            case TARGET -> TlsContextFactory.newClientHandler(config, sslContext, allocator);
+            case TARGET -> TlsContextFactory.newClientHandler(route, sslContext, allocator);
             case LISTENER -> sslContext.newHandler(allocator, endpoint.host(), endpoint.port());
         };
     }

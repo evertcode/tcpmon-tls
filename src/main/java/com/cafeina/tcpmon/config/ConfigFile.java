@@ -3,6 +3,7 @@ package com.cafeina.tcpmon.config;
 import java.util.List;
 
 public record ConfigFile(
+        List<RouteSection> routes,
         ListenerSection listener,
         TargetSection target,
         UiSection ui,
@@ -16,6 +17,12 @@ public record ConfigFile(
             String mode,
             String clientAuth,
             TlsSection tls) {
+    }
+
+    public record RouteSection(
+            String id,
+            ListenerSection listener,
+            TargetSection target) {
     }
 
     public record TargetSection(

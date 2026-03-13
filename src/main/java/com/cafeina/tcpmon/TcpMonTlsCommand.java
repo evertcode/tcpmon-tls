@@ -169,19 +169,6 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
 
     ProxyConfig toConfig() {
         ConfigFile fileConfig = loadConfigFile();
-        String effectiveListenHost = select(listenHost, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().host(), "0.0.0.0");
-        Integer effectiveListenPort = select(listenPort, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().port(), null);
-        TransportMode effectiveListenMode = enumValue(listenMode, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().mode(), TransportMode.class, TransportMode.PLAIN);
-        ClientAuthMode effectiveClientAuth = enumValue(listenClientAuth, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().clientAuth(), ClientAuthMode.class, ClientAuthMode.NONE);
-
-        String effectiveTargetHost = select(targetHost, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().host(), null);
-        Integer effectiveTargetPort = select(targetPort, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().port(), null);
-        TransportMode effectiveTargetMode = enumValue(targetMode, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().mode(), TransportMode.class, TransportMode.PLAIN);
-        String effectiveTargetSni = select(targetSni, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().sni(), null);
-        boolean effectiveTargetInsecure = selectBoolean(targetInsecure, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().insecure(), false);
-        boolean effectiveTargetVerifyHostname = selectBoolean(targetVerifyHostname, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().verifyHostname(), false);
-        boolean effectiveRewriteHostHeader = selectBoolean(rewriteHostHeader, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().rewriteHostHeader(), false);
-
         String effectiveUiHost = select(uiHost, fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().host(), "127.0.0.1");
         Integer effectiveUiPort = select(uiPort, fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().port(), 8080);
         boolean effectiveUiEnabled = selectBoolean(uiEnabled, fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().enabled(), true);
@@ -198,9 +185,39 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
                 ? fileConfig.tlsCiphers()
                 : List.of();
 
-        validateRequired(effectiveListenPort, effectiveTargetHost, effectiveTargetPort);
+        List<RouteConfig> effectiveRoutes = buildRoutes(fileConfig);
 
         return new ProxyConfig(
+                effectiveRoutes,
+                new UiConfig(effectiveUiHost, effectiveUiPort, effectiveUiEnabled),
+                effectiveSessionsDir,
+                effectiveInterceptMode,
+                effectiveProtocols,
+                effectiveCiphers);
+    }
+
+    private List<RouteConfig> buildRoutes(ConfigFile fileConfig) {
+        if (fileConfig != null && fileConfig.routes() != null && !fileConfig.routes().isEmpty()) {
+            return fileConfig.routes().stream()
+                    .map(this::routeFromFile)
+                    .toList();
+        }
+
+        String effectiveListenHost = select(listenHost, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().host(), "0.0.0.0");
+        Integer effectiveListenPort = select(listenPort, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().port(), null);
+        TransportMode effectiveListenMode = enumValue(listenMode, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().mode(), TransportMode.class, TransportMode.PLAIN);
+        ClientAuthMode effectiveClientAuth = enumValue(listenClientAuth, fileConfig == null ? null : fileConfig.listener() == null ? null : fileConfig.listener().clientAuth(), ClientAuthMode.class, ClientAuthMode.NONE);
+        String effectiveTargetHost = select(targetHost, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().host(), null);
+        Integer effectiveTargetPort = select(targetPort, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().port(), null);
+        TransportMode effectiveTargetMode = enumValue(targetMode, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().mode(), TransportMode.class, TransportMode.PLAIN);
+        String effectiveTargetSni = select(targetSni, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().sni(), null);
+        boolean effectiveTargetInsecure = selectBoolean(targetInsecure, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().insecure(), false);
+        boolean effectiveTargetVerifyHostname = selectBoolean(targetVerifyHostname, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().verifyHostname(), false);
+        boolean effectiveRewriteHostHeader = selectBoolean(rewriteHostHeader, fileConfig == null ? null : fileConfig.target() == null ? null : fileConfig.target().rewriteHostHeader(), false);
+        validateRequired(effectiveListenPort, effectiveTargetHost, effectiveTargetPort);
+
+        return List.of(new RouteConfig(
+                "default",
                 new ListenerConfig(
                         effectiveListenHost,
                         effectiveListenPort,
@@ -233,12 +250,31 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
                                 targetTrustStorePassword,
                                 targetKeyStoreType,
                                 targetTrustStoreType,
-                                fileConfig == null || fileConfig.target() == null ? null : fileConfig.target().tls())),
-                new UiConfig(effectiveUiHost, effectiveUiPort, effectiveUiEnabled),
-                effectiveSessionsDir,
-                effectiveInterceptMode,
-                effectiveProtocols,
-                effectiveCiphers);
+                                fileConfig == null || fileConfig.target() == null ? null : fileConfig.target().tls()))));
+    }
+
+    private RouteConfig routeFromFile(ConfigFile.RouteSection route) {
+        if (route.listener() == null || route.target() == null) {
+            throw new IllegalArgumentException("Each route requires listener and target sections");
+        }
+        validateRequired(route.listener().port(), route.target().host(), route.target().port());
+        return new RouteConfig(
+                route.id() == null || route.id().isBlank() ? "route-" + route.listener().port() : route.id(),
+                new ListenerConfig(
+                        select(route.listener().host(), null, "0.0.0.0"),
+                        route.listener().port(),
+                        enumValue(null, route.listener().mode(), TransportMode.class, TransportMode.PLAIN),
+                        enumValue(null, route.listener().clientAuth(), ClientAuthMode.class, ClientAuthMode.NONE),
+                        mergeTls(null, null, null, null, null, null, null, null, route.listener().tls())),
+                new TargetConfig(
+                        route.target().host(),
+                        route.target().port(),
+                        enumValue(null, route.target().mode(), TransportMode.class, TransportMode.PLAIN),
+                        route.target().sni(),
+                        selectBoolean(null, route.target().insecure(), false),
+                        selectBoolean(null, route.target().verifyHostname(), false),
+                        selectBoolean(null, route.target().rewriteHostHeader(), false),
+                        mergeTls(null, null, null, null, null, null, null, null, route.target().tls())));
     }
 
     private ConfigFile loadConfigFile() {
@@ -312,6 +348,7 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
 
     private static ConfigFile exampleConfigFile() {
         return new ConfigFile(
+                null,
                 new ConfigFile.ListenerSection(
                         "127.0.0.1",
                         9000,
