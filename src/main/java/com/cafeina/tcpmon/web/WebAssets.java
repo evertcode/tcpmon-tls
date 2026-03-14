@@ -263,9 +263,21 @@ public final class WebAssets {
                     }
                     .request-toolbar {
                       display: grid;
-                      grid-template-columns: 1fr auto;
+                      grid-template-columns: 1fr 140px 140px auto;
                       gap: 8px;
                       margin-bottom: 10px;
+                    }
+                    .table-footer {
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      gap: 12px;
+                      margin-top: 10px;
+                    }
+                    .pager {
+                      display: flex;
+                      gap: 8px;
+                      align-items: center;
                     }
                     table {
                       width: 100%;
@@ -314,6 +326,20 @@ public final class WebAssets {
                     }
                     .payload-section {
                       padding: 0 12px 12px;
+                    }
+                    .headers-table {
+                      width: 100%;
+                    }
+                    .headers-table td {
+                      padding: 7px 8px;
+                      border-bottom: 1px solid var(--border);
+                      font-size: 12px;
+                      vertical-align: top;
+                    }
+                    .headers-table td:first-child {
+                      width: 32%;
+                      color: var(--text-muted);
+                      font-family: var(--mono);
                     }
                     .payload-body {
                       padding: 0 12px 12px;
@@ -435,6 +461,8 @@ public final class WebAssets {
                     let activeRoute = null;
                     let activeSession = null;
                     let activeExchangeIndex = 0;
+                    let requestPage = 1;
+                    const requestPageSize = 10;
                     let statusMessage = null;
 
                     async function fetchJson(url, options) {
@@ -544,6 +572,7 @@ public final class WebAssets {
                       activeRoute = routeId;
                       activeSession = null;
                       activeExchangeIndex = 0;
+                      requestPage = 1;
                       const sessions = sessionsForActiveRoute();
                       activeSession = sessions[0] ? sessions[0].sessionId : null;
                       renderRouteList();
@@ -601,7 +630,13 @@ public final class WebAssets {
                       document.getElementById('request-table').innerHTML = `
                         <section class="table-card">
                           <div class="request-toolbar">
-                            <input id="request-search" type="search" placeholder="Filter requests in this route" oninput="renderRequestTable()">
+                            <input id="request-search" type="search" placeholder="Filter requests in this route" oninput="resetRequestPageAndRender()">
+                            <select id="request-method-filter" onchange="resetRequestPageAndRender()">
+                              ${renderMethodOptions(sessions)}
+                            </select>
+                            <select id="request-status-code-filter" onchange="resetRequestPageAndRender()">
+                              ${renderStatusCodeOptions(sessions)}
+                            </select>
                             <button class="secondary" onclick="refreshSessions(true)">Refresh</button>
                           </div>
                           ${renderRequestTableRows(sessions)}
@@ -611,7 +646,11 @@ public final class WebAssets {
 
                     function renderRequestTableRows(sessions) {
                       const query = document.getElementById('request-search') ? document.getElementById('request-search').value.trim().toLowerCase() : '';
+                      const methodFilter = document.getElementById('request-method-filter') ? document.getElementById('request-method-filter').value : '';
+                      const statusCodeFilter = document.getElementById('request-status-code-filter') ? document.getElementById('request-status-code-filter').value : '';
                       const filtered = sessions.filter(session => {
+                        if (methodFilter && String(session.requestMethod || '') !== methodFilter) return false;
+                        if (statusCodeFilter && String(session.responseStatusCode || '') !== statusCodeFilter) return false;
                         if (!query) return true;
                         return [
                           session.sessionId,
@@ -624,8 +663,13 @@ public final class WebAssets {
                         ].join(' ').toLowerCase().includes(query);
                       });
                       if (!filtered.length) {
+                        requestPage = 1;
                         return '<div class="empty">No requests match the current filter.</div>';
                       }
+                      const totalPages = Math.max(1, Math.ceil(filtered.length / requestPageSize));
+                      requestPage = Math.min(requestPage, totalPages);
+                      const pageStart = (requestPage - 1) * requestPageSize;
+                      const pageItems = filtered.slice(pageStart, pageStart + requestPageSize);
                       return `
                         <table>
                           <thead>
@@ -638,7 +682,7 @@ public final class WebAssets {
                             </tr>
                           </thead>
                           <tbody>
-                            ${filtered.map(session => `
+                            ${pageItems.map(session => `
                               <tr class="session-entry${session.sessionId === activeSession ? ' active' : ''}" onclick="selectSession('${session.sessionId}')">
                                 <td class="mono">${escapeHtml(session.sessionId || '')}</td>
                                 <td>${escapeHtml(session.requestMethod || '')}</td>
@@ -649,7 +693,35 @@ public final class WebAssets {
                             `).join('')}
                           </tbody>
                         </table>
+                        <div class="table-footer">
+                          <div class="muted">Showing ${pageStart + 1}-${pageStart + pageItems.length} of ${filtered.length} requests</div>
+                          <div class="pager">
+                            <button class="secondary" ${requestPage === 1 ? 'disabled' : ''} onclick="changeRequestPage(-1)">Previous</button>
+                            <span class="muted">Page ${requestPage} / ${totalPages}</span>
+                            <button class="secondary" ${requestPage >= totalPages ? 'disabled' : ''} onclick="changeRequestPage(1)">Next</button>
+                          </div>
+                        </div>
                       `;
+                    }
+
+                    function renderMethodOptions(sessions) {
+                      const methods = [...new Set(sessions.map(session => String(session.requestMethod || '')).filter(Boolean))].sort();
+                      return `<option value="">All methods</option>` + methods.map(method => `<option value="${escapeAttr(method)}">${escapeHtml(method)}</option>`).join('');
+                    }
+
+                    function renderStatusCodeOptions(sessions) {
+                      const statusCodes = [...new Set(sessions.map(session => String(session.responseStatusCode || '')).filter(Boolean))].sort();
+                      return `<option value="">All responses</option>` + statusCodes.map(code => `<option value="${escapeAttr(code)}">${escapeHtml(code)}</option>`).join('');
+                    }
+
+                    function resetRequestPageAndRender() {
+                      requestPage = 1;
+                      renderRequestTable();
+                    }
+
+                    function changeRequestPage(delta) {
+                      requestPage = Math.max(1, requestPage + delta);
+                      renderRequestTable();
                     }
 
                     async function selectSession(sessionId) {
@@ -693,8 +765,8 @@ public final class WebAssets {
                         `;
                       }
                       const decoded = payload.decoded || {};
-                      const headersText = decoded.isHttp ? (decoded.headersText || '') : 'Non-HTTP payload';
-                      const bodyText = decoded.bodyText || '';
+                      const headers = Array.isArray(decoded.headers) ? decoded.headers : [];
+                      const bodyText = formatBody(decoded);
                       const chunkText = payload.chunkCount ? ` / ${payload.chunkCount} chunks` : '';
                       return `
                         <article class="payload-card">
@@ -711,7 +783,7 @@ public final class WebAssets {
                           </div>
                           <div class="payload-section">
                             <span class="label">Headers</span>
-                            <pre>${escapeHtml(headersText)}</pre>
+                            ${renderHeadersTable(headers, decoded)}
                           </div>
                           <div class="payload-body">
                             <span class="label">Body</span>
@@ -719,6 +791,79 @@ public final class WebAssets {
                           </div>
                         </article>
                       `;
+                    }
+
+                    function renderHeadersTable(headers, decoded) {
+                      if (!decoded.isHttp) {
+                        return `<pre>Non-HTTP payload</pre>`;
+                      }
+                      if (!headers.length) {
+                        return `<pre>No headers</pre>`;
+                      }
+                      return `
+                        <table class="headers-table">
+                          <tbody>
+                            ${headers.map(header => `
+                              <tr>
+                                <td>${escapeHtml(header.name || '')}</td>
+                                <td>${escapeHtml(header.value || '')}</td>
+                              </tr>
+                            `).join('')}
+                          </tbody>
+                        </table>
+                      `;
+                    }
+
+                    function formatBody(decoded) {
+                      const bodyText = decoded.bodyText || '';
+                      if (!decoded.isHttp || !bodyText) {
+                        return bodyText;
+                      }
+                      const headers = Array.isArray(decoded.headers) ? decoded.headers : [];
+                      const contentTypeHeader = headers.find(header => String(header.name || '').toLowerCase() === 'content-type');
+                      const contentType = String(contentTypeHeader?.value || '').toLowerCase();
+                      if (contentType.includes('json') || looksLikeJson(bodyText)) {
+                        try {
+                          return JSON.stringify(JSON.parse(bodyText), null, 2);
+                        } catch (error) {
+                          return bodyText;
+                        }
+                      }
+                      if (contentType.includes('xml') || contentType.includes('soap') || looksLikeXml(bodyText)) {
+                        return prettyPrintXml(bodyText);
+                      }
+                      return bodyText;
+                    }
+
+                    function looksLikeJson(value) {
+                      const text = String(value || '').trim();
+                      return text.startsWith('{') || text.startsWith('[');
+                    }
+
+                    function looksLikeXml(value) {
+                      return String(value || '').trim().startsWith('<');
+                    }
+
+                    function prettyPrintXml(value) {
+                      const compact = String(value || '').replace(/>\\s+</g, '><').trim();
+                      if (!compact) {
+                        return value;
+                      }
+                      const tokens = compact.replace(/></g, '>\n<').split('\n');
+                      let indent = 0;
+                      const lines = [];
+                      for (const rawToken of tokens) {
+                        const token = rawToken.trim();
+                        if (!token) continue;
+                        if (token.startsWith('</')) {
+                          indent = Math.max(0, indent - 1);
+                        }
+                        lines.push('  '.repeat(indent) + token);
+                        if (token.startsWith('<') && !token.startsWith('</') && !token.endsWith('/>') && !token.includes('</')) {
+                          indent++;
+                        }
+                      }
+                      return lines.join('\n');
                     }
 
                     function renderEventsAndEditor(data) {
