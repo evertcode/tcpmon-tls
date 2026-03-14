@@ -1,50 +1,50 @@
 # tcpmon-tls
 
-Proxy estilo `tcpmon` para depuración moderna de tráfico HTTP/TLS.
+`tcpmon`-style proxy for modern HTTP/TLS debugging.
 
-`tcpmon-tls` es una herramienta Java para depurar integraciones locales y remotas sobre TCP, TLS y HTTP/HTTPS. Permite inspeccionar `request/response`, interceptar tráfico, editar requests HTTP, reenviar al target, recapturar por el listener local y operar múltiples rutas en un solo proceso.
+`tcpmon-tls` is a Java tool for debugging local and remote integrations over TCP, TLS, and HTTP/HTTPS. It lets you inspect `request/response` traffic, intercept payloads, edit HTTP requests, resend them to the target, recapture them through the local listener, and run multiple routes in a single process.
 
 ## Highlights
 
-- múltiples listeners y targets por proceso usando `routes[]`
-- inspección de `request/response` HTTP desde una UI web local
-- interceptación, edición estructurada y reenvío de requests
-- replay al target y recapture por el listener local
-- soporte para `TLS` y `mTLS` inbound/outbound
-- configuración por `JSON` o `YAML` y empaquetado como `jar` ejecutable
+- multiple listeners and targets per process using `routes[]`
+- HTTP `request/response` inspection from a local web UI
+- interception, structured editing, and forwarding of requests
+- replay to the target and recapture through the local listener
+- `TLS` and `mTLS` support for inbound and outbound connections
+- `JSON` or `YAML` configuration and executable `jar` packaging
 
-## Casos de uso típicos
+## Typical use cases
 
-- depurar `HTTP local -> HTTPS remoto`
-- inspeccionar requests y responses sin modificar el cliente
-- reproducir errores de integración desde tráfico ya capturado
-- probar conectividad `TLS/mTLS` hacia backends remotos
-- correr varias rutas locales contra distintos destinos
+- debug `local HTTP -> remote HTTPS`
+- inspect requests and responses without changing the client
+- reproduce integration failures from captured traffic
+- validate `TLS/mTLS` connectivity to remote backends
+- run several local routes against different targets
 
-Actualmente el flujo más útil y probado es:
+The most useful and tested flows today are:
 
-- `HTTP local -> HTTPS remoto`
-- `HTTP local -> HTTP remoto`
-- `TLS local -> TLS remoto`
-- recaptura de requests desde la UI local
+- `local HTTP -> remote HTTPS`
+- `local HTTP -> remote HTTP`
+- `local TLS -> remote TLS`
+- request recapture from the local UI
 
-## Qué hace
+## What it does
 
-- expone un listener local TCP o TLS
-- reenvía el tráfico a un destino TCP o TLS
-- soporta `mTLS` inbound y outbound
-- guarda sesiones y payloads en disco
-- expone una UI web local para inspección
-- separa `request` y `response` HTTP cuando puede detectarlos
-- soporta múltiples intercambios HTTP en una misma sesión keep-alive
-- permite reenviar un request:
-  - al listener local para recapturarlo
-  - directo al target configurado
+- exposes a local TCP or TLS listener
+- forwards traffic to a TCP or TLS target
+- supports inbound and outbound `mTLS`
+- persists session history locally
+- exposes a local web UI for inspection
+- separates HTTP `request` and `response` messages when possible
+- supports multiple HTTP exchanges within a single keep-alive session
+- can resend a request:
+  - to the local listener for recapture
+  - directly to the configured target
 
-## Requisitos
+## Requirements
 
 - Java 21
-- Maven 3.9+ para compilar
+- Maven 3.9+ to build
 
 ## Build
 
@@ -52,35 +52,35 @@ Actualmente el flujo más útil y probado es:
 mvn -q package -DskipTests
 ```
 
-Jar resultante:
+Resulting jar:
 
 ```text
 target/tcpmon-tls-0.1.0-SNAPSHOT.jar
 ```
 
-## Ejecución rápida
+## Quick start
 
-Genera un archivo de ejemplo:
+Generate an example config file:
 
 ```bash
 java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --init-config tcpmon.json
 ```
 
-También puedes generarlo en `YAML`:
+You can also generate it as `YAML`:
 
 ```bash
 java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --init-config tcpmon.yaml
 ```
 
-Arranca usando ese archivo:
+Start the proxy using that file:
 
 ```bash
 java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
-## Caso recomendado: HTTP local -> HTTPS remoto
+## Recommended case: local HTTP -> remote HTTPS
 
-Ejemplo con `jsonplaceholder`:
+Example using `jsonplaceholder`:
 
 ```json
 {
@@ -108,7 +108,7 @@ Ejemplo con `jsonplaceholder`:
 }
 ```
 
-El mismo ejemplo en `YAML`:
+The same example in `YAML`:
 
 ```yaml
 listener:
@@ -133,27 +133,27 @@ tlsProtocols:
   - TLSv1.2
 ```
 
-Arranque:
+Start it:
 
 ```bash
 java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
-Prueba local:
+Local test:
 
 ```bash
 curl -v http://127.0.0.1:9000/posts/1
 ```
 
-UI local:
+Local UI:
 
 ```text
 http://127.0.0.1:8080/
 ```
 
-## Ejecución por flags
+## Running with CLI flags
 
-El mismo ejemplo anterior sin archivo:
+The same example without a config file:
 
 ```bash
 java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar \
@@ -171,56 +171,82 @@ java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar \
   --ui-port 8080
 ```
 
-## Opciones más importantes
+## Most important options
 
-### Listener local
+### Local listener
 
 - `--listen-host`
+  Local bind address for the proxy listener. Use `127.0.0.1` for local-only access or `0.0.0.0` to accept connections from other hosts.
 - `--listen-port`
+  Local port where clients connect to `tcpmon-tls`.
 - `--listen-mode=PLAIN|TLS`
+  Controls whether the local listener accepts plain TCP/HTTP or TLS/HTTPS connections.
 - `--listen-client-auth=NONE|OPTIONAL|REQUIRE`
+  Enables client-certificate validation on the local listener. Use `REQUIRE` when you want inbound `mTLS`.
 - `--listen-cert`
+  PEM certificate presented by the local TLS listener.
 - `--listen-key`
+  PEM private key that matches `--listen-cert`.
 - `--listen-keystore`
+  Alternative to PEM files when the local listener certificate is stored in `JKS` or `PKCS12`.
 - `--listen-truststore`
+  Trust material used to validate client certificates when inbound client auth is enabled.
 
-### Target remoto
+### Remote target
 
 - `--target-host`
+  Hostname or IP of the remote backend that receives forwarded traffic.
 - `--target-port`
+  Remote backend port.
 - `--target-mode=PLAIN|TLS`
+  Controls whether the outbound connection to the backend is plain TCP/HTTP or TLS/HTTPS.
 - `--target-sni`
+  Hostname announced in the outbound TLS handshake. Useful when connecting by IP or when the backend uses TLS virtual hosting.
 - `--target-insecure`
+  Disables outbound certificate validation. Intended for local testing only.
 - `--target-verify-hostname`
+  Enables hostname verification for outbound TLS. Use this when you want stricter remote certificate validation.
 - `--rewrite-host-header`
+  Rewrites the HTTP `Host` header to match the configured target. Useful when clients connect to `localhost` but the backend expects its own hostname.
 - `--target-cert`
+  PEM client certificate for outbound `mTLS`.
 - `--target-key`
+  PEM private key for `--target-cert`.
 - `--target-keystore`
+  Alternative to PEM files when the outbound client certificate is stored in `JKS` or `PKCS12`.
 - `--target-truststore`
+  Trust material used to validate the remote server certificate.
 
-### UI y sesiones
+### UI and sessions
 
 - `--ui-enabled`
+  Enables the local control-plane UI.
 - `--ui-host`
+  Bind address for the local web UI.
 - `--ui-port`
+  Port used by the local web UI.
 - `--sessions-dir`
+  Directory where session history is persisted. The SQLite database is created here as `sessions.db`.
 - `--intercept-mode=NONE|REQUEST|RESPONSE|BOTH`
+  Chooses which traffic direction is paused for manual forward/edit in the UI.
 
-### Configuración por archivo
+### File-based configuration
 
-- `--config <ruta>`
-- `--init-config <ruta>`
+- `--config <path>`
+  Loads runtime configuration from a `JSON` or `YAML` file.
+- `--init-config <path>`
+  Writes an example config file to the given path. The output format is inferred from the extension, for example `.json`, `.yaml`, or `.yml`.
 
-La configuración por archivo soporta `JSON` y `YAML`, en dos formas:
+File-based configuration supports both `JSON` and `YAML`, in two modes:
 
-- modo simple: `listener` + `target`
-- modo multi-route: `routes[]`
+- simple mode: `listener` + `target`
+- multi-route mode: `routes[]`
 
-## Multi-route en un solo proceso
+## Multi-route in a single process
 
-También puedes definir múltiples listeners, cada uno con su target propio, dentro del mismo proceso.
+You can define multiple listeners, each with its own target, within the same process.
 
-Ejemplo:
+Example:
 
 ```json
 {
@@ -265,7 +291,7 @@ Ejemplo:
 }
 ```
 
-El mismo ejemplo en `YAML`:
+The same example in `YAML`:
 
 ```yaml
 routes:
@@ -298,191 +324,190 @@ sessionsDir: ./sessions
 interceptMode: NONE
 ```
 
-Con este archivo:
+With this file:
 
-- `127.0.0.1:9000` apunta al target TLS definido en `public-api`
-- `127.0.0.1:9001` apunta al target plano definido en `legacy-http`
-- cada sesión queda etiquetada por `routeId`
+- `127.0.0.1:9000` points to the TLS target defined in `public-api`
+- `127.0.0.1:9001` points to the plain target defined in `legacy-http`
+- each session is tagged with its `routeId`
 
-Arranque:
+Start it:
 
 ```bash
 java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
-Notas:
+Notes:
 
-- cuando usas `routes[]`, esa lista define completamente los listeners/targets del proceso
-- los flags CLI actuales siguen siendo útiles para el modo de una sola ruta
-- la UI muestra `routeId` por sesión para distinguir de qué listener provino el tráfico
+- when you use `routes[]`, that list fully defines the listeners and targets for the process
+- the current CLI flags are still useful for single-route mode
+- the UI shows `routeId` per session so you can tell which listener produced the traffic
 
-## Booleanos en CLI
+## Boolean CLI flags
 
-Las opciones booleanas aceptan ambos estilos:
+Boolean options support both styles:
 
 ```bash
 --target-insecure
 --target-insecure=true
 ```
 
-Lo mismo aplica para:
+The same applies to:
 
 - `--ui-enabled`
 - `--target-verify-hostname`
 - `--rewrite-host-header`
 
-## Certificados y TLS
+## Certificates and TLS
 
-Se soporta carga de material TLS por:
+TLS material can be loaded from:
 
 - `PEM`
 - `JKS`
 - `PKCS12`
 
-Uso típico:
+Typical usage:
 
-- `cert + key PEM` para server/client cert
-- `truststore PEM/JKS/P12` para validar peers
+- `cert + key PEM` for server/client certificates
+- `truststore PEM/JKS/P12` to validate peers
 
-### Cuándo usar `--target-sni`
+### When to use `--target-sni`
 
-Sirve para indicar el hostname que se enviará en el handshake TLS hacia el remoto.
+It controls the hostname sent in the TLS handshake to the remote target.
 
-Es útil cuando:
+It is useful when:
 
-- el socket se abre contra una IP pero el certificado está emitido para un hostname
-- el servidor remoto usa virtual hosting TLS
-- quieres desacoplar `target-host` del nombre anunciado en SNI
+- the socket connects to an IP address but the certificate is issued for a hostname
+- the remote server uses TLS virtual hosting
+- you want to decouple `target-host` from the name announced in SNI
 
 ## `--target-insecure`
 
-Deshabilita la validación del certificado remoto en TLS outbound.
+Disables remote certificate validation for outbound TLS.
 
-Está pensado para:
+It is intended for:
 
-- pruebas locales
-- ambientes con certificados internos no confiables aún
+- local testing
+- environments with internal or not-yet-trusted certificates
 
-No debería usarse como default en producción.
+It should not be the default in production.
 
 ## `--rewrite-host-header`
 
-Reescribe el header `Host` del request HTTP antes de enviarlo al target remoto.
+Rewrites the HTTP `Host` header before sending the request to the remote target.
 
-Es útil en flujos como:
+This is useful in flows like:
 
 - `curl http://127.0.0.1:9000/...`
-- target remoto HTTPS que espera `Host: api.example.com`
+- remote HTTPS target expecting `Host: api.example.com`
 
-Sin esta opción, muchos backends devolverán `403`, `421` o respuestas incorrectas.
+Without this option, many backends will return `403`, `421`, or incorrect responses.
 
-## UI local
+## Local UI
 
-La UI muestra:
+The UI shows:
 
-- lista de sesiones
-- `routeId` por sesión
-- metadata TLS inbound/outbound
-- lista de exchanges HTTP detectados
-- request y response por exchange
-- headers y body cuando el payload puede parsearse como HTTP
-- eventos raw capturados por la sesión
+- session list
+- `routeId` per session
+- inbound/outbound TLS metadata
+- detected HTTP exchange list
+- request and response per exchange
+- headers and body when the payload can be parsed as HTTP
+- raw events captured for the session
 
-### Acciones disponibles
+### Available actions
 
-Para payloads `CLIENT_TO_TARGET`:
+For `CLIENT_TO_TARGET` payloads:
 
 - `Recapture request`
-  - reenvía el request al listener local
-  - el request entra otra vez por el proxy
-  - se captura como una nueva sesión
+  - resends the request to the local listener
+  - the request enters the proxy again
+  - it is captured as a new session
 
 - `Send direct`
-  - reenvía el request directo al target actual
+  - resends the request directly to the current target
 
-Para payloads interceptados:
+For intercepted payloads:
 
 - `Forward original`
 - `Edit/Forward`
 
-## Persistencia
+## Persistence
 
-Las sesiones se guardan en el directorio configurado en `sessionsDir`.
+Session history is stored under the directory configured in `sessionsDir`.
 
-Estructura típica:
+Current storage:
 
 ```text
 sessions/
-├── sessions.jsonl
-└── blobs/
-    └── <session-id>/
-        └── <event-id>.bin
+└── sessions.db
 ```
 
-### Qué se guarda
+### What is stored
 
-- apertura y cierre de sesión
-- errores y eventos de ciclo de vida
-- metadata TLS
-- payloads request/response
-- referencias a blobs binarios
+- session open/close metadata
+- lifecycle events and errors
+- TLS metadata
+- request/response payloads
+- event details used by the local UI
 
-## Intercepción
+`pending payloads` remain in memory only and are not restored after restart.
 
-`--intercept-mode` soporta:
+## Interception
+
+`--intercept-mode` supports:
 
 - `NONE`
 - `REQUEST`
 - `RESPONSE`
 - `BOTH`
 
-Cuando una dirección está interceptada:
+When a direction is intercepted:
 
-- el payload no se reenvía inmediatamente
-- queda pendiente en memoria
-- puedes reenviarlo original o editarlo desde la UI
+- the payload is not forwarded immediately
+- it stays pending in memory
+- you can forward it as-is or edit it from the UI
 
-## Limitaciones actuales
+## Current limitations
 
-- el parser HTTP de la UI soporta `Content-Length`, `Transfer-Encoding: chunked`, `gzip`, `deflate` y `br`
-- no interpreta todavía:
+- the UI HTTP parser supports `Content-Length`, `Transfer-Encoding: chunked`, `gzip`, `deflate`, and `br`
+- it still does not interpret:
   - WebSocket
-  - streaming HTTP incremental
-- la recaptura local a listener `TLS` con `client auth REQUIRE` no presenta certificado cliente todavía
-- la herramienta está optimizada para depuración local, no para throughput alto
-- la UI está enfocada en HTTP; para tráfico TCP genérico cae a vista raw
+  - incremental HTTP streaming
+- local recapture to a `TLS` listener with `client auth REQUIRE` does not present a client certificate yet
+- the tool is optimized for local debugging, not high throughput
+- the UI is focused on HTTP; generic TCP traffic falls back to raw view
 
-## Desarrollo
+## Development
 
-Ejecutar pruebas:
+Run tests:
 
 ```bash
 mvn -q test
 ```
 
-## Estructura del proyecto
+## Project structure
 
 ```text
 src/main/java/com/cafeina/tcpmon/
-├── config/     # carga de config JSON/YAML
-├── proxy/      # listener, bridge y reescritura HTTP
-├── replay/     # reenvío a listener o target
-├── session/    # modelo y persistencia de sesiones
-├── tls/        # construcción de contextos TLS
+├── config/     # JSON/YAML config loading
+├── proxy/      # listeners, bridges, and HTTP rewriting
+├── replay/     # resend to listener or target
+├── session/    # session model and persistence
+├── tls/        # TLS context construction
 ├── util/       # helpers
-└── web/        # API local y UI
+└── web/        # local API and UI
 ```
 
-## Estado actual
+## Current status
 
-El proyecto ya tiene:
+The project already includes:
 
-- build funcional
-- pruebas unitarias e integración
-- UI local utilizable
-- flujo útil para depuración de APIs HTTP/HTTPS
+- a working build
+- unit and integration tests
+- a usable local UI
+- a practical workflow for HTTP/HTTPS API debugging
 
-Si vas a continuar el desarrollo, los siguientes pasos con más valor técnico serían:
+If you continue development, the highest-value next steps would be:
 
-- exportación/importación de exchanges
-- filtros y búsqueda por `routeId`
+- exchange import/export
+- richer filtering and search by `routeId`
