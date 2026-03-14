@@ -29,4 +29,19 @@ class ConfigLoaderTest {
         assertTrue(Boolean.TRUE.equals(config.target().insecure()));
         assertTrue(Boolean.TRUE.equals(config.target().rewriteHostHeader()));
     }
+
+    @Test
+    void writesExampleYamlConfigFile() throws Exception {
+        Path output = tempDir.resolve("tcpmon.yaml");
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+
+        command.writeExampleConfig(output);
+
+        assertTrue(Files.exists(output));
+        ConfigFile config = ConfigLoader.load(output);
+        assertEquals(9000, config.listener().port());
+        assertEquals("jsonplaceholder.typicode.com", config.target().host());
+        assertTrue(Boolean.TRUE.equals(config.target().insecure()));
+        assertTrue(Boolean.TRUE.equals(config.target().rewriteHostHeader()));
+    }
 }

@@ -96,6 +96,44 @@ class TcpMonTlsCommandTest {
     }
 
     @Test
+    void loadsConfigurationFromYamlFile() throws Exception {
+        Path configPath = tempDir.resolve("tcpmon.yaml");
+        Files.writeString(configPath, """
+                listener:
+                  host: 127.0.0.1
+                  port: 9100
+                  mode: PLAIN
+                target:
+                  host: jsonplaceholder.typicode.com
+                  port: 443
+                  mode: TLS
+                  sni: jsonplaceholder.typicode.com
+                  insecure: true
+                  rewriteHostHeader: true
+                ui:
+                  host: 127.0.0.1
+                  port: 8081
+                  enabled: true
+                sessionsDir: ./sessions-yaml
+                interceptMode: NONE
+                tlsProtocols:
+                  - TLSv1.3
+                  - TLSv1.2
+                """);
+
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+        CommandLine commandLine = new CommandLine(command);
+        commandLine.parseArgs("--config", configPath.toString());
+
+        ProxyConfig config = command.toConfig();
+        assertEquals(9100, config.listener().port());
+        assertEquals("jsonplaceholder.typicode.com", config.target().host());
+        assertTrue(config.target().insecureTrustAll());
+        assertTrue(config.target().rewriteHostHeader());
+        assertEquals(8081, config.ui().port());
+    }
+
+    @Test
     void cliOverridesConfigFileValues() throws Exception {
         Path configPath = tempDir.resolve("tcpmon.json");
         Files.writeString(configPath, """

@@ -22,7 +22,7 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
     @Option(names = "--init-config", description = "Write an example JSON config file to this path and exit.")
     private Path initConfigFile;
 
-    @Option(names = "--config", description = "Path to a JSON config file. CLI flags override file values.")
+    @Option(names = "--config", description = "Path to a JSON or YAML config file. CLI flags override file values.")
     private Path configFile;
 
     @Option(names = "--listen-host")
@@ -158,10 +158,9 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        String json = JsonSupport.objectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(exampleConfigFile());
         Files.writeString(
                 outputPath,
-                json + System.lineSeparator(),
+                ConfigLoader.write(exampleConfigFile(), outputPath) + System.lineSeparator(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE);
