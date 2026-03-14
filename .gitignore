@@ -1,6 +1,8 @@
 /target/
 /sessions/
 tcpmon.json
+tcpmon.yml
+tcpmon.yaml
 /.idea/
 /.vscode/
 *.iml
