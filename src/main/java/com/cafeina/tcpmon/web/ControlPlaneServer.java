@@ -280,6 +280,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         Map<String, Object> latestRequest = requests.isEmpty() ? null : requests.getLast();
         Map<String, Object> latestResponse = responses.isEmpty() ? null : responses.getLast();
         enriched.put("requestMethod", extractRequestMethod(latestRequest));
+        enriched.put("requestPath", extractRequestPath(latestRequest));
         enriched.put("responseStatusCode", extractResponseStatusCode(latestResponse));
         return enriched;
     }
@@ -298,6 +299,22 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
         Object method = requestMeta.get("method");
         return method == null ? "" : method.toString();
+    }
+
+    private static String extractRequestPath(Map<String, Object> request) {
+        if (request == null) {
+            return "";
+        }
+        Object decodedValue = request.get("decoded");
+        if (!(decodedValue instanceof Map<?, ?> decoded)) {
+            return "";
+        }
+        Object requestValue = decoded.get("request");
+        if (!(requestValue instanceof Map<?, ?> requestMeta)) {
+            return "";
+        }
+        Object path = requestMeta.get("path");
+        return path == null ? "" : path.toString();
     }
 
     private static String extractResponseStatusCode(Map<String, Object> response) {

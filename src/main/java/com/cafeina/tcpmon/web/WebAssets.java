@@ -210,19 +210,29 @@ public final class WebAssets {
                     }
                     .route-row {
                       border: 1px solid var(--border);
+                      border-left: 3px solid var(--border);
                       border-radius: 10px;
-                      padding: 10px;
+                      padding: 10px 10px 10px 12px;
                       margin-bottom: 8px;
                       background: var(--surface);
                       cursor: pointer;
+                      transition: background 100ms, border-color 100ms;
                     }
                     .route-row:hover {
                       border-color: var(--border-strong);
+                      border-left-color: var(--border-strong);
                       background: var(--surface-2);
                     }
                     .route-row.active {
-                      border-color: rgba(15, 108, 189, 0.45);
+                      border-color: rgba(15, 108, 189, 0.3);
+                      border-left-color: var(--accent);
                       background: var(--accent-soft);
+                    }
+                    .route-row.status-open {
+                      border-left-color: var(--ok);
+                    }
+                    .route-row.status-error {
+                      border-left-color: var(--danger);
                     }
                     .row-top,
                     .row-bottom {
@@ -232,7 +242,23 @@ public final class WebAssets {
                       gap: 8px;
                     }
                     .row-top {
-                      margin-bottom: 6px;
+                      margin-bottom: 4px;
+                    }
+                    .route-preview {
+                      margin-top: 6px;
+                      padding-top: 6px;
+                      border-top: 1px solid var(--border);
+                      font-family: var(--mono);
+                      font-size: 11px;
+                      color: var(--text-muted);
+                      white-space: nowrap;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                    }
+                    .route-preview .method-tag {
+                      font-weight: 700;
+                      color: var(--accent);
+                      margin-right: 4px;
                     }
                     .pill {
                       display: inline-flex;
@@ -261,6 +287,37 @@ public final class WebAssets {
                       background: rgba(180, 35, 24, 0.08);
                       color: var(--danger);
                     }
+                    .pill.pending {
+                      background: rgba(161, 92, 7, 0.1);
+                      color: var(--warn);
+                      border-color: rgba(161, 92, 7, 0.2);
+                    }
+                    .pill.pending-alarm {
+                      background: rgba(180, 35, 24, 0.1);
+                      color: var(--danger);
+                      border-color: rgba(180, 35, 24, 0.2);
+                      animation: pulse-alarm 1.4s infinite;
+                    }
+                    @keyframes pulse-alarm {
+                      0%, 100% { opacity: 1; }
+                      50% { opacity: 0.55; }
+                    }
+                    .status-badge {
+                      display: inline-flex;
+                      align-items: center;
+                      border-radius: 6px;
+                      padding: 2px 6px;
+                      font-family: var(--mono);
+                      font-size: 11px;
+                      font-weight: 600;
+                      line-height: 1;
+                      border: 1px solid transparent;
+                    }
+                    .status-2xx { background: rgba(19, 121, 91, 0.1); color: var(--ok); border-color: rgba(19, 121, 91, 0.2); }
+                    .status-3xx { background: rgba(15, 108, 189, 0.1); color: var(--accent); border-color: rgba(15, 108, 189, 0.2); }
+                    .status-4xx { background: rgba(161, 92, 7, 0.1); color: var(--warn); border-color: rgba(161, 92, 7, 0.2); }
+                    .status-5xx { background: rgba(180, 35, 24, 0.1); color: var(--danger); border-color: rgba(180, 35, 24, 0.2); }
+                    .status-other { background: rgba(24, 33, 47, 0.06); color: var(--text-muted); }
                     .route-line,
                     .mono {
                       font-family: var(--mono);
@@ -271,6 +328,12 @@ public final class WebAssets {
                       white-space: nowrap;
                       overflow: hidden;
                       text-overflow: ellipsis;
+                    }
+                    .url-cell {
+                      max-width: 280px;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                      white-space: nowrap;
                     }
                     .content {
                       display: grid;
@@ -327,11 +390,42 @@ public final class WebAssets {
                       display: block;
                       font-size: 15px;
                     }
+                    .route-stats {
+                      display: grid;
+                      grid-template-columns: repeat(3, 1fr);
+                      gap: 8px;
+                      margin-top: 12px;
+                    }
+                    .stat-block {
+                      background: var(--surface-2);
+                      border: 1px solid var(--border);
+                      border-radius: 10px;
+                      padding: 10px 12px;
+                      display: flex;
+                      flex-direction: column;
+                      gap: 2px;
+                    }
+                    .stat-block .stat-value {
+                      font-size: 22px;
+                      font-weight: 700;
+                      line-height: 1;
+                      color: var(--text);
+                    }
+                    .stat-block .stat-label {
+                      font-size: 11px;
+                      color: var(--text-muted);
+                      text-transform: uppercase;
+                      letter-spacing: 0.04em;
+                    }
+                    .stat-block.stat-warn .stat-value { color: var(--warn); }
+                    .stat-block.stat-danger .stat-value { color: var(--danger); }
                     .route-meta-grid {
                       display: grid;
                       grid-template-columns: repeat(2, minmax(0, 1fr));
-                      gap: 8px 16px;
+                      gap: 6px 16px;
                       margin-top: 10px;
+                      padding-top: 10px;
+                      border-top: 1px solid var(--border);
                       font-size: 12px;
                     }
                     .label {
@@ -344,7 +438,7 @@ public final class WebAssets {
                     }
                     .request-toolbar {
                       display: grid;
-                      grid-template-columns: 1fr 140px 140px auto;
+                      grid-template-columns: 1fr 140px 140px;
                       gap: 8px;
                       margin-bottom: 10px;
                     }
@@ -398,7 +492,7 @@ public final class WebAssets {
                     }
                     .payload-card {
                       display: grid;
-                      grid-template-rows: auto auto 1fr auto;
+                      grid-template-rows: auto auto auto 1fr auto;
                       min-height: 360px;
                     }
                     .payload-header {
@@ -441,15 +535,20 @@ public final class WebAssets {
                     }
                     .payload-details-body {
                       padding: 0 12px 12px;
+                      max-height: 220px;
+                      overflow-y: auto;
                     }
                     .headers-table {
                       width: 100%;
+                      table-layout: fixed;
                     }
                     .headers-table td {
                       padding: 7px 8px;
                       border-bottom: 1px solid var(--border);
                       font-size: 12px;
                       vertical-align: top;
+                      word-break: break-all;
+                      overflow-wrap: anywhere;
                     }
                     .headers-table td:first-child {
                       width: 32%;
@@ -488,6 +587,15 @@ public final class WebAssets {
                       border-radius: 8px;
                       padding: 10px;
                     }
+                    .payload-body pre {
+                      max-height: 320px;
+                      overflow: auto;
+                    }
+                    .loading-overlay {
+                      opacity: 0.5;
+                      pointer-events: none;
+                      transition: opacity 200ms;
+                    }
                     .scroll {
                       max-height: 100%;
                       overflow: auto;
@@ -496,24 +604,83 @@ public final class WebAssets {
                       color: var(--text-muted);
                       font-size: 12px;
                     }
-                    .events-list {
-                      display: grid;
-                      gap: 8px;
-                      max-height: 320px;
-                      overflow: auto;
+                    .intercept-panel {
+                      border: 1px solid rgba(161, 92, 7, 0.25);
+                      border-left: 3px solid var(--warn);
+                      border-radius: 12px;
+                      background: rgba(161, 92, 7, 0.04);
+                      margin-bottom: 12px;
+                      overflow: hidden;
                     }
-                    .event-row {
-                      border: 1px solid var(--border);
-                      border-radius: 10px;
-                      padding: 10px;
-                      background: var(--surface-2);
-                    }
-                    .event-top {
+                    .intercept-panel-header {
                       display: flex;
                       justify-content: space-between;
                       align-items: center;
+                      padding: 10px 14px;
+                      background: rgba(161, 92, 7, 0.07);
+                      border-bottom: 1px solid rgba(161, 92, 7, 0.15);
+                    }
+                    .intercept-item {
+                      padding: 12px 14px;
+                      border-bottom: 1px solid rgba(161, 92, 7, 0.1);
+                    }
+                    .intercept-item:last-child {
+                      border-bottom: none;
+                    }
+                    .timeline {
+                      display: flex;
+                      flex-direction: column;
+                      padding-left: 11px;
+                      border-left: 2px solid var(--border);
+                      max-height: 340px;
+                      overflow-y: auto;
+                    }
+                    .tl-item {
+                      display: grid;
+                      grid-template-columns: 22px 1fr;
+                      gap: 10px;
+                      margin-left: -12px;
+                      padding-bottom: 10px;
+                      align-items: start;
+                    }
+                    .tl-dot {
+                      width: 22px;
+                      height: 22px;
+                      border-radius: 50%;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      font-size: 9px;
+                      font-weight: 800;
+                      border: 2px solid;
+                      background: var(--surface);
+                      flex-shrink: 0;
+                    }
+                    .tl-dot.dot-accent { color: var(--accent); border-color: var(--accent); }
+                    .tl-dot.dot-ok { color: var(--ok); border-color: var(--ok); }
+                    .tl-dot.dot-warn { color: var(--warn); border-color: var(--warn); }
+                    .tl-dot.dot-danger { color: var(--danger); border-color: var(--danger); }
+                    .tl-dot.dot-muted { color: var(--text-muted); border-color: var(--border-strong); }
+                    .tl-body {
+                      padding-top: 2px;
+                    }
+                    .tl-label {
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: baseline;
                       gap: 8px;
-                      margin-bottom: 6px;
+                      margin-bottom: 2px;
+                    }
+                    .tl-label strong {
+                      font-size: 12px;
+                    }
+                    .tl-detail {
+                      font-family: var(--mono);
+                      font-size: 11px;
+                      color: var(--text-muted);
+                      white-space: nowrap;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
                     }
                     .actions {
                       display: flex;
@@ -571,6 +738,27 @@ public final class WebAssets {
                         flex-wrap: wrap;
                       }
                     }
+                    @media (prefers-color-scheme: dark) {
+                      :root {
+                        --canvas: #0d1117;
+                        --surface: #161b22;
+                        --surface-2: #1c2128;
+                        --surface-3: #22272e;
+                        --text: #e6edf3;
+                        --text-muted: #8b949e;
+                        --border: rgba(230, 237, 243, 0.1);
+                        --border-strong: rgba(230, 237, 243, 0.18);
+                        --accent: #388bfd;
+                        --accent-strong: #58a6ff;
+                        --accent-soft: rgba(56, 139, 253, 0.12);
+                        --route: #3fb950;
+                        --ok: #3fb950;
+                        --warn: #d29922;
+                        --danger: #f85149;
+                        --button-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 14px rgba(0,0,0,0.15);
+                        --shadow: 0 10px 26px rgba(0,0,0,0.25);
+                      }
+                    }
                   </style>
                 </head>
                 <body>
@@ -578,7 +766,7 @@ public final class WebAssets {
                     <header class="topbar">
                       <div class="topbar-title">
                         <strong>tcpmon-tls control plane</strong>
-                        <span class="muted">Select route, inspect recorded requests, open one to view request and response.</span>
+                        <span id="topbar-subtitle" class="muted">Select route, inspect recorded requests, open one to view request and response.</span>
                       </div>
                     </header>
 
@@ -619,7 +807,7 @@ public final class WebAssets {
                     let requestSearchDebounceTimer = null;
                     let statusMessage = null;
                     let streamMessage = { type: 'info', text: 'Connecting live updates...' };
-                    let eventsExpanded = false;
+                    let eventsExpanded = true;
                     let eventsScrollTop = 0;
                     let eventSource = null;
                     let scheduledDetailRefreshTimer = null;
@@ -629,8 +817,8 @@ public final class WebAssets {
                     let detailRefreshInFlight = false;
                     let listRefreshInFlight = false;
                     const payloadHeadersExpanded = {
-                      Request: false,
-                      Response: false
+                      Request: true,
+                      Response: true
                     };
 
                     async function fetchJson(url, options) {
@@ -726,16 +914,27 @@ public final class WebAssets {
                       container.innerHTML = routes.map(route => {
                         const pending = route.sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
                         const statusClass = String(route.status || 'closed').toLowerCase();
-                        return `<div class="route-row${route.routeId === activeRoute ? ' active' : ''}" onclick="selectRoute('${route.routeId}')">
+                        const isOpen = statusClass === 'open';
+                        const isError = statusClass === 'error';
+                        const latest = route.sessions.slice().sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')))[0];
+                        const latestPreview = latest && (latest.requestMethod || latest.requestPath)
+                          ? `<div class="route-preview"><span class="method-tag">${escapeHtml(latest.requestMethod || '')}</span>${escapeHtml(latest.requestPath || latest.sessionId.slice(0, 12) + '\u2026')}</div>`
+                          : '';
+                        const activeClass = route.routeId === activeRoute ? ' active' : '';
+                        const statusEdge = isOpen ? ' status-open' : isError ? ' status-error' : '';
+                        return `<div class="route-row${activeClass}${statusEdge}" onclick="selectRoute('${route.routeId}')">
                           <div class="row-top">
-                            <strong>${escapeHtml(route.routeId)}</strong>
-                            <span class="pill route">${escapeHtml(route.sessions.length)} req</span>
+                            <strong style="font-size:13px;">${escapeHtml(route.routeId)}</strong>
+                            <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+                              ${pending > 0 ? `<span class="pill ${pending >= 3 ? 'pending-alarm' : 'pending'}">${escapeHtml(pending)}</span>` : ''}
+                              <span class="pill ${escapeHtml(statusClass)}">${isOpen ? 'Live' : escapeHtml(route.status)}</span>
+                            </div>
                           </div>
                           <div class="row-bottom">
-                            <span class="pill ${escapeHtml(statusClass)}">${escapeHtml(route.status)}</span>
-                            <span class="muted">${escapeHtml(pending)} pending</span>
+                            <span class="route-line">${escapeHtml(route.targetAddress || '')}</span>
+                            <span class="pill route" style="flex-shrink:0;">${escapeHtml(route.sessions.length)} req</span>
                           </div>
-                          <div class="route-line">${escapeHtml(route.targetAddress || '')}</div>
+                          ${latestPreview}
                         </div>`;
                       }).join('');
                     }
@@ -753,6 +952,7 @@ public final class WebAssets {
                       renderRouteList();
                       renderBanner();
                       renderRouteHeader();
+                      updateTopbarSubtitle();
                       renderRequestTable();
                       if (activeSession) {
                         loadSessionDetails(activeSession);
@@ -781,30 +981,47 @@ public final class WebAssets {
                       const sessions = sessionsForActiveRoute();
                       if (!activeRoute) {
                         document.getElementById('route-header').innerHTML = '<div class="empty">Select a route.</div>';
+                        updateTopbarSubtitle();
                         return;
                       }
                       const first = sessions[0] || {};
                       const open = sessions.filter(session => String(session.status || '').toUpperCase() === 'OPEN').length;
                       const pending = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
+                      const activeSessionObj = sessions.find(session => session.sessionId === activeSession);
+                      const selectedLabel = activeSessionObj
+                        ? escapeHtml((activeSessionObj.requestMethod ? activeSessionObj.requestMethod + ' ' : '') + (activeSessionObj.requestPath || activeSessionObj.sessionId.slice(0, 8) + '\u2026'))
+                        : 'None';
+                      const pendingStatClass = pending >= 3 ? 'stat-danger' : pending > 0 ? 'stat-warn' : '';
                       document.getElementById('route-header').innerHTML = `
                         <section class="route-card">
                           <div class="route-title">
                             <div>
                               <strong>${escapeHtml(activeRoute)}</strong>
-                              <div class="muted">Route overview and recorded requests</div>
+                              <span class="muted" style="font-size:12px;">${escapeHtml(first.listenerAddress || '')} \u2192 ${escapeHtml(first.targetAddress || '')}</span>
                             </div>
-                            <span class="pill route">${escapeHtml(sessions.length)} requests</span>
+                            <span class="pill ${open > 0 ? 'open' : 'closed'}">${open > 0 ? 'Live' : 'Closed'}</span>
+                          </div>
+                          <div class="route-stats">
+                            <div class="stat-block">
+                              <span class="stat-value">${escapeHtml(sessions.length)}</span>
+                              <span class="stat-label">Total</span>
+                            </div>
+                            <div class="stat-block">
+                              <span class="stat-value">${escapeHtml(open)}</span>
+                              <span class="stat-label">Open</span>
+                            </div>
+                            <div class="stat-block ${escapeHtml(pendingStatClass)}">
+                              <span class="stat-value">${escapeHtml(pending)}</span>
+                              <span class="stat-label">Pending</span>
+                            </div>
                           </div>
                           <div class="route-meta-grid">
-                            <div><span class="label">Listener</span><span class="mono">${escapeHtml(first.listenerAddress || 'Unknown')}</span></div>
-                            <div><span class="label">Target</span><span class="mono">${escapeHtml(first.targetAddress || 'Unknown')}</span></div>
-                            <div><span class="label">Latest client</span><span class="mono">${escapeHtml(first.clientAddress || 'Unknown')}</span></div>
-                            <div><span class="label">Selected request</span><span class="mono">${escapeHtml(activeSession || 'None')}</span></div>
-                            <div><span class="label">Open</span>${escapeHtml(open)}</div>
-                            <div><span class="label">Pending</span>${escapeHtml(pending)}</div>
+                            <div><span class="label">Client</span><span class="mono">${escapeHtml(first.clientAddress || 'Unknown')}</span></div>
+                            <div><span class="label">Selected</span><span class="mono">${selectedLabel}</span></div>
                           </div>
                         </section>
                       `;
+                      updateTopbarSubtitle();
                     }
 
                     function renderRequestTable() {
@@ -819,7 +1036,6 @@ public final class WebAssets {
                             <select id="request-status-code-filter" onchange="resetRequestPageAndRender()">
                               ${renderStatusCodeOptions(sessions)}
                             </select>
-                            <button class="secondary" onclick="refreshSessions(true)">Refresh</button>
                           </div>
                           ${renderRequestTableRows(sessions)}
                         </section>
@@ -837,6 +1053,7 @@ public final class WebAssets {
                         return [
                           session.sessionId,
                           session.requestMethod,
+                          session.requestPath,
                           session.responseStatusCode,
                           session.clientAddress,
                           session.targetAddress,
@@ -856,8 +1073,8 @@ public final class WebAssets {
                         <table>
                           <thead>
                             <tr>
-                              <th>Request</th>
                               <th>Method</th>
+                              <th>Path</th>
                               <th>Response</th>
                               <th>Client</th>
                               <th>Started</th>
@@ -866,9 +1083,9 @@ public final class WebAssets {
                           <tbody>
                             ${pageItems.map(session => `
                               <tr class="session-entry${session.sessionId === activeSession ? ' active' : ''}" onclick="selectSession('${session.sessionId}')">
-                                <td class="mono">${escapeHtml(session.sessionId || '')}</td>
                                 <td>${escapeHtml(session.requestMethod || '')}</td>
-                                <td>${escapeHtml(session.responseStatusCode || '')}</td>
+                                <td class="mono url-cell" title="${escapeAttr(session.requestPath || session.sessionId || '')}">${escapeHtml(session.requestPath || session.sessionId.slice(0, 8) + '\u2026')}</td>
+                                <td>${statusBadge(session.responseStatusCode)}</td>
                                 <td class="mono">${escapeHtml(session.clientAddress || '')}</td>
                                 <td>${escapeHtml(formatTime(session.startedAt))}</td>
                               </tr>
@@ -930,7 +1147,10 @@ public final class WebAssets {
                     }
 
                     async function loadSessionDetails(sessionId) {
+                      const payloadsEl = document.getElementById('payloads');
+                      if (payloadsEl) payloadsEl.classList.add('loading-overlay');
                       const data = await fetchJson('/api/sessions/' + sessionId);
+                      if (payloadsEl) payloadsEl.classList.remove('loading-overlay');
                       const exchanges = data.exchanges || [];
                       if (activeExchangeIndex >= exchanges.length) activeExchangeIndex = 0;
                       const activeExchange = exchanges[activeExchangeIndex] || {};
@@ -983,6 +1203,12 @@ public final class WebAssets {
                             <span class="label">Start line</span>
                             <pre>${escapeHtml(decoded.startLine || 'No HTTP start line')}</pre>
                           </div>
+                          <details class="payload-details" ${payloadHeadersExpanded[title] ? 'open' : ''} ontoggle="setPayloadHeadersExpanded('${title}', this.open)">
+                            <summary>Headers</summary>
+                            <div class="payload-details-body">
+                              ${renderHeadersTable(headers, decoded)}
+                            </div>
+                          </details>
                           <div class="payload-body">
                             <div class="payload-body-head">
                               <span class="label">Body</span>
@@ -991,12 +1217,6 @@ public final class WebAssets {
                             <pre class="scroll">${escapeHtml(bodyText || 'No body captured')}</pre>
                           </div>
                           ${actions}
-                          <details class="payload-details" ${payloadHeadersExpanded[title] ? 'open' : ''} ontoggle="setPayloadHeadersExpanded('${title}', this.open)">
-                            <summary>Headers</summary>
-                            <div class="payload-details-body">
-                              ${renderHeadersTable(headers, decoded)}
-                            </div>
-                          </details>
                         </article>
                       `;
                     }
@@ -1020,7 +1240,11 @@ public final class WebAssets {
                       if (!headers.length) {
                         return `<pre>No headers</pre>`;
                       }
+                      const headersText = headers.map(h => `${h.name || ''}: ${h.value || ''}`).join('\\n');
                       return `
+                        <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+                          <button class="utility" onclick='copyText(${JSON.stringify(headersText)})'>Copy headers</button>
+                        </div>
                         <table class="headers-table">
                           <tbody>
                             ${headers.map(header => `
@@ -1113,22 +1337,123 @@ public final class WebAssets {
                     function renderEventsAndEditor(data) {
                       const exchanges = data.exchanges || [];
                       const events = data.events || [];
+                      const pendingEvents = events.filter(event => event.pendingId);
+                      const pendingBadge = pendingEvents.length
+                        ? ` <span style="color:var(--warn);font-weight:700;">\u00b7 ${escapeHtml(pendingEvents.length)} intercepted</span>`
+                        : '';
                       document.getElementById('events-and-editor').innerHTML = `
                         <details class="events-card" ${eventsExpanded ? 'open' : ''} ontoggle="setEventsExpanded(this.open)">
                           <summary style="display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;">
-                            <span><strong>Events</strong></span>
-                            <span class="muted">${escapeHtml(exchanges.length)} exchanges / ${escapeHtml(events.length)} events</span>
+                            <span><strong>Session timeline</strong></span>
+                            <span class="muted">${escapeHtml(exchanges.length)} exchange${exchanges.length !== 1 ? 's' : ''} \u00b7 ${escapeHtml(events.length)} events${pendingBadge}</span>
                           </summary>
-                          <div style="margin-top:10px;">
+                          <div style="margin-top:12px;">
                             ${renderExchangeButtons(exchanges)}
-                            <div id="events-list" class="events-list" onscroll="setEventsScroll(this.scrollTop)">
-                              ${events.length ? events.map(event => renderEventRow(data.sessionId, event)).join('') : '<div class="empty">No events yet.</div>'}
+                            ${pendingEvents.length ? renderInterceptPanel(pendingEvents) : ''}
+                            <div id="events-list" class="timeline" onscroll="setEventsScroll(this.scrollTop)">
+                              ${events.length ? events.map(event => renderTimelineItem(event)).join('') : '<div class="empty">No events yet.</div>'}
                             </div>
                           </div>
                         </details>
                         <div id="editor"></div>
                       `;
                       restoreEventsScroll();
+                    }
+
+                    function renderInterceptPanel(pendingEvents) {
+                      const count = pendingEvents.length;
+                      const items = pendingEvents.map(event => {
+                        const decoded = event.decoded || {};
+                        const isOut = String(event.direction || '').includes('CLIENT');
+                        const preview = decoded.startLine || (isOut ? '\u2192 Outbound payload' : '\u2190 Inbound payload');
+                        const sizeLabel = event.size ? escapeHtml(event.size) + ' B' : '';
+                        return `
+                          <div class="intercept-item">
+                            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+                              <span class="mono" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(preview)}</span>
+                              ${sizeLabel ? `<span class="muted" style="flex-shrink:0;">${sizeLabel}</span>` : ''}
+                            </div>
+                            <div style="display:flex;gap:8px;">
+                              <button class="secondary" onclick="releasePending('${event.pendingId}')">Forward original</button>
+                              <button class="primary" onclick='showEdit("${event.pendingId}", ${JSON.stringify(event.decoded || null)}, "${event.details?.base64 || ''}")'>Edit and forward</button>
+                            </div>
+                          </div>
+                        `;
+                      }).join('');
+                      return `
+                        <div class="intercept-panel">
+                          <div class="intercept-panel-header">
+                            <strong style="color:var(--warn);">\u26a0 ${escapeHtml(count)} payload${count !== 1 ? 's' : ''} intercepted</strong>
+                            <span class="muted">Waiting for your action</span>
+                          </div>
+                          ${items}
+                        </div>
+                      `;
+                    }
+
+                    function renderTimelineItem(event) {
+                      const cfg = timelineConfig(event);
+                      const time = formatTime(event.timestamp);
+                      const detail = cfg.detail
+                        ? `<div class="tl-detail">${escapeHtml(cfg.detail)}</div>`
+                        : '';
+                      const pendingActions = event.pendingId ? `
+                        <div style="display:flex;gap:8px;margin-top:8px;">
+                          <button class="secondary" onclick="releasePending('${event.pendingId}')">Forward original</button>
+                          <button class="primary" onclick='showEdit("${event.pendingId}", ${JSON.stringify(event.decoded || null)}, "${event.details?.base64 || ''}")'>Edit and forward</button>
+                        </div>` : '';
+                      return `
+                        <div class="tl-item">
+                          <div class="tl-dot ${cfg.dotClass}">${cfg.icon}</div>
+                          <div class="tl-body">
+                            <div class="tl-label">
+                              <strong>${escapeHtml(cfg.label)}</strong>
+                              <span class="muted" style="font-size:11px;white-space:nowrap;">${escapeHtml(time)}</span>
+                            </div>
+                            ${detail}
+                            ${pendingActions}
+                          </div>
+                        </div>
+                      `;
+                    }
+
+                    function timelineConfig(event) {
+                      const type = event.type || '';
+                      const dir = String(event.direction || '');
+                      const details = event.details || {};
+                      const decoded = event.decoded || {};
+                      const isPending = !!event.pendingId;
+                      switch (type) {
+                        case 'CLIENT_CONNECTED':
+                          return { icon: '\u2192', dotClass: 'dot-accent', label: 'Client connected', detail: details.client || '' };
+                        case 'TARGET_CONNECTED':
+                          return { icon: '\u2192', dotClass: 'dot-ok', label: 'Target connected', detail: details.target || '' };
+                        case 'TLS_INBOUND':
+                          return { icon: '\u25b2', dotClass: 'dot-ok', label: 'TLS inbound', detail: details.sni ? 'SNI: ' + details.sni : 'Handshake OK' };
+                        case 'TLS_OUTBOUND':
+                          return { icon: '\u25b2', dotClass: 'dot-ok', label: 'TLS outbound', detail: 'Handshake OK' };
+                        case 'TLS_INBOUND_FAILED':
+                          return { icon: '\u2715', dotClass: 'dot-danger', label: 'TLS inbound failed', detail: details.error || '' };
+                        case 'TLS_OUTBOUND_FAILED':
+                          return { icon: '\u2715', dotClass: 'dot-danger', label: 'TLS outbound failed', detail: details.error || '' };
+                        case 'PAYLOAD': {
+                          const isOut = dir.includes('CLIENT');
+                          const startLine = decoded.startLine || '';
+                          const sizeStr = event.size ? ' \u00b7 ' + event.size + ' B' : '';
+                          return {
+                            icon: isOut ? '\u2192' : '\u2190',
+                            dotClass: isPending ? 'dot-warn' : (isOut ? 'dot-accent' : 'dot-ok'),
+                            label: isPending ? (isOut ? 'Request intercepted' : 'Response intercepted') : (isOut ? 'Request' : 'Response'),
+                            detail: startLine + sizeStr
+                          };
+                        }
+                        case 'CLIENT_CLOSED':
+                          return { icon: '\u25cb', dotClass: 'dot-muted', label: 'Session closed', detail: '' };
+                        case 'PENDING_RELEASED':
+                          return { icon: '\u2713', dotClass: 'dot-ok', label: 'Payload released', detail: '' };
+                        default:
+                          return { icon: '\u00b7', dotClass: 'dot-muted', label: type, detail: '' };
+                      }
                     }
 
                     function renderExchangeButtons(exchanges) {
@@ -1144,24 +1469,6 @@ public final class WebAssets {
                       `;
                     }
 
-                    function renderEventRow(sessionId, event) {
-                      const pending = event.pendingId
-                        ? `<div class="actions event-actions">
-                             <button class="secondary" onclick="releasePending('${event.pendingId}')">Forward original</button>
-                             <button class="primary action-edit" onclick='showEdit("${event.pendingId}", ${JSON.stringify(event.decoded || null)}, "${event.details?.base64 || ''}")'>Edit and forward</button>
-                           </div>` : '';
-                      return `
-                        <div class="event-row">
-                          <div class="event-top">
-                            <div><strong>${escapeHtml(event.type)}</strong> <span class="muted">${escapeHtml(event.direction || '')}</span></div>
-                          <div class="muted">${escapeHtml(event.timestamp || '')}</div>
-                          </div>
-                          <div class="muted">${escapeHtml(event.size || 0)} bytes</div>
-                          <pre>${escapeHtml(event.previewText || '')}\n${escapeHtml(event.previewHex || '')}</pre>
-                          ${pending}
-                        </div>
-                      `;
-                    }
 
                     function showEdit(pendingId, decodedPayload, base64Value) {
                       const editor = document.getElementById('editor');
@@ -1438,7 +1745,7 @@ public final class WebAssets {
 
                     function renderEmptyState(message) {
                       document.getElementById('status-banner').innerHTML = '';
-                      document.getElementById('route-header').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+                      document.getElementById('route-header').innerHTML = `<div class="empty" style="flex-direction:column;gap:6px;">${escapeHtml(message)}<span class="muted" style="font-size:11px;text-align:center;">Proxy traffic through the configured listener to begin capturing.</span></div>`;
                       document.getElementById('request-table').innerHTML = '';
                       document.getElementById('payloads').innerHTML = '';
                       document.getElementById('events-and-editor').innerHTML = '';
@@ -1447,7 +1754,64 @@ public final class WebAssets {
                     function formatTime(value) {
                       if (!value) return '';
                       const date = new Date(value);
-                      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+                      if (Number.isNaN(date.getTime())) return String(value);
+                      const diffMs = Date.now() - date.getTime();
+                      const diffSec = Math.floor(diffMs / 1000);
+                      if (diffSec < 10) return 'just now';
+                      if (diffSec < 60) return diffSec + 's ago';
+                      const diffMin = Math.floor(diffSec / 60);
+                      if (diffMin < 60) return diffMin + 'm ago';
+                      const diffHr = Math.floor(diffMin / 60);
+                      if (diffHr < 24) return diffHr + 'h ago';
+                      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    }
+
+                    function statusBadge(code) {
+                      const s = String(code ?? '');
+                      if (!s) return '';
+                      const first = s.charAt(0);
+                      const cls = first === '2' ? 'status-2xx' : first === '3' ? 'status-3xx' : first === '4' ? 'status-4xx' : first === '5' ? 'status-5xx' : 'status-other';
+                      return `<span class="status-badge ${cls}">${escapeHtml(s)}</span>`;
+                    }
+
+                    async function copyText(text) {
+                      if (!text) return;
+                      try {
+                        if (navigator.clipboard?.writeText) {
+                          await navigator.clipboard.writeText(text);
+                        } else {
+                          const helper = document.createElement('textarea');
+                          helper.value = text;
+                          helper.setAttribute('readonly', 'true');
+                          helper.style.position = 'absolute';
+                          helper.style.left = '-9999px';
+                          document.body.appendChild(helper);
+                          helper.select();
+                          document.execCommand('copy');
+                          document.body.removeChild(helper);
+                        }
+                        setStatus('success', 'Copied to clipboard');
+                      } catch (error) {
+                        setStatus('error', 'Unable to copy');
+                      }
+                    }
+
+                    function updateTopbarSubtitle() {
+                      const el = document.getElementById('topbar-subtitle');
+                      if (!el) return;
+                      if (!activeRoute) {
+                        el.textContent = 'Select route, inspect recorded requests, open one to view request and response.';
+                        return;
+                      }
+                      const sessions = sessionsForActiveRoute();
+                      const pending = sessions.reduce((sum, s) => sum + Number(s.pendingCount || 0), 0);
+                      if (pending > 0) {
+                        el.textContent = activeRoute + ' \u2014 ' + pending + ' pending';
+                      } else if (activeSession) {
+                        el.textContent = activeRoute + ' \u2014 ' + sessions.length + ' request' + (sessions.length !== 1 ? 's' : '');
+                      } else {
+                        el.textContent = activeRoute + ' \u2014 ' + sessions.length + ' request' + (sessions.length !== 1 ? 's' : '');
+                      }
                     }
 
                     function escapeHtml(value) {
