@@ -58,7 +58,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     private void handleSessions(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
         if ("GET".equalsIgnoreCase(exchange.getRequestMethod()) && "/api/sessions".equals(path)) {
-            sendJson(exchange, 200, Map.of("sessions", sessionStore.listSessions()));
+            sendJson(exchange, 200, Map.of("sessions", summarizeSessions()));
             return;
         }
 
@@ -195,6 +195,74 @@ public final class ControlPlaneServer implements AutoCloseable {
         enriched.put("latestRequest", requests.isEmpty() ? null : requests.getLast());
         enriched.put("latestResponse", responses.isEmpty() ? null : responses.getLast());
         return enriched;
+    }
+
+    private List<Map<String, Object>> summarizeSessions() {
+        return sessionStore.listSessions().stream()
+                .map(this::summarizeSession)
+                .toList();
+    }
+
+    private Map<String, Object> summarizeSession(Map<String, Object> summary) {
+        Map<String, Object> enriched = new LinkedHashMap<>(summary);
+        String sessionId = String.valueOf(summary.get("sessionId"));
+        Map<String, Object> details = sessionStore.sessionDetails(sessionId);
+        if (details == null) {
+            return enriched;
+        }
+
+        Object eventsValue = details.get("events");
+        if (!(eventsValue instanceof List<?> rawEvents)) {
+            return enriched;
+        }
+
+        List<SessionEvent> typedEvents = new ArrayList<>();
+        for (Object rawEvent : rawEvents) {
+            if (rawEvent instanceof SessionEvent event) {
+                typedEvents.add(event);
+            }
+        }
+
+        List<Map<String, Object>> requests = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.CLIENT_TO_TARGET);
+        List<Map<String, Object>> responses = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.TARGET_TO_CLIENT);
+
+        Map<String, Object> latestRequest = requests.isEmpty() ? null : requests.getLast();
+        Map<String, Object> latestResponse = responses.isEmpty() ? null : responses.getLast();
+        enriched.put("requestMethod", extractRequestMethod(latestRequest));
+        enriched.put("responseStatusCode", extractResponseStatusCode(latestResponse));
+        return enriched;
+    }
+
+    private static String extractRequestMethod(Map<String, Object> request) {
+        if (request == null) {
+            return "";
+        }
+        Object decodedValue = request.get("decoded");
+        if (!(decodedValue instanceof Map<?, ?> decoded)) {
+            return "";
+        }
+        Object requestValue = decoded.get("request");
+        if (!(requestValue instanceof Map<?, ?> requestMeta)) {
+            return "";
+        }
+        Object method = requestMeta.get("method");
+        return method == null ? "" : method.toString();
+    }
+
+    private static String extractResponseStatusCode(Map<String, Object> response) {
+        if (response == null) {
+            return "";
+        }
+        Object decodedValue = response.get("decoded");
+        if (!(decodedValue instanceof Map<?, ?> decoded)) {
+            return "";
+        }
+        Object startLine = decoded.get("startLine");
+        if (!(startLine instanceof String line) || !line.startsWith("HTTP/")) {
+            return "";
+        }
+        String[] parts = line.split(" ", 3);
+        return parts.length >= 2 ? parts[1] : "";
     }
 
     static boolean isReplayable(SessionEvent event) {

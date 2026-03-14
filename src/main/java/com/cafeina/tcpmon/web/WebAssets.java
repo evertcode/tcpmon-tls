@@ -63,19 +63,6 @@ public final class WebAssets {
                     .topbar-title strong {
                       font-size: 16px;
                     }
-                    .topbar-meta {
-                      display: flex;
-                      gap: 10px;
-                      flex-wrap: wrap;
-                    }
-                    .metric {
-                      padding: 6px 10px;
-                      border: 1px solid var(--border);
-                      border-radius: 999px;
-                      background: var(--surface-2);
-                      font-size: 12px;
-                      color: var(--text-muted);
-                    }
                     .layout {
                       display: grid;
                       grid-template-columns: 280px minmax(0, 1fr);
@@ -276,7 +263,7 @@ public final class WebAssets {
                     }
                     .request-toolbar {
                       display: grid;
-                      grid-template-columns: 1fr 160px auto;
+                      grid-template-columns: 1fr auto;
                       gap: 8px;
                       margin-bottom: 10px;
                     }
@@ -417,7 +404,6 @@ public final class WebAssets {
                         <strong>tcpmon-tls control plane</strong>
                         <span class="muted">Select route, inspect recorded requests, open one to view request and response.</span>
                       </div>
-                      <div id="topbar-metrics" class="topbar-meta"></div>
                     </header>
 
                     <div class="layout">
@@ -465,7 +451,6 @@ public final class WebAssets {
                     async function refreshSessions(preserveSelection = true) {
                       const data = await fetchJson('/api/sessions');
                       allSessions = Array.isArray(data.sessions) ? data.sessions : [];
-                      updateMetrics();
                       renderRouteList();
 
                       if (!allSessions.length) {
@@ -529,18 +514,6 @@ public final class WebAssets {
                       return allSessions
                         .filter(session => (session.routeId || 'default') === activeRoute)
                         .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
-                    }
-
-                    function updateMetrics() {
-                      const open = allSessions.filter(session => String(session.status || '').toUpperCase() === 'OPEN').length;
-                      const pending = allSessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
-                      const routes = new Set(allSessions.map(session => session.routeId || 'default')).size;
-                      document.getElementById('topbar-metrics').innerHTML = `
-                        <span class="metric">${allSessions.length} requests</span>
-                        <span class="metric">${routes} routes</span>
-                        <span class="metric">${open} open</span>
-                        <span class="metric">${pending} pending</span>
-                      `;
                     }
 
                     function renderRouteList() {
@@ -629,12 +602,6 @@ public final class WebAssets {
                         <section class="table-card">
                           <div class="request-toolbar">
                             <input id="request-search" type="search" placeholder="Filter requests in this route" oninput="renderRequestTable()">
-                            <select id="request-status" onchange="renderRequestTable()">
-                              <option value="">All statuses</option>
-                              <option value="OPEN">Open</option>
-                              <option value="CLOSED">Closed</option>
-                              <option value="ERROR">Error</option>
-                            </select>
                             <button class="secondary" onclick="refreshSessions(true)">Refresh</button>
                           </div>
                           ${renderRequestTableRows(sessions)}
@@ -644,12 +611,12 @@ public final class WebAssets {
 
                     function renderRequestTableRows(sessions) {
                       const query = document.getElementById('request-search') ? document.getElementById('request-search').value.trim().toLowerCase() : '';
-                      const status = document.getElementById('request-status') ? document.getElementById('request-status').value : '';
                       const filtered = sessions.filter(session => {
-                        if (status && String(session.status || '').toUpperCase() !== status) return false;
                         if (!query) return true;
                         return [
                           session.sessionId,
+                          session.requestMethod,
+                          session.responseStatusCode,
                           session.clientAddress,
                           session.targetAddress,
                           session.startedAt,
@@ -664,10 +631,9 @@ public final class WebAssets {
                           <thead>
                             <tr>
                               <th>Request</th>
+                              <th>Method</th>
+                              <th>Response</th>
                               <th>Client</th>
-                              <th>Status</th>
-                              <th>Events</th>
-                              <th>Pending</th>
                               <th>Started</th>
                             </tr>
                           </thead>
@@ -675,10 +641,9 @@ public final class WebAssets {
                             ${filtered.map(session => `
                               <tr class="session-entry${session.sessionId === activeSession ? ' active' : ''}" onclick="selectSession('${session.sessionId}')">
                                 <td class="mono">${escapeHtml(session.sessionId || '')}</td>
+                                <td>${escapeHtml(session.requestMethod || '')}</td>
+                                <td>${escapeHtml(session.responseStatusCode || '')}</td>
                                 <td class="mono">${escapeHtml(session.clientAddress || '')}</td>
-                                <td><span class="pill ${String(session.status || 'closed').toLowerCase()}">${escapeHtml(session.status || 'UNKNOWN')}</span></td>
-                                <td>${escapeHtml(session.eventCount || 0)}</td>
-                                <td>${escapeHtml(session.pendingCount || 0)}</td>
                                 <td>${escapeHtml(formatTime(session.startedAt))}</td>
                               </tr>
                             `).join('')}
