@@ -8,7 +8,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,6 +71,33 @@ class SessionStoreTest {
             assertEquals(
                     "GET /health HTTP/1.1\r\n\r\n",
                     new String(Base64.getDecoder().decode(payloadEvent.details().get("base64").toString()), StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    void publishesSessionChangeEventsForLifecycleOperations() throws Exception {
+        try (SessionStore store = new SessionStore(tempDir.resolve("publisher-sessions"), JsonSupport.objectMapper())) {
+            List<SessionChangeEvent> changes = new CopyOnWriteArrayList<>();
+            store.addChangeListener(changes::add);
+
+            String sessionId = store.openSession("route-a", "client-a", "listener-a", "target-a");
+            store.recordLifecycle(sessionId, "CLIENT_CONNECTED", Map.of("source", "test"));
+            store.recordPayload(
+                    sessionId,
+                    Direction.CLIENT_TO_TARGET,
+                    "GET /health HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.UTF_8),
+                    null,
+                    Map.of("intercepted", false));
+            store.closeSession(sessionId, "CLOSED");
+
+            assertEquals(List.of(
+                    "session-created",
+                    "session-updated",
+                    "session-updated",
+                    "session-closed"),
+                    changes.stream().map(SessionChangeEvent::type).toList());
+            assertTrue(changes.stream().allMatch(change -> sessionId.equals(change.sessionId())));
+            assertTrue(changes.stream().allMatch(change -> "route-a".equals(change.routeId())));
         }
     }
 }

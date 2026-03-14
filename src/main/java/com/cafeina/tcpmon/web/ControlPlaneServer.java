@@ -4,6 +4,8 @@ import com.cafeina.tcpmon.UiConfig;
 import com.cafeina.tcpmon.Direction;
 import com.cafeina.tcpmon.replay.ReplayDestination;
 import com.cafeina.tcpmon.replay.ReplayService;
+import com.cafeina.tcpmon.session.SessionChangeEvent;
+import com.cafeina.tcpmon.session.SessionChangeListener;
 import com.cafeina.tcpmon.session.SessionEvent;
 import com.cafeina.tcpmon.session.SessionStore;
 import com.cafeina.tcpmon.util.JsonSupport;
@@ -15,6 +17,9 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -22,13 +27,18 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public final class ControlPlaneServer implements AutoCloseable {
     private final UiConfig config;
     private final SessionStore sessionStore;
     private final ReplayService replayService;
     private final ObjectMapper objectMapper = JsonSupport.objectMapper();
+    private final CopyOnWriteArrayList<SseClient> sseClients = new CopyOnWriteArrayList<>();
+    private final SessionChangeListener changeListener = this::broadcastSessionChange;
     private HttpServer server;
 
     public ControlPlaneServer(UiConfig config, SessionStore sessionStore, ReplayService replayService) {
@@ -40,10 +50,12 @@ public final class ControlPlaneServer implements AutoCloseable {
     public void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress(config.host(), config.port()), 0);
         server.createContext("/", this::handleRoot);
+        server.createContext("/api/events", this::handleEvents);
         server.createContext("/api/sessions", this::handleSessions);
         server.createContext("/api/pending/", this::handlePending);
         server.createContext("/api/replay", this::handleReplay);
         server.setExecutor(Executors.newCachedThreadPool());
+        sessionStore.addChangeListener(changeListener);
         server.start();
     }
 
@@ -76,6 +88,28 @@ public final class ControlPlaneServer implements AutoCloseable {
         sendJson(exchange, 405, Map.of("error", "method not allowed"));
     }
 
+    private void handleEvents(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+
+        exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
+        exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+        exchange.getResponseHeaders().set("Connection", "keep-alive");
+        exchange.sendResponseHeaders(200, 0);
+
+        SseClient client = new SseClient(exchange);
+        sseClients.add(client);
+        client.offer("connected", Map.of("status", "ok"));
+        try {
+            client.stream();
+        } finally {
+            sseClients.remove(client);
+            client.close();
+        }
+    }
+
     private void handlePending(HttpExchange exchange) throws IOException {
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod()) || !exchange.getRequestURI().getPath().endsWith("/forward")) {
             sendJson(exchange, 405, Map.of("error", "method not allowed"));
@@ -106,25 +140,36 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
 
         JsonNode body = readJsonBody(exchange);
-        String sessionId = body.path("sessionId").asText();
-        String eventId = body.path("eventId").asText();
-        SessionEvent event = sessionStore.findEvent(sessionId, eventId);
-        if (event == null) {
-            sendJson(exchange, 404, Map.of("error", "event not found"));
-            return;
-        }
-        if (!isReplayable(event)) {
-            sendJson(exchange, 400, Map.of("error", "only client-to-target payloads can be replayed"));
-            return;
-        }
-        String routeId = sessionStore.routeIdForSession(sessionId);
-        if (routeId == null) {
-            sendJson(exchange, 404, Map.of("error", "session route not found"));
-            return;
-        }
-        String base64 = event.details().get("base64").toString();
         try {
             ReplayDestination destination = ReplayDestination.fromString(body.path("destination").asText("listener"));
+            String routeId = body.path("routeId").asText();
+            if (body.hasNonNull("base64")) {
+                if (routeId == null || routeId.isBlank()) {
+                    sendJson(exchange, 400, Map.of("error", "routeId is required when replaying raw payloads"));
+                    return;
+                }
+                Map<String, Object> result = replayService.replay(java.util.Base64.getDecoder().decode(body.path("base64").asText()), routeId, destination);
+                sendJson(exchange, 200, result);
+                return;
+            }
+
+            String sessionId = body.path("sessionId").asText();
+            String eventId = body.path("eventId").asText();
+            SessionEvent event = sessionStore.findEvent(sessionId, eventId);
+            if (event == null) {
+                sendJson(exchange, 404, Map.of("error", "event not found"));
+                return;
+            }
+            if (!isReplayable(event)) {
+                sendJson(exchange, 400, Map.of("error", "only client-to-target payloads can be replayed"));
+                return;
+            }
+            routeId = sessionStore.routeIdForSession(sessionId);
+            if (routeId == null) {
+                sendJson(exchange, 404, Map.of("error", "session route not found"));
+                return;
+            }
+            String base64 = event.details().get("base64").toString();
             Map<String, Object> result = replayService.replay(java.util.Base64.getDecoder().decode(base64), routeId, destination);
             sendJson(exchange, 200, result);
         } catch (Exception exception) {
@@ -156,6 +201,12 @@ public final class ControlPlaneServer implements AutoCloseable {
         exchange.sendResponseHeaders(status, bytes.length);
         try (OutputStream stream = exchange.getResponseBody()) {
             stream.write(bytes);
+        }
+    }
+
+    private void broadcastSessionChange(SessionChangeEvent event) {
+        for (SseClient client : sseClients) {
+            client.offer(event.type(), event);
         }
     }
 
@@ -271,8 +322,69 @@ public final class ControlPlaneServer implements AutoCloseable {
 
     @Override
     public void close() {
+        sessionStore.removeChangeListener(changeListener);
+        for (SseClient client : sseClients) {
+            client.close();
+        }
+        sseClients.clear();
         if (server != null) {
             server.stop(0);
+        }
+    }
+
+    private final class SseClient implements AutoCloseable {
+        private final HttpExchange exchange;
+        private final Writer writer;
+        private final LinkedBlockingQueue<String> queue = new LinkedBlockingQueue<>();
+        private volatile boolean closed;
+
+        private SseClient(HttpExchange exchange) throws IOException {
+            this.exchange = exchange;
+            this.writer = new OutputStreamWriter(exchange.getResponseBody(), StandardCharsets.UTF_8);
+        }
+
+        private void offer(String eventName, Object payload) {
+            if (closed) {
+                return;
+            }
+            try {
+                queue.offer("event: " + eventName + "\n" + "data: " + objectMapper.writeValueAsString(payload) + "\n\n");
+            } catch (IOException exception) {
+                throw new UncheckedIOException(exception);
+            }
+        }
+
+        private void stream() throws IOException {
+            while (!closed) {
+                try {
+                    String message = queue.poll(15, TimeUnit.SECONDS);
+                    if (message == null) {
+                        writer.write(": ping\n\n");
+                    } else {
+                        writer.write(message);
+                    }
+                    writer.flush();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (UncheckedIOException exception) {
+                    throw exception.getCause();
+                }
+            }
+        }
+
+        @Override
+        public void close() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            try {
+                writer.close();
+            } catch (IOException ignored) {
+            } finally {
+                exchange.close();
+            }
         }
     }
 }

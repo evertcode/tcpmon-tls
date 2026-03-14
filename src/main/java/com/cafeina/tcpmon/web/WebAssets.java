@@ -23,11 +23,13 @@ public final class WebAssets {
                       --border: rgba(24, 33, 47, 0.12);
                       --border-strong: rgba(24, 33, 47, 0.2);
                       --accent: #0f6cbd;
+                      --accent-strong: #0a5aa0;
                       --accent-soft: rgba(15, 108, 189, 0.1);
                       --route: #106c5a;
                       --ok: #13795b;
                       --warn: #a15c07;
                       --danger: #b42318;
+                      --button-shadow: 0 1px 2px rgba(24, 33, 47, 0.08), 0 6px 14px rgba(24, 33, 47, 0.04);
                       --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
                       --sans: "Segoe UI", "Helvetica Neue", sans-serif;
                       --shadow: 0 10px 26px rgba(24, 33, 47, 0.06);
@@ -107,26 +109,100 @@ public final class WebAssets {
                       border-color: rgba(15, 108, 189, 0.45);
                     }
                     button {
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                      min-height: 34px;
                       border: 1px solid transparent;
-                      border-radius: 8px;
-                      padding: 9px 12px;
+                      border-radius: 10px;
+                      padding: 8px 12px;
                       font: inherit;
                       font-weight: 600;
+                      line-height: 1.2;
+                      letter-spacing: 0.01em;
                       cursor: pointer;
+                      white-space: nowrap;
+                      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+                    }
+                    button:hover:not(:disabled) {
+                      transform: translateY(-1px);
+                    }
+                    button:active:not(:disabled) {
+                      transform: translateY(0);
+                    }
+                    button:focus-visible {
+                      outline: 2px solid rgba(15, 108, 189, 0.18);
+                      outline-offset: 2px;
+                    }
+                    button:disabled {
+                      opacity: 0.45;
+                      cursor: not-allowed;
+                      transform: none;
+                      box-shadow: none;
                     }
                     button.primary {
                       background: var(--accent);
+                      border-color: rgba(10, 90, 160, 0.55);
                       color: white;
+                      box-shadow: var(--button-shadow);
+                    }
+                    button.primary:hover:not(:disabled) {
+                      background: var(--accent-strong);
                     }
                     button.secondary {
                       background: var(--surface-2);
-                      border-color: var(--border);
+                      border-color: rgba(24, 33, 47, 0.16);
                       color: var(--text);
+                      box-shadow: 0 1px 2px rgba(24, 33, 47, 0.04);
+                    }
+                    button.secondary:hover:not(:disabled) {
+                      background: var(--surface-3);
+                      border-color: rgba(24, 33, 47, 0.24);
                     }
                     button.ghost {
-                      background: transparent;
-                      border-color: var(--border);
+                      background: rgba(255, 255, 255, 0.55);
+                      border-color: rgba(24, 33, 47, 0.1);
+                      color: var(--text-muted);
+                    }
+                    button.ghost:hover:not(:disabled) {
+                      background: var(--surface);
+                      border-color: rgba(24, 33, 47, 0.18);
                       color: var(--text);
+                    }
+                    button.utility {
+                      min-height: 28px;
+                      padding: 5px 9px;
+                      border-radius: 8px;
+                      background: transparent;
+                      border-color: rgba(24, 33, 47, 0.08);
+                      color: var(--text-muted);
+                      font-size: 12px;
+                      font-weight: 500;
+                      box-shadow: none;
+                    }
+                    button.utility:hover:not(:disabled) {
+                      background: var(--surface-2);
+                      border-color: rgba(24, 33, 47, 0.16);
+                      color: var(--text);
+                    }
+                    button.nav {
+                      min-height: 30px;
+                      padding: 6px 10px;
+                      border-radius: 8px;
+                      font-size: 12px;
+                      font-weight: 600;
+                    }
+                    button.action-main {
+                      min-width: 172px;
+                      min-height: 38px;
+                      padding: 10px 14px;
+                    }
+                    button.action-alt {
+                      min-height: 38px;
+                      padding: 10px 14px;
+                    }
+                    button.action-edit {
+                      min-width: 170px;
                     }
                     .route-list {
                       overflow: auto;
@@ -220,6 +296,11 @@ public final class WebAssets {
                       border-color: rgba(180, 35, 24, 0.2);
                       background: rgba(180, 35, 24, 0.06);
                     }
+                    .banner.info {
+                      color: var(--text-muted);
+                      border-color: rgba(102, 102, 102, 0.18);
+                      background: var(--surface);
+                    }
                     .route-card,
                     .table-card,
                     .payload-card,
@@ -279,6 +360,9 @@ public final class WebAssets {
                       gap: 8px;
                       align-items: center;
                     }
+                    .pager button {
+                      min-width: 92px;
+                    }
                     table {
                       width: 100%;
                       border-collapse: collapse;
@@ -314,7 +398,7 @@ public final class WebAssets {
                     }
                     .payload-card {
                       display: grid;
-                      grid-template-rows: auto auto auto 1fr;
+                      grid-template-rows: auto auto 1fr auto;
                       min-height: 360px;
                     }
                     .payload-header {
@@ -325,6 +409,37 @@ public final class WebAssets {
                       gap: 12px;
                     }
                     .payload-section {
+                      padding: 0 12px 12px;
+                    }
+                    .payload-details {
+                      margin: 0 12px 12px;
+                      border: 1px solid var(--border);
+                      border-radius: 8px;
+                      background: var(--surface-2);
+                    }
+                    .payload-details summary {
+                      list-style: none;
+                      cursor: pointer;
+                      padding: 10px 12px;
+                      color: var(--text-muted);
+                      font-size: 12px;
+                      text-transform: uppercase;
+                      letter-spacing: 0.04em;
+                      user-select: none;
+                    }
+                    .payload-details summary::-webkit-details-marker {
+                      display: none;
+                    }
+                    .payload-details summary::after {
+                      content: '+';
+                      float: right;
+                      color: var(--text-muted);
+                      font: 14px/1 var(--mono);
+                    }
+                    .payload-details[open] summary::after {
+                      content: '-';
+                    }
+                    .payload-details-body {
                       padding: 0 12px 12px;
                     }
                     .headers-table {
@@ -344,6 +459,23 @@ public final class WebAssets {
                     .payload-body {
                       padding: 0 12px 12px;
                       min-height: 0;
+                    }
+                    .payload-body-head {
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      gap: 8px;
+                      margin-bottom: 4px;
+                    }
+                    .payload-actions {
+                      display: flex;
+                      gap: 10px;
+                      flex-wrap: nowrap;
+                      padding: 0 12px 12px;
+                      border-top: 1px solid var(--border);
+                      margin-top: 4px;
+                      padding-top: 12px;
+                      align-items: stretch;
                     }
                     pre {
                       margin: 0;
@@ -389,6 +521,21 @@ public final class WebAssets {
                       gap: 8px;
                       margin-top: 10px;
                     }
+                    .event-actions {
+                      display: flex;
+                      gap: 8px;
+                    }
+                    .editor-actions {
+                      display: flex;
+                      justify-content: flex-end;
+                    }
+                    .actions button,
+                    .payload-actions button {
+                      min-width: 0;
+                    }
+                    .request-toolbar button {
+                      min-width: 88px;
+                    }
                     .editor-grid {
                       display: grid;
                       gap: 8px;
@@ -420,6 +567,9 @@ public final class WebAssets {
                       .route-meta-grid {
                         grid-template-columns: 1fr;
                       }
+                      .payload-actions {
+                        flex-wrap: wrap;
+                      }
                     }
                   </style>
                 </head>
@@ -440,7 +590,7 @@ public final class WebAssets {
                         <div class="sidebar-section">
                           <div class="toolbar">
                             <input id="route-search" type="search" placeholder="Search route or target" oninput="renderRouteList()">
-                            <button class="secondary" onclick="refreshSessions(true)">Refresh</button>
+                            <button class="utility" onclick="refreshSessions(true)">Refresh</button>
                           </div>
                         </div>
                         <div id="routes" class="route-list"></div>
@@ -463,7 +613,25 @@ public final class WebAssets {
                     let activeExchangeIndex = 0;
                     let requestPage = 1;
                     const requestPageSize = 10;
+                    let requestSearchValue = '';
+                    let requestMethodFilterValue = '';
+                    let requestStatusCodeFilterValue = '';
+                    let requestSearchDebounceTimer = null;
                     let statusMessage = null;
+                    let streamMessage = { type: 'info', text: 'Connecting live updates...' };
+                    let eventsExpanded = false;
+                    let eventsScrollTop = 0;
+                    let eventSource = null;
+                    let scheduledDetailRefreshTimer = null;
+                    let scheduledListRefreshTimer = null;
+                    let pendingDetailRefresh = false;
+                    let pendingListRefresh = false;
+                    let detailRefreshInFlight = false;
+                    let listRefreshInFlight = false;
+                    const payloadHeadersExpanded = {
+                      Request: false,
+                      Response: false
+                    };
 
                     async function fetchJson(url, options) {
                       const response = await fetch(url, options);
@@ -477,6 +645,10 @@ public final class WebAssets {
                     }
 
                     async function refreshSessions(preserveSelection = true) {
+                      return refreshSessionsView(preserveSelection, true);
+                    }
+
+                    async function refreshSessionsView(preserveSelection = true, refreshDetail = true) {
                       const data = await fetchJson('/api/sessions');
                       allSessions = Array.isArray(data.sessions) ? data.sessions : [];
                       renderRouteList();
@@ -502,9 +674,9 @@ public final class WebAssets {
                       renderBanner();
                       renderRouteHeader();
                       renderRequestTable();
-                      if (activeSession) {
+                      if (refreshDetail && activeSession) {
                         await loadSessionDetails(activeSession);
-                      } else {
+                      } else if (!activeSession) {
                         renderDetailEmpty('No requests for the selected route.');
                       }
                     }
@@ -573,6 +745,9 @@ public final class WebAssets {
                       activeSession = null;
                       activeExchangeIndex = 0;
                       requestPage = 1;
+                      requestSearchValue = '';
+                      requestMethodFilterValue = '';
+                      requestStatusCodeFilterValue = '';
                       const sessions = sessionsForActiveRoute();
                       activeSession = sessions[0] ? sessions[0].sessionId : null;
                       renderRouteList();
@@ -588,11 +763,18 @@ public final class WebAssets {
 
                     function renderBanner() {
                       const el = document.getElementById('status-banner');
-                      if (!statusMessage) {
+                      const messages = [];
+                      if (streamMessage) {
+                        messages.push(streamMessage);
+                      }
+                      if (statusMessage) {
+                        messages.push(statusMessage);
+                      }
+                      if (!messages.length) {
                         el.innerHTML = '';
                         return;
                       }
-                      el.innerHTML = `<div class="banner ${statusMessage.type}">${escapeHtml(statusMessage.text)}</div>`;
+                      el.innerHTML = messages.map(message => `<div class="banner ${message.type}">${escapeHtml(message.text)}</div>`).join('');
                     }
 
                     function renderRouteHeader() {
@@ -630,7 +812,7 @@ public final class WebAssets {
                       document.getElementById('request-table').innerHTML = `
                         <section class="table-card">
                           <div class="request-toolbar">
-                            <input id="request-search" type="search" placeholder="Filter requests in this route" oninput="resetRequestPageAndRender()">
+                            <input id="request-search" type="search" value="${escapeAttr(requestSearchValue)}" placeholder="Filter requests in this route" oninput="debounceRequestSearch()">
                             <select id="request-method-filter" onchange="resetRequestPageAndRender()">
                               ${renderMethodOptions(sessions)}
                             </select>
@@ -645,9 +827,9 @@ public final class WebAssets {
                     }
 
                     function renderRequestTableRows(sessions) {
-                      const query = document.getElementById('request-search') ? document.getElementById('request-search').value.trim().toLowerCase() : '';
-                      const methodFilter = document.getElementById('request-method-filter') ? document.getElementById('request-method-filter').value : '';
-                      const statusCodeFilter = document.getElementById('request-status-code-filter') ? document.getElementById('request-status-code-filter').value : '';
+                      const query = requestSearchValue.trim().toLowerCase();
+                      const methodFilter = requestMethodFilterValue;
+                      const statusCodeFilter = requestStatusCodeFilterValue;
                       const filtered = sessions.filter(session => {
                         if (methodFilter && String(session.requestMethod || '') !== methodFilter) return false;
                         if (statusCodeFilter && String(session.responseStatusCode || '') !== statusCodeFilter) return false;
@@ -696,9 +878,9 @@ public final class WebAssets {
                         <div class="table-footer">
                           <div class="muted">Showing ${pageStart + 1}-${pageStart + pageItems.length} of ${filtered.length} requests</div>
                           <div class="pager">
-                            <button class="secondary" ${requestPage === 1 ? 'disabled' : ''} onclick="changeRequestPage(-1)">Previous</button>
+                            <button class="secondary nav" ${requestPage === 1 ? 'disabled' : ''} onclick="changeRequestPage(-1)">Previous</button>
                             <span class="muted">Page ${requestPage} / ${totalPages}</span>
-                            <button class="secondary" ${requestPage >= totalPages ? 'disabled' : ''} onclick="changeRequestPage(1)">Next</button>
+                            <button class="secondary nav" ${requestPage >= totalPages ? 'disabled' : ''} onclick="changeRequestPage(1)">Next</button>
                           </div>
                         </div>
                       `;
@@ -706,17 +888,32 @@ public final class WebAssets {
 
                     function renderMethodOptions(sessions) {
                       const methods = [...new Set(sessions.map(session => String(session.requestMethod || '')).filter(Boolean))].sort();
-                      return `<option value="">All methods</option>` + methods.map(method => `<option value="${escapeAttr(method)}">${escapeHtml(method)}</option>`).join('');
+                      return `<option value="">All methods</option>` + methods.map(method => `<option value="${escapeAttr(method)}" ${method === requestMethodFilterValue ? 'selected' : ''}>${escapeHtml(method)}</option>`).join('');
                     }
 
                     function renderStatusCodeOptions(sessions) {
                       const statusCodes = [...new Set(sessions.map(session => String(session.responseStatusCode || '')).filter(Boolean))].sort();
-                      return `<option value="">All responses</option>` + statusCodes.map(code => `<option value="${escapeAttr(code)}">${escapeHtml(code)}</option>`).join('');
+                      return `<option value="">All responses</option>` + statusCodes.map(code => `<option value="${escapeAttr(code)}" ${code === requestStatusCodeFilterValue ? 'selected' : ''}>${escapeHtml(code)}</option>`).join('');
                     }
 
                     function resetRequestPageAndRender() {
+                      requestSearchValue = document.getElementById('request-search') ? document.getElementById('request-search').value : requestSearchValue;
+                      requestMethodFilterValue = document.getElementById('request-method-filter') ? document.getElementById('request-method-filter').value : requestMethodFilterValue;
+                      requestStatusCodeFilterValue = document.getElementById('request-status-code-filter') ? document.getElementById('request-status-code-filter').value : requestStatusCodeFilterValue;
                       requestPage = 1;
                       renderRequestTable();
+                    }
+
+                    function debounceRequestSearch() {
+                      requestSearchValue = document.getElementById('request-search') ? document.getElementById('request-search').value : requestSearchValue;
+                      requestPage = 1;
+                      if (requestSearchDebounceTimer) {
+                        clearTimeout(requestSearchDebounceTimer);
+                      }
+                      requestSearchDebounceTimer = setTimeout(() => {
+                        requestSearchDebounceTimer = null;
+                        renderRequestTable();
+                      }, 250);
                     }
 
                     function changeRequestPage(delta) {
@@ -746,13 +943,13 @@ public final class WebAssets {
                       const response = activeExchange.response || data.latestResponse;
                       document.getElementById('payloads').innerHTML = `
                         <section class="payload-grid">
-                          ${renderPayloadCard('Request', request, 'CLIENT_TO_TARGET')}
-                          ${renderPayloadCard('Response', response, 'TARGET_TO_CLIENT')}
+                          ${renderPayloadCard('Request', request, 'CLIENT_TO_TARGET', data)}
+                          ${renderPayloadCard('Response', response, 'TARGET_TO_CLIENT', data)}
                         </section>
                       `;
                     }
 
-                    function renderPayloadCard(title, payload, expectedDirection) {
+                    function renderPayloadCard(title, payload, expectedDirection, data) {
                       if (!payload) {
                         return `
                           <article class="payload-card">
@@ -767,7 +964,12 @@ public final class WebAssets {
                       const decoded = payload.decoded || {};
                       const headers = Array.isArray(decoded.headers) ? decoded.headers : [];
                       const bodyText = formatBody(decoded);
+                      const hasBody = Boolean(bodyText);
                       const chunkText = payload.chunkCount ? ` / ${payload.chunkCount} chunks` : '';
+                      const actions = title === 'Request' ? renderRequestActions(data, payload) : '';
+                      const copyAction = hasBody
+                        ? `onclick='copyPayloadBody(${JSON.stringify(title)}, ${JSON.stringify(bodyText)})'`
+                        : '';
                       return `
                         <article class="payload-card">
                           <div class="payload-header">
@@ -781,15 +983,33 @@ public final class WebAssets {
                             <span class="label">Start line</span>
                             <pre>${escapeHtml(decoded.startLine || 'No HTTP start line')}</pre>
                           </div>
-                          <div class="payload-section">
-                            <span class="label">Headers</span>
-                            ${renderHeadersTable(headers, decoded)}
-                          </div>
                           <div class="payload-body">
-                            <span class="label">Body</span>
-                            <pre class="scroll">${escapeHtml(bodyText)}</pre>
+                            <div class="payload-body-head">
+                              <span class="label">Body</span>
+                              ${hasBody ? `<button class="utility" ${copyAction}>Copy body</button>` : ''}
+                            </div>
+                            <pre class="scroll">${escapeHtml(bodyText || 'No body captured')}</pre>
                           </div>
+                          ${actions}
+                          <details class="payload-details" ${payloadHeadersExpanded[title] ? 'open' : ''} ontoggle="setPayloadHeadersExpanded('${title}', this.open)">
+                            <summary>Headers</summary>
+                            <div class="payload-details-body">
+                              ${renderHeadersTable(headers, decoded)}
+                            </div>
+                          </details>
                         </article>
+                      `;
+                    }
+
+                    function renderRequestActions(data, payload) {
+                      if (!payload?.base64 || !data?.routeId) {
+                        return '';
+                      }
+                      return `
+                        <div class="payload-actions">
+                          <button class="primary action-main" onclick='replayPayload(${JSON.stringify(data.routeId)}, ${JSON.stringify(payload.base64)}, "listener")'>Recapture request</button>
+                          <button class="secondary action-alt" onclick='replayPayload(${JSON.stringify(data.routeId)}, ${JSON.stringify(payload.base64)}, "target")'>Send direct</button>
+                        </div>
                       `;
                     }
 
@@ -835,6 +1055,30 @@ public final class WebAssets {
                       return bodyText;
                     }
 
+                    async function copyPayloadBody(title, bodyText) {
+                      if (!bodyText) {
+                        return;
+                      }
+                      try {
+                        if (navigator.clipboard?.writeText) {
+                          await navigator.clipboard.writeText(bodyText);
+                        } else {
+                          const helper = document.createElement('textarea');
+                          helper.value = bodyText;
+                          helper.setAttribute('readonly', 'true');
+                          helper.style.position = 'absolute';
+                          helper.style.left = '-9999px';
+                          document.body.appendChild(helper);
+                          helper.select();
+                          document.execCommand('copy');
+                          document.body.removeChild(helper);
+                        }
+                        setStatus('success', `${title} body copied to clipboard`);
+                      } catch (error) {
+                        setStatus('error', `Unable to copy ${title.toLowerCase()} body`);
+                      }
+                    }
+
                     function looksLikeJson(value) {
                       const text = String(value || '').trim();
                       return text.startsWith('{') || text.startsWith('[');
@@ -845,11 +1089,11 @@ public final class WebAssets {
                     }
 
                     function prettyPrintXml(value) {
-                      const compact = String(value || '').replace(/>\\s+</g, '><').trim();
+                      const compact = String(value || '').replace(/>\s+</g, '><').trim();
                       if (!compact) {
                         return value;
                       }
-                      const tokens = compact.replace(/></g, '>\n<').split('\n');
+                      const tokens = compact.replace(/></g, '>\\n<').split('\\n');
                       let indent = 0;
                       const lines = [];
                       for (const rawToken of tokens) {
@@ -863,25 +1107,28 @@ public final class WebAssets {
                           indent++;
                         }
                       }
-                      return lines.join('\n');
+                      return lines.join('\\n');
                     }
 
                     function renderEventsAndEditor(data) {
                       const exchanges = data.exchanges || [];
                       const events = data.events || [];
                       document.getElementById('events-and-editor').innerHTML = `
-                        <section class="events-card">
-                          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;">
-                            <h3>Events</h3>
-                            <div class="muted">${escapeHtml(exchanges.length)} exchanges / ${escapeHtml(events.length)} events</div>
+                        <details class="events-card" ${eventsExpanded ? 'open' : ''} ontoggle="setEventsExpanded(this.open)">
+                          <summary style="display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;">
+                            <span><strong>Events</strong></span>
+                            <span class="muted">${escapeHtml(exchanges.length)} exchanges / ${escapeHtml(events.length)} events</span>
+                          </summary>
+                          <div style="margin-top:10px;">
+                            ${renderExchangeButtons(exchanges)}
+                            <div id="events-list" class="events-list" onscroll="setEventsScroll(this.scrollTop)">
+                              ${events.length ? events.map(event => renderEventRow(data.sessionId, event)).join('') : '<div class="empty">No events yet.</div>'}
+                            </div>
                           </div>
-                          ${renderExchangeButtons(exchanges)}
-                          <div class="events-list">
-                            ${events.length ? events.map(event => renderEventRow(data.sessionId, event)).join('') : '<div class="empty">No events yet.</div>'}
-                          </div>
-                        </section>
+                        </details>
                         <div id="editor"></div>
                       `;
+                      restoreEventsScroll();
                     }
 
                     function renderExchangeButtons(exchanges) {
@@ -898,25 +1145,19 @@ public final class WebAssets {
                     }
 
                     function renderEventRow(sessionId, event) {
-                      const replay = event.type === 'PAYLOAD' && event.direction === 'CLIENT_TO_TARGET'
-                        ? `<div class="actions">
-                             <button class="primary" onclick="replayEvent('${sessionId}','${event.eventId}','listener')">Recapture request</button>
-                             <button class="ghost" onclick="replayEvent('${sessionId}','${event.eventId}','target')">Send direct</button>
-                           </div>` : '';
                       const pending = event.pendingId
-                        ? `<div class="actions">
+                        ? `<div class="actions event-actions">
                              <button class="secondary" onclick="releasePending('${event.pendingId}')">Forward original</button>
-                             <button class="primary" onclick='showEdit("${event.pendingId}", ${JSON.stringify(event.decoded || null)}, "${event.details?.base64 || ''}")'>Edit and forward</button>
+                             <button class="primary action-edit" onclick='showEdit("${event.pendingId}", ${JSON.stringify(event.decoded || null)}, "${event.details?.base64 || ''}")'>Edit and forward</button>
                            </div>` : '';
                       return `
                         <div class="event-row">
                           <div class="event-top">
                             <div><strong>${escapeHtml(event.type)}</strong> <span class="muted">${escapeHtml(event.direction || '')}</span></div>
-                            <div class="muted">${escapeHtml(event.timestamp || '')}</div>
+                          <div class="muted">${escapeHtml(event.timestamp || '')}</div>
                           </div>
                           <div class="muted">${escapeHtml(event.size || 0)} bytes</div>
                           <pre>${escapeHtml(event.previewText || '')}\n${escapeHtml(event.previewHex || '')}</pre>
-                          ${replay}
                           ${pending}
                         </div>
                       `;
@@ -938,8 +1179,8 @@ public final class WebAssets {
                               </div>
                               <textarea id="http-headers" rows="8" placeholder="Headers">${escapeHtml(decodedPayload.headersText || '')}</textarea>
                               <textarea id="http-body" rows="10" placeholder="Body">${escapeHtml(decodedPayload.bodyText || '')}</textarea>
-                              <div class="actions">
-                                <button class="primary" onclick="submitStructuredHttp('${pendingId}')">Forward edited HTTP</button>
+                              <div class="actions editor-actions">
+                                <button class="primary action-edit" onclick="submitStructuredHttp('${pendingId}')">Forward edited HTTP</button>
                               </div>
                             </div>
                           </section>
@@ -951,8 +1192,8 @@ public final class WebAssets {
                           <h3>Edit pending payload</h3>
                           <div class="editor-grid">
                             <textarea id="payload-editor" rows="10">${escapeHtml(atob(base64Value || ''))}</textarea>
-                            <div class="actions">
-                              <button class="primary" onclick="submitEdited('${pendingId}')">Forward edited</button>
+                            <div class="actions editor-actions">
+                              <button class="primary action-edit" onclick="submitEdited('${pendingId}')">Forward edited</button>
                             </div>
                           </div>
                         </section>
@@ -1021,11 +1262,48 @@ public final class WebAssets {
                       }
                     }
 
+                    async function replayPayload(routeId, base64, destination) {
+                      try {
+                        const result = await fetchJson('/api/replay', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ routeId, base64, destination })
+                        });
+                        setStatus('success', `Replay ${destination} completed: sent ${result.bytesSent} bytes, received ${result.bytesReceived ?? 0} bytes from ${result.target}`);
+                      } catch (error) {
+                        setStatus('error', error.message);
+                      }
+                    }
+
                     async function selectExchange(index) {
                       activeExchangeIndex = index;
                       if (activeSession) {
                         await loadSessionDetails(activeSession);
                       }
+                    }
+
+                    function setPayloadHeadersExpanded(title, open) {
+                      payloadHeadersExpanded[title] = open;
+                    }
+
+                    function setEventsExpanded(open) {
+                      eventsExpanded = open;
+                    }
+
+                    function setEventsScroll(value) {
+                      eventsScrollTop = value;
+                    }
+
+                    function restoreEventsScroll() {
+                      if (!eventsExpanded) {
+                        return;
+                      }
+                      requestAnimationFrame(() => {
+                        const list = document.getElementById('events-list');
+                        if (list) {
+                          list.scrollTop = eventsScrollTop;
+                        }
+                      });
                     }
 
                     function setStatus(type, text) {
@@ -1034,6 +1312,123 @@ public final class WebAssets {
                       if (activeSession) {
                         loadSessionDetails(activeSession);
                       }
+                    }
+
+                    function connectEventStream() {
+                      if (eventSource) {
+                        eventSource.close();
+                      }
+                      eventSource = new EventSource('/api/events');
+                      eventSource.addEventListener('open', () => {
+                        streamMessage = null;
+                        renderBanner();
+                      });
+                      eventSource.addEventListener('error', () => {
+                        streamMessage = { type: 'info', text: 'Live updates disconnected. Trying to reconnect...' };
+                        renderBanner();
+                      });
+                      eventSource.addEventListener('session-created', handleSessionChange);
+                      eventSource.addEventListener('session-updated', handleSessionChange);
+                      eventSource.addEventListener('session-closed', handleSessionChange);
+                      eventSource.addEventListener('pending-released', handleSessionChange);
+                    }
+
+                    async function handleSessionChange(event) {
+                      let payload;
+                      try {
+                        payload = JSON.parse(event.data || '{}');
+                      } catch (error) {
+                        return;
+                      }
+                      const affectsActiveSession = Boolean(activeSession && payload.sessionId === activeSession);
+                      const affectsActiveRoute = Boolean(activeRoute && payload.routeId === activeRoute);
+                      if (payload.type === 'session-created' || payload.type === 'session-closed') {
+                        scheduleListRefresh();
+                        if (affectsActiveSession) {
+                          scheduleDetailRefresh();
+                        }
+                        return;
+                      }
+                      if (payload.type === 'pending-released') {
+                        if (affectsActiveSession) {
+                          scheduleDetailRefresh();
+                        }
+                        return;
+                      }
+                      if (affectsActiveSession) {
+                        scheduleDetailRefresh();
+                        return;
+                      }
+                      if (affectsActiveRoute) {
+                        scheduleListRefresh();
+                      }
+                    }
+
+                    function scheduleDetailRefresh() {
+                      pendingDetailRefresh = true;
+                      if (scheduledDetailRefreshTimer) {
+                        return;
+                      }
+                      scheduledDetailRefreshTimer = setTimeout(async () => {
+                        scheduledDetailRefreshTimer = null;
+                        if (detailRefreshInFlight) {
+                          scheduleDetailRefresh();
+                          return;
+                        }
+                        if (!pendingDetailRefresh || !activeSession) {
+                          pendingDetailRefresh = false;
+                          return;
+                        }
+                        pendingDetailRefresh = false;
+                        detailRefreshInFlight = true;
+                        try {
+                          await loadSessionDetails(activeSession);
+                        } catch (error) {
+                          streamMessage = { type: 'info', text: 'Live update received, but refresh failed. Use Refresh to resync.' };
+                          renderBanner();
+                        } finally {
+                          detailRefreshInFlight = false;
+                        }
+                        if (!streamMessage) {
+                          renderBanner();
+                        }
+                        if (pendingDetailRefresh) {
+                          scheduleDetailRefresh();
+                        }
+                      }, 150);
+                    }
+
+                    function scheduleListRefresh() {
+                      pendingListRefresh = true;
+                      if (scheduledListRefreshTimer) {
+                        return;
+                      }
+                      scheduledListRefreshTimer = setTimeout(async () => {
+                        scheduledListRefreshTimer = null;
+                        if (listRefreshInFlight) {
+                          scheduleListRefresh();
+                          return;
+                        }
+                        if (!pendingListRefresh) {
+                          return;
+                        }
+                        pendingListRefresh = false;
+                        listRefreshInFlight = true;
+                        try {
+                          await refreshSessionsView(true, false);
+                        } catch (error) {
+                          streamMessage = { type: 'info', text: 'Live update received, but refresh failed. Use Refresh to resync.' };
+                          renderBanner();
+                        } finally {
+                          listRefreshInFlight = false;
+                        }
+                        if (!streamMessage) {
+                          renderBanner();
+                        }
+                        if (pendingListRefresh) {
+                          scheduleListRefresh();
+                        }
+                      }, 800);
                     }
 
                     function renderDetailEmpty(message) {
@@ -1071,7 +1466,7 @@ public final class WebAssets {
                     }
 
                     refreshSessions(false);
-                    setInterval(() => refreshSessions(true), 3000);
+                    connectEventStream();
                   </script>
                 </body>
                 </html>

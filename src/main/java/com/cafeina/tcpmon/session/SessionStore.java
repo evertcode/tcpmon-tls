@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -37,6 +38,7 @@ public final class SessionStore implements AutoCloseable {
     private final ObjectMapper objectMapper;
     private final Connection connection;
     private final Map<String, PendingPayload> pendingPayloads = new ConcurrentHashMap<>();
+    private final CopyOnWriteArrayList<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private final AtomicLong ids = new AtomicLong();
 
     public SessionStore(Path rootDir, ObjectMapper objectMapper) throws IOException {
@@ -80,6 +82,7 @@ public final class SessionStore implements AutoCloseable {
             statement.setString(8, "{}");
             statement.setString(9, "{}");
             statement.executeUpdate();
+            publishChange(new SessionChangeEvent("session-created", sessionId, routeId, now, null));
             return sessionId;
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to open session " + sessionId, exception);
@@ -97,6 +100,7 @@ public final class SessionStore implements AutoCloseable {
             statement.setString(2, Instant.now().toString());
             statement.setString(3, sessionId);
             statement.executeUpdate();
+            publishChange(new SessionChangeEvent("session-closed", sessionId, routeIdForSession(sessionId), Instant.now(), status));
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to close session " + sessionId, exception);
         }
@@ -104,8 +108,12 @@ public final class SessionStore implements AutoCloseable {
 
     public synchronized void recordLifecycle(String sessionId, String type, Map<String, Object> details) {
         requireSessionExists(sessionId);
-        SessionEvent event = new SessionEvent(nextEventId(), type, Instant.now(), null, 0, null, null, null, null, details);
+        Instant timestamp = Instant.now();
+        SessionEvent event = new SessionEvent(nextEventId(), type, timestamp, null, 0, null, null, null, null, details);
         insertEvent(sessionId, event, null);
+        if (!"PENDING_RELEASED".equals(type)) {
+            publishChange(new SessionChangeEvent("session-updated", sessionId, routeIdForSession(sessionId), timestamp, type));
+        }
     }
 
     public synchronized void recordTls(String sessionId, boolean inbound, Map<String, Object> details) {
@@ -131,6 +139,7 @@ public final class SessionStore implements AutoCloseable {
                 pendingId,
                 details);
         insertEvent(sessionId, event, payload);
+        publishChange(new SessionChangeEvent("session-updated", sessionId, routeIdForSession(sessionId), event.timestamp(), "PAYLOAD"));
         return event;
     }
 
@@ -153,7 +162,21 @@ public final class SessionStore implements AutoCloseable {
                 "pendingId", pendingId,
                 "edited", replacementPayload != null,
                 "finalSize", finalPayload.length));
+        publishChange(new SessionChangeEvent(
+                "pending-released",
+                pendingPayload.sessionId(),
+                routeIdForSession(pendingPayload.sessionId()),
+                Instant.now(),
+                pendingId));
         return true;
+    }
+
+    public void addChangeListener(SessionChangeListener listener) {
+        changeListeners.add(listener);
+    }
+
+    public void removeChangeListener(SessionChangeListener listener) {
+        changeListeners.remove(listener);
     }
 
     public synchronized List<Map<String, Object>> listSessions() {
@@ -445,6 +468,12 @@ public final class SessionStore implements AutoCloseable {
             }
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to verify session " + sessionId, exception);
+        }
+    }
+
+    private void publishChange(SessionChangeEvent event) {
+        for (SessionChangeListener listener : changeListeners) {
+            listener.onSessionChange(event);
         }
     }
 
