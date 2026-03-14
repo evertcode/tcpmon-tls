@@ -2,4 +2,5 @@
 /sessions/
 tcpmon.json
 /.idea/
+/.vscode/
 *.iml

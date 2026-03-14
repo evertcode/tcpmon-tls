@@ -11,7 +11,7 @@ Proxy estilo `tcpmon` para depuración moderna de tráfico HTTP/TLS.
 - interceptación, edición estructurada y reenvío de requests
 - replay al target y recapture por el listener local
 - soporte para `TLS` y `mTLS` inbound/outbound
-- configuración por `JSON` y empaquetado como `jar` ejecutable
+- configuración por `JSON` o `YAML` y empaquetado como `jar` ejecutable
 
 ## Casos de uso típicos
 
@@ -60,10 +60,16 @@ target/tcpmon-tls-0.1.0-SNAPSHOT.jar
 
 ## Ejecución rápida
 
-Genera un archivo JSON de ejemplo:
+Genera un archivo de ejemplo:
 
 ```bash
 java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --init-config tcpmon.json
+```
+
+También puedes generarlo en `YAML`:
+
+```bash
+java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --init-config tcpmon.yaml
 ```
 
 Arranca usando ese archivo:
@@ -100,6 +106,31 @@ Ejemplo con `jsonplaceholder`:
   "interceptMode": "NONE",
   "tlsProtocols": ["TLSv1.3", "TLSv1.2"]
 }
+```
+
+El mismo ejemplo en `YAML`:
+
+```yaml
+listener:
+  host: 127.0.0.1
+  port: 9000
+  mode: PLAIN
+target:
+  host: jsonplaceholder.typicode.com
+  port: 443
+  mode: TLS
+  sni: jsonplaceholder.typicode.com
+  insecure: true
+  rewriteHostHeader: true
+ui:
+  host: 127.0.0.1
+  port: 8080
+  enabled: true
+sessionsDir: ./sessions
+interceptMode: NONE
+tlsProtocols:
+  - TLSv1.3
+  - TLSv1.2
 ```
 
 Arranque:
@@ -180,7 +211,7 @@ java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar \
 - `--config <ruta>`
 - `--init-config <ruta>`
 
-El archivo JSON soporta dos formas:
+La configuración por archivo soporta `JSON` y `YAML`, en dos formas:
 
 - modo simple: `listener` + `target`
 - modo multi-route: `routes[]`
@@ -232,6 +263,39 @@ Ejemplo:
   "sessionsDir": "./sessions",
   "interceptMode": "NONE"
 }
+```
+
+El mismo ejemplo en `YAML`:
+
+```yaml
+routes:
+  - id: public-api
+    listener:
+      host: 127.0.0.1
+      port: 9000
+      mode: PLAIN
+    target:
+      host: jsonplaceholder.typicode.com
+      port: 443
+      mode: TLS
+      sni: jsonplaceholder.typicode.com
+      insecure: true
+      rewriteHostHeader: true
+  - id: legacy-http
+    listener:
+      host: 127.0.0.1
+      port: 9001
+      mode: PLAIN
+    target:
+      host: example.org
+      port: 80
+      mode: PLAIN
+ui:
+  host: 127.0.0.1
+  port: 8080
+  enabled: true
+sessionsDir: ./sessions
+interceptMode: NONE
 ```
 
 Con este archivo:
@@ -400,7 +464,7 @@ mvn -q test
 
 ```text
 src/main/java/com/cafeina/tcpmon/
-├── config/     # carga de config JSON
+├── config/     # carga de config JSON/YAML
 ├── proxy/      # listener, bridge y reescritura HTTP
 ├── replay/     # reenvío a listener o target
 ├── session/    # modelo y persistencia de sesiones
