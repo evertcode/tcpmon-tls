@@ -25,7 +25,7 @@ public final class TcpMonApplication implements AutoCloseable {
         this.proxy.start();
         if (config.ui().enabled()) {
             this.controlPlaneServer = new ControlPlaneServer(
-                    config.ui(),
+                    config,
                     sessionStore,
                     new ReplayService(config));
             this.controlPlaneServer.start();

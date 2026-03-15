@@ -318,6 +318,106 @@ public final class WebAssets {
                     .status-4xx { background: rgba(161, 92, 7, 0.1); color: var(--warn); border-color: rgba(161, 92, 7, 0.2); }
                     .status-5xx { background: rgba(180, 35, 24, 0.1); color: var(--danger); border-color: rgba(180, 35, 24, 0.2); }
                     .status-other { background: rgba(24, 33, 47, 0.06); color: var(--text-muted); }
+                    .timing-fast { color: var(--ok); font-weight: 600; }
+                    .timing-medium { color: var(--warn); font-weight: 600; }
+                    .timing-slow { color: var(--danger); font-weight: 600; }
+                    .tls-section {
+                      display: grid;
+                      grid-template-columns: 1fr 1fr;
+                      gap: 10px;
+                      margin-top: 10px;
+                      padding-top: 10px;
+                      border-top: 1px solid var(--border);
+                    }
+                    .tls-col { font-size: 12px; }
+                    .tls-col .label { margin-bottom: 6px; }
+                    .tls-row {
+                      display: flex;
+                      gap: 8px;
+                      margin-bottom: 4px;
+                    }
+                    .tls-row .tls-key {
+                      color: var(--text-muted);
+                      min-width: 80px;
+                      flex-shrink: 0;
+                    }
+                    .tls-row .tls-val {
+                      font-family: var(--mono);
+                      word-break: break-all;
+                    }
+                    .config-panel {
+                      background: var(--surface-2);
+                      border: 1px solid var(--border);
+                      border-radius: 10px;
+                      padding: 10px 12px;
+                      margin-top: 8px;
+                      font-size: 12px;
+                    }
+                    .config-row {
+                      display: flex;
+                      gap: 8px;
+                      margin-bottom: 4px;
+                    }
+                    .config-row .config-key {
+                      color: var(--text-muted);
+                      min-width: 110px;
+                      flex-shrink: 0;
+                    }
+                    .config-row .config-val {
+                      font-family: var(--mono);
+                    }
+                    .waterfall {
+                      display: flex;
+                      flex-direction: column;
+                      gap: 5px;
+                      padding: 4px 0;
+                    }
+                    .wf-row {
+                      display: grid;
+                      grid-template-columns: 110px 1fr 64px;
+                      align-items: center;
+                      gap: 10px;
+                      font-size: 12px;
+                    }
+                    .wf-label {
+                      color: var(--text-muted);
+                      text-align: right;
+                      font-size: 11px;
+                      text-transform: uppercase;
+                      letter-spacing: .04em;
+                      white-space: nowrap;
+                    }
+                    .wf-track {
+                      position: relative;
+                      height: 14px;
+                      background: var(--surface-3);
+                      border-radius: 4px;
+                      overflow: hidden;
+                    }
+                    .wf-bar {
+                      position: absolute;
+                      top: 0;
+                      height: 100%;
+                      border-radius: 3px;
+                      min-width: 2px;
+                    }
+                    .wf-bar-tls-in  { background: var(--accent); opacity: .75; }
+                    .wf-bar-tls-out { background: var(--ok); }
+                    .wf-bar-connect { background: var(--ok); }
+                    .wf-bar-wait    { background: var(--warn); }
+                    .wf-bar-dl      { background: var(--route); }
+                    .wf-bar-total   { background: var(--border-strong); }
+                    .wf-dur {
+                      font-family: var(--mono);
+                      font-size: 11px;
+                      color: var(--text-muted);
+                      text-align: right;
+                      white-space: nowrap;
+                    }
+                    .wf-sep { height: 1px; background: var(--border); margin: 3px 0; }
+                    .wf-row-total .wf-label { color: var(--text); font-weight: 600; font-size: 12px; text-transform: none; letter-spacing: 0; }
+                    .wf-row-total .wf-dur   { color: var(--text); font-weight: 600; }
+                    .wf-empty { font-size: 12px; color: var(--text-muted); padding: 4px 0; }
                     .route-line,
                     .mono {
                       font-family: var(--mono);
@@ -768,7 +868,9 @@ public final class WebAssets {
                         <strong>tcpmon-tls control plane</strong>
                         <span id="topbar-subtitle" class="muted">Select route, inspect recorded requests, open one to view request and response.</span>
                       </div>
+                      <div id="topbar-config"></div>
                     </header>
+                    <div id="config-panel-container"></div>
 
                     <div class="layout">
                       <aside class="sidebar">
@@ -797,6 +899,9 @@ public final class WebAssets {
                   <script>
                     let allSessions = [];
                     let activeRoute = null;
+                    let lastLoadedSession = null;
+                    let proxyConfig = null;
+                    let diffMode = false;
                     let activeSession = null;
                     let activeExchangeIndex = 0;
                     let requestPage = 1;
@@ -922,6 +1027,20 @@ public final class WebAssets {
                           : '';
                         const activeClass = route.routeId === activeRoute ? ' active' : '';
                         const statusEdge = isOpen ? ' status-open' : isError ? ' status-error' : '';
+                        const withDuration = route.sessions.filter(s => s.durationMs != null);
+                        const avgDuration = withDuration.length
+                          ? Math.round(withDuration.reduce((sum, s) => sum + Number(s.durationMs), 0) / withDuration.length)
+                          : null;
+                        const errors = route.sessions.filter(s => String(s.responseStatusCode || '').startsWith('5') || String(s.status || '') === 'ERROR').length;
+                        const perfParts = [];
+                        if (avgDuration != null) {
+                          const cls = avgDuration < 200 ? 'timing-fast' : avgDuration < 1000 ? 'timing-medium' : 'timing-slow';
+                          perfParts.push(`<span class="${cls}">avg ${avgDuration < 1000 ? avgDuration + ' ms' : (avgDuration/1000).toFixed(1) + ' s'}</span>`);
+                        }
+                        if (errors > 0) perfParts.push(`<span style="color:var(--danger);">${errors} error${errors !== 1 ? 's' : ''}</span>`);
+                        const perfLine = perfParts.length
+                          ? `<div class="route-preview" style="font-family:var(--sans);">${perfParts.join(' · ')}</div>`
+                          : '';
                         return `<div class="route-row${activeClass}${statusEdge}" onclick="selectRoute('${route.routeId}')">
                           <div class="row-top">
                             <strong style="font-size:13px;">${escapeHtml(route.routeId)}</strong>
@@ -935,6 +1054,7 @@ public final class WebAssets {
                             <span class="pill route" style="flex-shrink:0;">${escapeHtml(route.sessions.length)} req</span>
                           </div>
                           ${latestPreview}
+                          ${perfLine}
                         </div>`;
                       }).join('');
                     }
@@ -999,7 +1119,10 @@ public final class WebAssets {
                               <strong>${escapeHtml(activeRoute)}</strong>
                               <span class="muted" style="font-size:12px;">${escapeHtml(first.listenerAddress || '')} \u2192 ${escapeHtml(first.targetAddress || '')}</span>
                             </div>
-                            <span class="pill ${open > 0 ? 'open' : 'closed'}">${open > 0 ? 'Live' : 'Closed'}</span>
+                            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                              <button class="utility" onclick="exportHar()">Export HAR</button>
+                              <span class="pill ${open > 0 ? 'open' : 'closed'}">${open > 0 ? 'Live' : 'Closed'}</span>
+                            </div>
                           </div>
                           <div class="route-stats">
                             <div class="stat-block">
@@ -1076,6 +1199,8 @@ public final class WebAssets {
                               <th>Method</th>
                               <th>Path</th>
                               <th>Response</th>
+                              <th>Duration</th>
+                              <th>Size</th>
                               <th>Client</th>
                               <th>Started</th>
                             </tr>
@@ -1086,6 +1211,8 @@ public final class WebAssets {
                                 <td>${escapeHtml(session.requestMethod || '')}</td>
                                 <td class="mono url-cell" title="${escapeAttr(session.requestPath || session.sessionId || '')}">${escapeHtml(session.requestPath || session.sessionId.slice(0, 8) + '\u2026')}</td>
                                 <td>${statusBadge(session.responseStatusCode)}</td>
+                                <td>${formatDuration(session.durationMs)}</td>
+                                <td>${formatBytes(session.responseSizeBytes)}</td>
                                 <td class="mono">${escapeHtml(session.clientAddress || '')}</td>
                                 <td>${escapeHtml(formatTime(session.startedAt))}</td>
                               </tr>
@@ -1141,6 +1268,7 @@ public final class WebAssets {
                     async function selectSession(sessionId) {
                       activeSession = sessionId;
                       activeExchangeIndex = 0;
+                      diffMode = false;
                       renderRouteHeader();
                       renderRequestTable();
                       await loadSessionDetails(sessionId);
@@ -1150,6 +1278,7 @@ public final class WebAssets {
                       const payloadsEl = document.getElementById('payloads');
                       if (payloadsEl) payloadsEl.classList.add('loading-overlay');
                       const data = await fetchJson('/api/sessions/' + sessionId);
+                      lastLoadedSession = data;
                       if (payloadsEl) payloadsEl.classList.remove('loading-overlay');
                       const exchanges = data.exchanges || [];
                       if (activeExchangeIndex >= exchanges.length) activeExchangeIndex = 0;
@@ -1161,12 +1290,58 @@ public final class WebAssets {
                     function renderPayloads(activeExchange, data) {
                       const request = activeExchange.request || data.latestRequest;
                       const response = activeExchange.response || data.latestResponse;
+                      const tlsPanel = renderTlsPanel(data);
                       document.getElementById('payloads').innerHTML = `
+                        ${tlsPanel}
                         <section class="payload-grid">
                           ${renderPayloadCard('Request', request, 'CLIENT_TO_TARGET', data)}
                           ${renderPayloadCard('Response', response, 'TARGET_TO_CLIENT', data)}
                         </section>
                       `;
+                    }
+
+                    function renderTlsPanel(data) {
+                      const inbound = data.inboundTls || {};
+                      const outbound = data.outboundTls || {};
+                      if (!inbound.protocol && !inbound.cipherSuite && !outbound.protocol && !outbound.cipherSuite) return '';
+                      function tlsRows(tls) {
+                        const rows = [];
+                        if (tls.protocol) rows.push(`<div class="tls-row"><span class="tls-key">Protocol</span><span class="tls-val">${escapeHtml(tls.protocol)}</span></div>`);
+                        if (tls.cipherSuite) rows.push(`<div class="tls-row"><span class="tls-key">Cipher</span><span class="tls-val">${escapeHtml(tls.cipherSuite)}</span></div>`);
+                        if (tls.sni) rows.push(`<div class="tls-row"><span class="tls-key">SNI</span><span class="tls-val">${escapeHtml(tls.sni)}</span></div>`);
+                        if (tls.peerCertCount != null) rows.push(`<div class="tls-row"><span class="tls-key">Peer certs</span><span class="tls-val">${escapeHtml(tls.peerCertCount)}</span></div>`);
+                        if (tls.tlsVersion) rows.push(`<div class="tls-row"><span class="tls-key">Version</span><span class="tls-val">${escapeHtml(tls.tlsVersion)}</span></div>`);
+                        return rows.join('') || '<div class="tls-row"><span class="tls-key muted">No details</span></div>';
+                      }
+                      return `
+                        <details class="route-card" style="margin-bottom:12px;">
+                          <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:2px 0;">
+                            <strong style="font-size:13px;">TLS</strong>
+                            <span class="muted" style="font-size:11px;">${escapeHtml(inbound.protocol || '')}${inbound.protocol && outbound.protocol ? ' / ' : ''}${inbound.protocol !== outbound.protocol ? escapeHtml(outbound.protocol || '') : ''}</span>
+                          </summary>
+                          <div class="tls-section" style="padding-bottom:12px;">
+                            <div class="tls-col">
+                              <span class="label">Inbound (client → proxy)</span>
+                              ${tlsRows(inbound)}
+                            </div>
+                            <div class="tls-col">
+                              <span class="label">Outbound (proxy → target)</span>
+                              ${tlsRows(outbound)}
+                            </div>
+                          </div>
+                        </details>
+                      `;
+                    }
+
+                    function calcTtfb(events) {
+                      if (!Array.isArray(events)) return null;
+                      const firstReq = events.find(e => e.type === 'PAYLOAD' && String(e.direction || '').includes('CLIENT'));
+                      const firstRes = events.find(e => e.type === 'PAYLOAD' && String(e.direction || '').includes('TARGET'));
+                      if (!firstReq || !firstRes) return null;
+                      const t1 = new Date(firstReq.timestamp).getTime();
+                      const t2 = new Date(firstRes.timestamp).getTime();
+                      if (isNaN(t1) || isNaN(t2) || t2 < t1) return null;
+                      return t2 - t1;
                     }
 
                     function renderPayloadCard(title, payload, expectedDirection, data) {
@@ -1187,15 +1362,22 @@ public final class WebAssets {
                       const hasBody = Boolean(bodyText);
                       const chunkText = payload.chunkCount ? ` / ${payload.chunkCount} chunks` : '';
                       const actions = title === 'Request' ? renderRequestActions(data, payload) : '';
-                      const copyAction = hasBody
-                        ? `onclick='copyPayloadBody(${JSON.stringify(title)}, ${JSON.stringify(bodyText)})'`
-                        : '';
+                      const isRequest = title === 'Request';
+                      let ttfbHtml = '';
+                      if (title === 'Response' && data && Array.isArray(data.events)) {
+                        const ttfb = calcTtfb(data.events);
+                        if (ttfb !== null) {
+                          const ttfbCls = ttfb < 200 ? 'timing-fast' : ttfb < 1000 ? 'timing-medium' : 'timing-slow';
+                          ttfbHtml = `<span class="muted" style="font-size:11px;">TTFB: <span class="${ttfbCls}">${ttfb} ms</span></span>`;
+                        }
+                      }
                       return `
                         <article class="payload-card">
                           <div class="payload-header">
                             <div>
                               <h3>${title}</h3>
                               <div class="muted">${escapeHtml(payload.timestamp || '')} / ${escapeHtml(payload.size || 0)} bytes${escapeHtml(chunkText)}</div>
+                              ${ttfbHtml}
                             </div>
                             <span class="pill route">${escapeHtml(payload.direction || expectedDirection)}</span>
                           </div>
@@ -1206,13 +1388,13 @@ public final class WebAssets {
                           <details class="payload-details" ${payloadHeadersExpanded[title] ? 'open' : ''} ontoggle="setPayloadHeadersExpanded('${title}', this.open)">
                             <summary>Headers</summary>
                             <div class="payload-details-body">
-                              ${renderHeadersTable(headers, decoded)}
+                              ${renderHeadersTable(headers, decoded, isRequest)}
                             </div>
                           </details>
                           <div class="payload-body">
                             <div class="payload-body-head">
                               <span class="label">Body</span>
-                              ${hasBody ? `<button class="utility" ${copyAction}>Copy body</button>` : ''}
+                              ${hasBody ? `<button class="utility" onclick="copyCurrentBody(${isRequest})">Copy body</button>` : ''}
                             </div>
                             <pre class="scroll">${escapeHtml(bodyText || 'No body captured')}</pre>
                           </div>
@@ -1229,21 +1411,158 @@ public final class WebAssets {
                         <div class="payload-actions">
                           <button class="primary action-main" onclick='replayPayload(${JSON.stringify(data.routeId)}, ${JSON.stringify(payload.base64)}, "listener")'>Recapture request</button>
                           <button class="secondary action-alt" onclick='replayPayload(${JSON.stringify(data.routeId)}, ${JSON.stringify(payload.base64)}, "target")'>Send direct</button>
+                          <button class="utility" onclick="copyCurlFromSession()">Copy as cURL</button>
                         </div>
                       `;
                     }
 
-                    function renderHeadersTable(headers, decoded) {
+                    async function exportHar() {
+                      const sessions = sessionsForActiveRoute();
+                      if (!sessions.length) { setStatus('error', 'No sessions to export'); return; }
+                      setStatus('info', 'Building HAR export...');
+                      const entries = [];
+                      for (const session of sessions) {
+                        try {
+                          const data = await fetchJson('/api/sessions/' + session.sessionId);
+                          const exchanges = data.exchanges || [];
+                          for (const exchange of exchanges) {
+                            const req = exchange.request;
+                            const res = exchange.response;
+                            if (!req) continue;
+                            const reqDecoded = req.decoded || {};
+                            const resDecoded = res ? (res.decoded || {}) : {};
+                            const reqHeaders = Array.isArray(reqDecoded.headers) ? reqDecoded.headers : [];
+                            const resHeaders = Array.isArray(resDecoded.headers) ? resDecoded.headers : [];
+                            const reqMeta = reqDecoded.request || {};
+                            const resStart = resDecoded.startLine || '';
+                            const statusCode = parseInt((resStart.split(' ')[1] || '0'), 10) || 0;
+                            const startedAt = new Date(session.startedAt || Date.now()).toISOString();
+                            const ttfb = calcTtfb(data.events || []);
+                            const totalMs = session.durationMs != null ? Number(session.durationMs) : 0;
+                            const host = (data.targetAddress || '').replace(/:\\d+$/, '');
+                            const port = (data.targetAddress || '').includes(':') ? parseInt(data.targetAddress.split(':')[1], 10) : 443;
+                            const url = 'https://' + (data.targetAddress || 'unknown') + (reqMeta.path || '/') + (reqMeta.query ? '?' + reqMeta.query : '');
+                            const entry = {
+                              startedDateTime: startedAt,
+                              time: totalMs,
+                              request: {
+                                method: reqMeta.method || 'GET',
+                                url,
+                                httpVersion: reqMeta.version || 'HTTP/1.1',
+                                headers: reqHeaders.map(h => ({ name: h.name || '', value: h.value || '' })),
+                                queryString: [],
+                                cookies: [],
+                                headersSize: -1,
+                                bodySize: req.size || 0,
+                                postData: reqDecoded.bodyText ? { mimeType: '', text: reqDecoded.bodyText } : undefined
+                              },
+                              response: res ? {
+                                status: statusCode,
+                                statusText: resStart.split(' ').slice(2).join(' ') || '',
+                                httpVersion: (resStart.split(' ')[0]) || 'HTTP/1.1',
+                                headers: resHeaders.map(h => ({ name: h.name || '', value: h.value || '' })),
+                                cookies: [],
+                                content: {
+                                  size: res.size || 0,
+                                  mimeType: (resHeaders.find(h => String(h.name||'').toLowerCase() === 'content-type') || {}).value || '',
+                                  text: resDecoded.bodyText || ''
+                                },
+                                redirectURL: '',
+                                headersSize: -1,
+                                bodySize: res.size || 0
+                              } : { status: 0, statusText: '', httpVersion: 'HTTP/1.1', headers: [], cookies: [], content: { size: 0, mimeType: '', text: '' }, redirectURL: '', headersSize: -1, bodySize: -1 },
+                              cache: {},
+                              timings: { send: 0, wait: ttfb != null ? ttfb : totalMs, receive: 0 }
+                            };
+                            entries.push(entry);
+                          }
+                        } catch (e) { /* skip failed sessions */ }
+                      }
+                      const har = {
+                        log: {
+                          version: '1.2',
+                          creator: { name: 'tcpmon-tls', version: '1.0' },
+                          entries
+                        }
+                      };
+                      const blob = new Blob([JSON.stringify(har, null, 2)], { type: 'application/json' });
+                      const link = document.createElement('a');
+                      const dateStr = new Date().toISOString().slice(0, 10);
+                      link.href = URL.createObjectURL(blob);
+                      link.download = `tcpmon-${activeRoute || 'export'}-${dateStr}.har`;
+                      link.click();
+                      URL.revokeObjectURL(link.href);
+                      setStatus('success', `HAR exported: ${entries.length} request${entries.length !== 1 ? 's' : ''}`);
+                    }
+
+                    function resolvePayload(isRequest) {
+                      const data = lastLoadedSession;
+                      if (!data) return null;
+                      const exchange = (data.exchanges || [])[activeExchangeIndex] || {};
+                      return isRequest
+                        ? (exchange.request  || data.latestRequest)
+                        : (exchange.response || data.latestResponse);
+                    }
+
+                    function copyCurrentBody(isRequest) {
+                      const payload = resolvePayload(isRequest);
+                      if (!payload) return;
+                      const bodyText = formatBody(payload.decoded || {});
+                      if (!bodyText) return;
+                      copyText(bodyText);
+                    }
+
+                    function copyCurrentHeaders(isRequest) {
+                      const payload = resolvePayload(isRequest);
+                      if (!payload) return;
+                      const headers = Array.isArray(payload.decoded?.headers) ? payload.decoded.headers : [];
+                      if (!headers.length) return;
+                      const text = headers.map(h => (h.name || '') + ': ' + (h.value || '')).join('\\n');
+                      copyText(text);
+                    }
+
+                    function copyCurlFromSession() {
+                      const payload = resolvePayload(true);
+                      if (!payload) return;
+                      const curl = generateCurl((lastLoadedSession || {}).targetAddress || '', payload.decoded || {});
+                      copyText(curl);
+                    }
+
+                    function generateCurl(targetAddress, decoded) {
+                      if (!decoded.isHttp) return '';
+                      const req = decoded.request || {};
+                      const headers = Array.isArray(decoded.headers) ? decoded.headers : [];
+                      const method = req.method || 'GET';
+                      const path = req.path || '/';
+                      const query = req.query ? '?' + req.query : '';
+                      let host = targetAddress || '';
+                      if (host && !host.startsWith('http')) {
+                        host = 'https://' + host;
+                      }
+                      const url = host + path + query;
+                      const parts = [`curl -X ${method} '${url}'`];
+                      for (const h of headers) {
+                        const name = String(h.name || '').toLowerCase();
+                        if (name === 'content-length' || name === 'transfer-encoding') continue;
+                        parts.push(`  -H '${h.name}: ${String(h.value || '').replaceAll("'", "\\'")}'`);
+                      }
+                      const body = decoded.bodyText || '';
+                      if (body) {
+                        parts.push(`  -d '${body.replaceAll("'", "\\'")}'`);
+                      }
+                      return parts.join(' \\\\\\n');
+                    }
+
+                    function renderHeadersTable(headers, decoded, isRequest) {
                       if (!decoded.isHttp) {
                         return `<pre>Non-HTTP payload</pre>`;
                       }
                       if (!headers.length) {
                         return `<pre>No headers</pre>`;
                       }
-                      const headersText = headers.map(h => `${h.name || ''}: ${h.value || ''}`).join('\\n');
                       return `
                         <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
-                          <button class="utility" onclick='copyText(${JSON.stringify(headersText)})'>Copy headers</button>
+                          <button class="utility" onclick="copyCurrentHeaders(${isRequest})">Copy headers</button>
                         </div>
                         <table class="headers-table">
                           <tbody>
@@ -1279,29 +1598,6 @@ public final class WebAssets {
                       return bodyText;
                     }
 
-                    async function copyPayloadBody(title, bodyText) {
-                      if (!bodyText) {
-                        return;
-                      }
-                      try {
-                        if (navigator.clipboard?.writeText) {
-                          await navigator.clipboard.writeText(bodyText);
-                        } else {
-                          const helper = document.createElement('textarea');
-                          helper.value = bodyText;
-                          helper.setAttribute('readonly', 'true');
-                          helper.style.position = 'absolute';
-                          helper.style.left = '-9999px';
-                          document.body.appendChild(helper);
-                          helper.select();
-                          document.execCommand('copy');
-                          document.body.removeChild(helper);
-                        }
-                        setStatus('success', `${title} body copied to clipboard`);
-                      } catch (error) {
-                        setStatus('error', `Unable to copy ${title.toLowerCase()} body`);
-                      }
-                    }
 
                     function looksLikeJson(value) {
                       const text = String(value || '').trim();
@@ -1334,6 +1630,75 @@ public final class WebAssets {
                       return lines.join('\\n');
                     }
 
+                    function renderWaterfall(data) {
+                      const events = Array.isArray(data.events) ? data.events : [];
+                      function firstTs(type) {
+                        const ev = events.find(e => e.type === type);
+                        return ev ? new Date(ev.timestamp).getTime() : null;
+                      }
+                      function firstPayloadTs(dirFragment) {
+                        const ev = events.find(e => e.type === 'PAYLOAD' && String(e.direction || '').includes(dirFragment));
+                        return ev ? new Date(ev.timestamp).getTime() : null;
+                      }
+                      function lastPayloadTs(dirFragment) {
+                        const evs = events.filter(e => e.type === 'PAYLOAD' && String(e.direction || '').includes(dirFragment));
+                        return evs.length ? new Date(evs[evs.length - 1].timestamp).getTime() : null;
+                      }
+                      function fmtMs(ta, tb) {
+                        const d = tb - ta;
+                        if (d < 1) return '< 1 ms';
+                        return d < 1000 ? d + ' ms' : (d / 1000).toFixed(2) + ' s';
+                      }
+                      const t0 = data.startedAt ? new Date(data.startedAt).getTime() : firstTs('CLIENT_CONNECTED');
+                      const tClientConn = firstTs('CLIENT_CONNECTED');
+                      const tTlsIn      = firstTs('TLS_INBOUND');
+                      const tTlsOut     = firstTs('TLS_OUTBOUND');
+                      const tTargetConn = firstTs('TARGET_CONNECTED');
+                      const tFirstReq   = firstPayloadTs('CLIENT');
+                      const tFirstRes   = firstPayloadTs('TARGET');
+                      const tLastRes    = lastPayloadTs('TARGET');
+                      const tEnd = data.endedAt ? new Date(data.endedAt).getTime()
+                                 : tLastRes || firstTs('CLIENT_CLOSED');
+                      if (!t0 || !tEnd || tEnd <= t0) {
+                        return '<div class="wf-empty">Timing data not available for this session.</div>';
+                      }
+                      const total = tEnd - t0;
+                      function pct(t)       { return ((t - t0) / total * 100).toFixed(2); }
+                      function wpct(ta, tb) { return Math.max(0.3, (tb - ta) / total * 100).toFixed(2); }
+                      function wfBar(left, w, cls) {
+                        return '<div class="wf-bar ' + cls + '" style="left:' + left + '%;width:' + w + '%;"></div>';
+                      }
+                      function wfRow(label, barHtml, dur, extra) {
+                        return '<div class="wf-row' + (extra || '') + '">'
+                          + '<span class="wf-label">' + escapeHtml(label) + '</span>'
+                          + '<div class="wf-track">' + barHtml + '</div>'
+                          + '<span class="wf-dur">' + escapeHtml(dur) + '</span>'
+                          + '</div>';
+                      }
+                      const rows = [];
+                      if (tClientConn && tTlsIn && tTlsIn > tClientConn) {
+                        rows.push(wfRow('TLS Inbound', wfBar(pct(tClientConn), wpct(tClientConn, tTlsIn), 'wf-bar-tls-in'), fmtMs(tClientConn, tTlsIn)));
+                      }
+                      const connStart = tTlsIn || tClientConn || t0;
+                      const connEnd   = tTlsOut || tTargetConn;
+                      if (connEnd && connEnd > connStart) {
+                        const label = tTlsOut ? 'TLS Outbound' : 'Connect';
+                        const cls   = tTlsOut ? 'wf-bar-tls-out' : 'wf-bar-connect';
+                        rows.push(wfRow(label, wfBar(pct(connStart), wpct(connStart, connEnd), cls), fmtMs(connStart, connEnd)));
+                      }
+                      if (tFirstReq && tFirstRes && tFirstRes > tFirstReq) {
+                        rows.push(wfRow('Wait (TTFB)', wfBar(pct(tFirstReq), wpct(tFirstReq, tFirstRes), 'wf-bar-wait'), fmtMs(tFirstReq, tFirstRes)));
+                      }
+                      if (tFirstRes && tLastRes && tLastRes > tFirstRes) {
+                        rows.push(wfRow('Download', wfBar(pct(tFirstRes), wpct(tFirstRes, tLastRes), 'wf-bar-dl'), fmtMs(tFirstRes, tLastRes)));
+                      }
+                      if (!rows.length) {
+                        return '<div class="wf-empty">Not enough events to calculate timing breakdown.</div>';
+                      }
+                      const totalRow = wfRow('Total', wfBar('0', '100', 'wf-bar-total'), fmtMs(t0, tEnd), ' wf-row-total');
+                      return '<div class="waterfall">' + rows.join('') + '<div class="wf-sep"></div>' + totalRow + '</div>';
+                    }
+
                     function renderEventsAndEditor(data) {
                       const exchanges = data.exchanges || [];
                       const events = data.events || [];
@@ -1341,23 +1706,25 @@ public final class WebAssets {
                       const pendingBadge = pendingEvents.length
                         ? ` <span style="color:var(--warn);font-weight:700;">\u00b7 ${escapeHtml(pendingEvents.length)} intercepted</span>`
                         : '';
+                      const startMs = data.startedAt ? new Date(data.startedAt).getTime() : null;
+                      const endMs   = data.endedAt   ? new Date(data.endedAt).getTime()   : null;
+                      const durLabel = (startMs && endMs && endMs > startMs)
+                        ? ' \u00b7 ' + (endMs - startMs < 1000 ? (endMs - startMs) + ' ms' : ((endMs - startMs) / 1000).toFixed(2) + ' s')
+                        : '';
                       document.getElementById('events-and-editor').innerHTML = `
                         <details class="events-card" ${eventsExpanded ? 'open' : ''} ontoggle="setEventsExpanded(this.open)">
                           <summary style="display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;">
-                            <span><strong>Session timeline</strong></span>
-                            <span class="muted">${escapeHtml(exchanges.length)} exchange${exchanges.length !== 1 ? 's' : ''} \u00b7 ${escapeHtml(events.length)} events${pendingBadge}</span>
+                            <span><strong>Timing</strong></span>
+                            <span class="muted">${escapeHtml(exchanges.length)} exchange${exchanges.length !== 1 ? 's' : ''}${escapeHtml(durLabel)}${pendingBadge}</span>
                           </summary>
                           <div style="margin-top:12px;">
                             ${renderExchangeButtons(exchanges)}
                             ${pendingEvents.length ? renderInterceptPanel(pendingEvents) : ''}
-                            <div id="events-list" class="timeline" onscroll="setEventsScroll(this.scrollTop)">
-                              ${events.length ? events.map(event => renderTimelineItem(event)).join('') : '<div class="empty">No events yet.</div>'}
-                            </div>
+                            ${renderWaterfall(data)}
                           </div>
                         </details>
                         <div id="editor"></div>
                       `;
-                      restoreEventsScroll();
                     }
 
                     function renderInterceptPanel(pendingEvents) {
@@ -1458,15 +1825,110 @@ public final class WebAssets {
 
                     function renderExchangeButtons(exchanges) {
                       if (exchanges.length <= 1) {
+                        diffMode = false;
                         return '';
                       }
+                      const compareBtn = exchanges.length >= 2
+                        ? `<button class="${diffMode ? 'primary' : 'secondary'}" onclick="toggleDiffMode()">Compare</button>`
+                        : '';
                       return `
                         <div class="actions" style="margin:0 0 10px;">
                           ${exchanges.map(exchange => `
-                            <button class="${exchange.index === activeExchangeIndex ? 'primary' : 'secondary'}" onclick="selectExchange(${exchange.index})">Exchange ${exchange.index + 1}</button>
+                            <button class="${!diffMode && exchange.index === activeExchangeIndex ? 'primary' : 'secondary'}" onclick="selectExchange(${exchange.index})">${escapeHtml(exchange.index + 1)}</button>
                           `).join('')}
+                          ${compareBtn}
+                        </div>
+                        ${diffMode ? renderExchangeDiff(exchanges) : ''}
+                      `;
+                    }
+
+                    function toggleDiffMode() {
+                      diffMode = !diffMode;
+                      if (lastLoadedSession) {
+                        renderEventsAndEditor(lastLoadedSession);
+                        renderPayloads(
+                          (lastLoadedSession.exchanges || [])[activeExchangeIndex] || {},
+                          lastLoadedSession
+                        );
+                      }
+                    }
+
+                    function renderExchangeDiff(exchanges) {
+                      if (exchanges.length < 2) return '';
+                      const rows = [];
+                      const ex0 = exchanges[0];
+                      const ex1 = exchanges[1];
+                      // Status codes
+                      const status0 = extractExchangeStatus(ex0);
+                      const status1 = extractExchangeStatus(ex1);
+                      rows.push(diffRow('Status', status0, status1));
+                      // Request headers that differ
+                      const reqH0 = extractHeaders(ex0.request);
+                      const reqH1 = extractHeaders(ex1.request);
+                      const allReqKeys = [...new Set([...Object.keys(reqH0), ...Object.keys(reqH1)])].sort();
+                      for (const key of allReqKeys) {
+                        const v0 = reqH0[key] ?? '';
+                        const v1 = reqH1[key] ?? '';
+                        if (v0 !== v1) rows.push(diffRow('Req: ' + key, v0, v1));
+                      }
+                      // Response headers that differ
+                      const resH0 = extractHeaders(ex0.response);
+                      const resH1 = extractHeaders(ex1.response);
+                      const allResKeys = [...new Set([...Object.keys(resH0), ...Object.keys(resH1)])].sort();
+                      for (const key of allResKeys) {
+                        const v0 = resH0[key] ?? '';
+                        const v1 = resH1[key] ?? '';
+                        if (v0 !== v1) rows.push(diffRow('Res: ' + key, v0, v1));
+                      }
+                      if (!rows.length) {
+                        return `<div class="muted" style="font-size:12px;margin-bottom:10px;">No differences between Exchange 1 and Exchange 2.</div>`;
+                      }
+                      return `
+                        <div style="margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+                          <table style="width:100%;font-size:12px;border-collapse:collapse;">
+                            <thead>
+                              <tr style="background:var(--surface-2);">
+                                <th style="padding:8px 10px;text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;width:28%;">Field</th>
+                                <th style="padding:8px 10px;text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;">Exchange 1</th>
+                                <th style="padding:8px 10px;text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;">Exchange 2</th>
+                              </tr>
+                            </thead>
+                            <tbody>${rows.join('')}</tbody>
+                          </table>
                         </div>
                       `;
+                    }
+
+                    function diffRow(label, v0, v1) {
+                      const changed = v0 !== v1;
+                      const style = changed ? 'background:rgba(161,92,7,0.05);' : '';
+                      const cell = (v, other) => {
+                        if (!v && other) return `<span style="color:var(--text-muted);">—</span>`;
+                        if (v && !other) return `<span style="color:var(--ok);">${escapeHtml(v)}</span>`;
+                        if (changed) return `<span style="font-family:var(--mono);word-break:break-all;">${escapeHtml(v)}</span>`;
+                        return `<span style="font-family:var(--mono);color:var(--text-muted);word-break:break-all;">${escapeHtml(v)}</span>`;
+                      };
+                      return `<tr style="${style}border-bottom:1px solid var(--border);">
+                        <td style="padding:7px 10px;color:var(--text-muted);">${escapeHtml(label)}</td>
+                        <td style="padding:7px 10px;">${cell(v0, v1)}</td>
+                        <td style="padding:7px 10px;">${cell(v1, v0)}</td>
+                      </tr>`;
+                    }
+
+                    function extractExchangeStatus(exchange) {
+                      if (!exchange?.response) return '';
+                      const startLine = exchange.response.decoded?.startLine || '';
+                      return startLine.split(' ').slice(1, 3).join(' ');
+                    }
+
+                    function extractHeaders(payload) {
+                      if (!payload) return {};
+                      const headers = payload.decoded?.headers || [];
+                      const result = {};
+                      for (const h of headers) {
+                        if (h.name) result[String(h.name).toLowerCase()] = String(h.value || '');
+                      }
+                      return result;
                     }
 
 
@@ -1584,6 +2046,7 @@ public final class WebAssets {
 
                     async function selectExchange(index) {
                       activeExchangeIndex = index;
+                      diffMode = false;
                       if (activeSession) {
                         await loadSessionDetails(activeSession);
                       }
@@ -1766,6 +2229,24 @@ public final class WebAssets {
                       return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     }
 
+                    function formatDuration(ms) {
+                      if (ms == null) return '<span class="muted">—</span>';
+                      const n = Number(ms);
+                      if (isNaN(n)) return '<span class="muted">—</span>';
+                      const cls = n < 200 ? 'timing-fast' : n < 1000 ? 'timing-medium' : 'timing-slow';
+                      const label = n < 1000 ? n + ' ms' : (n / 1000).toFixed(1) + ' s';
+                      return `<span class="${cls}">${escapeHtml(label)}</span>`;
+                    }
+
+                    function formatBytes(bytes) {
+                      if (bytes == null) return '<span class="muted">—</span>';
+                      const n = Number(bytes);
+                      if (isNaN(n) || n === 0) return '<span class="muted">0 B</span>';
+                      if (n < 1024) return escapeHtml(n + ' B');
+                      if (n < 1048576) return escapeHtml((n / 1024).toFixed(1) + ' KB');
+                      return escapeHtml((n / 1048576).toFixed(1) + ' MB');
+                    }
+
                     function statusBadge(code) {
                       const s = String(code ?? '');
                       if (!s) return '';
@@ -1829,8 +2310,54 @@ public final class WebAssets {
                         .replaceAll('>', '&gt;');
                     }
 
+                    async function loadConfig() {
+                      try {
+                        proxyConfig = await fetchJson('/api/config');
+                        renderConfigButton();
+                      } catch (e) { /* config panel unavailable */ }
+                    }
+
+                    function renderConfigButton() {
+                      const el = document.getElementById('topbar-config');
+                      if (!el) return;
+                      el.innerHTML = `<button class="utility" onclick="toggleConfigPanel()">Config</button>`;
+                    }
+
+                    let configPanelOpen = false;
+                    function toggleConfigPanel() {
+                      configPanelOpen = !configPanelOpen;
+                      renderConfigPanel();
+                    }
+
+                    function renderConfigPanel() {
+                      const el = document.getElementById('config-panel-container');
+                      if (!el) return;
+                      if (!configPanelOpen || !proxyConfig) { el.innerHTML = ''; return; }
+                      const routes = proxyConfig.routes || [];
+                      const routeRows = routes.map(route => `
+                        <div style="margin-bottom:10px;">
+                          <div class="config-row"><span class="config-key">Route</span><span class="config-val">${escapeHtml(route.id || '')}</span></div>
+                          <div class="config-row"><span class="config-key">Listener</span><span class="config-val">${escapeHtml(route.listener.host + ':' + route.listener.port)} (${escapeHtml(route.listener.transport)})</span></div>
+                          <div class="config-row"><span class="config-key">Target</span><span class="config-val">${escapeHtml(route.target.host + ':' + route.target.port)} (${escapeHtml(route.target.transport)})</span></div>
+                          <div class="config-row"><span class="config-key">Client Auth</span><span class="config-val">${escapeHtml(route.listener.clientAuth || '')}</span></div>
+                          <div class="config-row"><span class="config-key">Trust All</span><span class="config-val">${escapeHtml(String(route.target.insecureTrustAll || false))}</span></div>
+                        </div>
+                      `).join('');
+                      el.innerHTML = `
+                        <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;">
+                          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                            <strong style="font-size:13px;">Proxy Configuration</strong>
+                            <button class="utility" onclick="toggleConfigPanel()">Close</button>
+                          </div>
+                          <div class="config-row"><span class="config-key">Intercept Mode</span><span class="config-val">${escapeHtml(proxyConfig.interceptMode || '')}</span></div>
+                          <div class="config-panel">${routeRows}</div>
+                        </div>
+                      `;
+                    }
+
                     refreshSessions(false);
                     connectEventStream();
+                    loadConfig();
                   </script>
                 </body>
                 </html>

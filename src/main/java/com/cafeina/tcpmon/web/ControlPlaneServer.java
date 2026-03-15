@@ -1,5 +1,6 @@
 package com.cafeina.tcpmon.web;
 
+import com.cafeina.tcpmon.ProxyConfig;
 import com.cafeina.tcpmon.UiConfig;
 import com.cafeina.tcpmon.Direction;
 import com.cafeina.tcpmon.replay.ReplayDestination;
@@ -16,6 +17,8 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
+import java.time.Instant;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
@@ -33,6 +36,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 public final class ControlPlaneServer implements AutoCloseable {
+    private final ProxyConfig proxyConfig;
     private final UiConfig config;
     private final SessionStore sessionStore;
     private final ReplayService replayService;
@@ -41,8 +45,9 @@ public final class ControlPlaneServer implements AutoCloseable {
     private final SessionChangeListener changeListener = this::broadcastSessionChange;
     private HttpServer server;
 
-    public ControlPlaneServer(UiConfig config, SessionStore sessionStore, ReplayService replayService) {
-        this.config = config;
+    public ControlPlaneServer(ProxyConfig proxyConfig, SessionStore sessionStore, ReplayService replayService) {
+        this.proxyConfig = proxyConfig;
+        this.config = proxyConfig.ui();
         this.sessionStore = sessionStore;
         this.replayService = replayService;
     }
@@ -54,6 +59,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         server.createContext("/api/sessions", this::handleSessions);
         server.createContext("/api/pending/", this::handlePending);
         server.createContext("/api/replay", this::handleReplay);
+        server.createContext("/api/config", this::handleConfig);
         server.setExecutor(Executors.newCachedThreadPool());
         sessionStore.addChangeListener(changeListener);
         server.start();
@@ -177,6 +183,41 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
     }
 
+    private void handleConfig(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+        sendJson(exchange, 200, buildConfigPayload());
+    }
+
+    private Map<String, Object> buildConfigPayload() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("interceptMode", proxyConfig.interceptMode().name());
+        List<Map<String, Object>> routes = new ArrayList<>();
+        for (var route : proxyConfig.routes()) {
+            Map<String, Object> routeMap = new LinkedHashMap<>();
+            routeMap.put("id", route.id());
+            Map<String, Object> listener = new LinkedHashMap<>();
+            listener.put("host", route.listener().host());
+            listener.put("port", route.listener().port());
+            listener.put("transport", route.listener().transportMode().name());
+            listener.put("clientAuth", route.listener().clientAuthMode().name());
+            routeMap.put("listener", listener);
+            Map<String, Object> target = new LinkedHashMap<>();
+            target.put("host", route.target().host());
+            target.put("port", route.target().port());
+            target.put("transport", route.target().transportMode().name());
+            target.put("insecureTrustAll", route.target().insecureTrustAll());
+            target.put("verifyHostname", route.target().verifyHostname());
+            target.put("rewriteHostHeader", route.target().rewriteHostHeader());
+            routeMap.put("target", target);
+            routes.add(routeMap);
+        }
+        result.put("routes", routes);
+        return result;
+    }
+
     private JsonNode readJsonBody(HttpExchange exchange) throws IOException {
         try (InputStream stream = exchange.getRequestBody()) {
             return objectMapper.readTree(stream);
@@ -282,6 +323,17 @@ public final class ControlPlaneServer implements AutoCloseable {
         enriched.put("requestMethod", extractRequestMethod(latestRequest));
         enriched.put("requestPath", extractRequestPath(latestRequest));
         enriched.put("responseStatusCode", extractResponseStatusCode(latestResponse));
+        Object startedAt = details.get("startedAt");
+        Object endedAt = details.get("endedAt");
+        if (startedAt instanceof Instant start && endedAt instanceof Instant end) {
+            enriched.put("durationMs", Duration.between(start, end).toMillis());
+        }
+        if (latestResponse != null) {
+            Object size = latestResponse.get("size");
+            if (size instanceof Number n) {
+                enriched.put("responseSizeBytes", n.longValue());
+            }
+        }
         return enriched;
     }
 
