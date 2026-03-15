@@ -1,8 +1,15 @@
 package com.cafeina.tcpmon.web;
 
+import com.cafeina.tcpmon.ClientAuthMode;
+import com.cafeina.tcpmon.ListenerConfig;
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
+import com.cafeina.tcpmon.TargetConfig;
+import com.cafeina.tcpmon.TransportMode;
 import com.cafeina.tcpmon.UiConfig;
 import com.cafeina.tcpmon.Direction;
+import com.cafeina.tcpmon.proxy.RouteRegistry;
+import com.cafeina.tcpmon.proxy.TcpMonProxy;
 import com.cafeina.tcpmon.replay.ReplayDestination;
 import com.cafeina.tcpmon.replay.ReplayService;
 import com.cafeina.tcpmon.session.SessionChangeEvent;
@@ -37,6 +44,8 @@ import java.util.concurrent.TimeUnit;
 
 public final class ControlPlaneServer implements AutoCloseable {
     private final ProxyConfig proxyConfig;
+    private final RouteRegistry registry;
+    private final TcpMonProxy proxy;
     private final UiConfig config;
     private final SessionStore sessionStore;
     private final ReplayService replayService;
@@ -45,8 +54,10 @@ public final class ControlPlaneServer implements AutoCloseable {
     private final SessionChangeListener changeListener = this::broadcastSessionChange;
     private HttpServer server;
 
-    public ControlPlaneServer(ProxyConfig proxyConfig, SessionStore sessionStore, ReplayService replayService) {
+    public ControlPlaneServer(ProxyConfig proxyConfig, RouteRegistry registry, TcpMonProxy proxy, SessionStore sessionStore, ReplayService replayService) {
         this.proxyConfig = proxyConfig;
+        this.registry = registry;
+        this.proxy = proxy;
         this.config = proxyConfig.ui();
         this.sessionStore = sessionStore;
         this.replayService = replayService;
@@ -60,6 +71,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         server.createContext("/api/pending/", this::handlePending);
         server.createContext("/api/replay", this::handleReplay);
         server.createContext("/api/config", this::handleConfig);
+        server.createContext("/api/routes", this::handleRoutes);
         server.setExecutor(Executors.newCachedThreadPool());
         sessionStore.addChangeListener(changeListener);
         server.start();
@@ -191,11 +203,179 @@ public final class ControlPlaneServer implements AutoCloseable {
         sendJson(exchange, 200, buildConfigPayload());
     }
 
+    private void handleRoutes(HttpExchange exchange) throws IOException {
+        String method = exchange.getRequestMethod().toUpperCase();
+        String path = exchange.getRequestURI().getPath();
+
+        if ("POST".equals(method) && "/api/routes".equals(path)) {
+            handleCreateRoute(exchange);
+        } else if ("PUT".equals(method) && path.startsWith("/api/routes/")) {
+            String id = path.substring("/api/routes/".length());
+            handleUpdateRoute(exchange, id);
+        } else if ("DELETE".equals(method) && path.startsWith("/api/routes/")) {
+            String id = path.substring("/api/routes/".length());
+            handleDeleteRoute(exchange, id);
+        } else {
+            sendJson(exchange, 405, Map.of("error", "method not allowed"));
+        }
+    }
+
+    private void handleCreateRoute(HttpExchange exchange) throws IOException {
+        JsonNode body;
+        try {
+            body = readJsonBody(exchange);
+        } catch (Exception e) {
+            sendJson(exchange, 400, Map.of("error", "invalid JSON body"));
+            return;
+        }
+
+        RouteConfig route;
+        try {
+            route = parseRouteFromJson(body);
+        } catch (IllegalArgumentException e) {
+            sendJson(exchange, 400, Map.of("error", e.getMessage()));
+            return;
+        }
+
+        if (route.listener().transportMode() == TransportMode.TLS || route.target().transportMode() == TransportMode.TLS) {
+            sendJson(exchange, 400, Map.of("error", "TLS transport requires TLS material configured in the config file; use PLAIN for routes created via UI"));
+            return;
+        }
+
+        boolean added = registry.add(route);
+        if (!added) {
+            sendJson(exchange, 409, Map.of("error", "Route with ID already exists: " + route.id()));
+            return;
+        }
+
+        try {
+            proxy.bindRoute(route);
+        } catch (Exception e) {
+            registry.remove(route.id());
+            sendJson(exchange, 500, Map.of("error", "Failed to bind route: " + e.getMessage()));
+            return;
+        }
+
+        sendJson(exchange, 201, buildConfigPayload());
+    }
+
+    private void handleUpdateRoute(HttpExchange exchange, String id) throws IOException {
+        RouteConfig original = registry.findById(id).orElse(null);
+        if (original == null) {
+            sendJson(exchange, 404, Map.of("error", "Route not found: " + id));
+            return;
+        }
+
+        JsonNode body;
+        try {
+            body = readJsonBody(exchange);
+        } catch (Exception e) {
+            sendJson(exchange, 400, Map.of("error", "invalid JSON body"));
+            return;
+        }
+
+        RouteConfig updated;
+        try {
+            updated = parseRouteFromJson(body, id);
+        } catch (IllegalArgumentException e) {
+            sendJson(exchange, 400, Map.of("error", e.getMessage()));
+            return;
+        }
+
+        if (updated.listener().transportMode() == TransportMode.TLS || updated.target().transportMode() == TransportMode.TLS) {
+            sendJson(exchange, 400, Map.of("error", "TLS transport requires TLS material configured in the config file; use PLAIN for routes created via UI"));
+            return;
+        }
+
+        proxy.unbindRoute(id);
+        registry.replace(id, updated);
+
+        try {
+            proxy.bindRoute(updated);
+        } catch (Exception e) {
+            try { proxy.bindRoute(original); } catch (Exception ignored) {}
+            registry.replace(id, original);
+            sendJson(exchange, 500, Map.of("error", "Failed to bind updated route: " + e.getMessage()));
+            return;
+        }
+
+        sendJson(exchange, 200, buildConfigPayload());
+    }
+
+    private void handleDeleteRoute(HttpExchange exchange, String id) throws IOException {
+        if (registry.findById(id).isEmpty()) {
+            sendJson(exchange, 404, Map.of("error", "Route not found: " + id));
+            return;
+        }
+
+        proxy.unbindRoute(id);
+        registry.remove(id);
+        sendJson(exchange, 200, buildConfigPayload());
+    }
+
+    private RouteConfig parseRouteFromJson(JsonNode body) {
+        return parseRouteFromJson(body, null);
+    }
+
+    private RouteConfig parseRouteFromJson(JsonNode body, String fixedId) {
+        String id = fixedId != null ? fixedId : body.path("id").asText("").trim();
+        if (id.isBlank()) {
+            throw new IllegalArgumentException("Route id is required");
+        }
+        if (!id.matches("[a-zA-Z0-9_-]+")) {
+            throw new IllegalArgumentException("Route id must match [a-zA-Z0-9_-]+");
+        }
+
+        JsonNode listenerNode = body.path("listener");
+        String listenerHost = listenerNode.path("host").asText("0.0.0.0");
+        int listenerPort = listenerNode.path("port").asInt(0);
+        if (listenerPort < 1 || listenerPort > 65535) {
+            throw new IllegalArgumentException("Listener port must be between 1 and 65535");
+        }
+        TransportMode listenerTransport = parseTransport(listenerNode.path("transport").asText("PLAIN"));
+        ClientAuthMode clientAuth = parseClientAuth(listenerNode.path("clientAuth").asText("NONE"));
+
+        JsonNode targetNode = body.path("target");
+        String targetHost = targetNode.path("host").asText("").trim();
+        if (targetHost.isBlank()) {
+            throw new IllegalArgumentException("Target host is required");
+        }
+        int targetPort = targetNode.path("port").asInt(0);
+        if (targetPort < 1 || targetPort > 65535) {
+            throw new IllegalArgumentException("Target port must be between 1 and 65535");
+        }
+        TransportMode targetTransport = parseTransport(targetNode.path("transport").asText("PLAIN"));
+        String sniHost = targetNode.path("sniHost").isNull() ? null : targetNode.path("sniHost").asText(null);
+        boolean insecureTrustAll = targetNode.path("insecureTrustAll").asBoolean(false);
+        boolean verifyHostname = targetNode.path("verifyHostname").asBoolean(true);
+        boolean rewriteHostHeader = targetNode.path("rewriteHostHeader").asBoolean(false);
+
+        ListenerConfig listener = new ListenerConfig(listenerHost, listenerPort, listenerTransport, clientAuth, null);
+        TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, null);
+        return new RouteConfig(id, listener, target);
+    }
+
+    private TransportMode parseTransport(String value) {
+        try {
+            return TransportMode.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid transport mode: " + value + " (expected PLAIN or TLS)");
+        }
+    }
+
+    private ClientAuthMode parseClientAuth(String value) {
+        try {
+            return ClientAuthMode.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid clientAuth mode: " + value);
+        }
+    }
+
     private Map<String, Object> buildConfigPayload() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("interceptMode", proxyConfig.interceptMode().name());
         List<Map<String, Object>> routes = new ArrayList<>();
-        for (var route : proxyConfig.routes()) {
+        for (var route : registry.routes()) {
             Map<String, Object> routeMap = new LinkedHashMap<>();
             routeMap.put("id", route.id());
             Map<String, Object> listener = new LinkedHashMap<>();

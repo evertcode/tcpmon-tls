@@ -1,6 +1,11 @@
 package com.cafeina.tcpmon.session;
 
+import com.cafeina.tcpmon.ClientAuthMode;
 import com.cafeina.tcpmon.Direction;
+import com.cafeina.tcpmon.ListenerConfig;
+import com.cafeina.tcpmon.RouteConfig;
+import com.cafeina.tcpmon.TargetConfig;
+import com.cafeina.tcpmon.TransportMode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -341,6 +346,22 @@ public final class SessionStore implements AutoCloseable {
                     )
                     """);
             statement.execute("create index if not exists idx_session_events_session on session_events(session_id, timestamp)");
+            statement.execute("""
+                    create table if not exists routes (
+                        id                         text primary key,
+                        listener_host              text not null default '0.0.0.0',
+                        listener_port              integer not null,
+                        listener_transport         text not null default 'PLAIN',
+                        listener_client_auth       text not null default 'NONE',
+                        target_host                text not null,
+                        target_port                integer not null,
+                        target_transport           text not null default 'PLAIN',
+                        target_sni_host            text,
+                        target_insecure_trust_all  integer not null default 0,
+                        target_verify_hostname     integer not null default 1,
+                        target_rewrite_host_header integer not null default 0
+                    )
+                    """);
         }
     }
 
@@ -538,6 +559,120 @@ public final class SessionStore implements AutoCloseable {
             builder.append(" ...");
         }
         return builder.toString();
+    }
+
+    public synchronized int countRoutes() {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("select count(*) from routes")) {
+            return resultSet.next() ? resultSet.getInt(1) : 0;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to count routes", exception);
+        }
+    }
+
+    public synchronized List<RouteConfig> loadRoutes() {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("select * from routes")) {
+            List<RouteConfig> routes = new ArrayList<>();
+            while (resultSet.next()) {
+                routes.add(mapRoute(resultSet));
+            }
+            return routes;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to load routes", exception);
+        }
+    }
+
+    public synchronized void insertRoute(RouteConfig route) {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                insert into routes (
+                    id, listener_host, listener_port, listener_transport, listener_client_auth,
+                    target_host, target_port, target_transport, target_sni_host,
+                    target_insecure_trust_all, target_verify_hostname, target_rewrite_host_header
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """)) {
+            setRouteParams(statement, route);
+            statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to insert route " + route.id(), exception);
+        }
+    }
+
+    public synchronized void updateRoute(RouteConfig route) {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                update routes set
+                    listener_host = ?, listener_port = ?, listener_transport = ?, listener_client_auth = ?,
+                    target_host = ?, target_port = ?, target_transport = ?, target_sni_host = ?,
+                    target_insecure_trust_all = ?, target_verify_hostname = ?, target_rewrite_host_header = ?
+                where id = ?
+                """)) {
+            statement.setString(1, route.listener().host());
+            statement.setInt(2, route.listener().port());
+            statement.setString(3, route.listener().transportMode().name());
+            statement.setString(4, route.listener().clientAuthMode().name());
+            statement.setString(5, route.target().host());
+            statement.setInt(6, route.target().port());
+            statement.setString(7, route.target().transportMode().name());
+            if (route.target().sniHost() != null) {
+                statement.setString(8, route.target().sniHost());
+            } else {
+                statement.setNull(8, Types.VARCHAR);
+            }
+            statement.setInt(9, route.target().insecureTrustAll() ? 1 : 0);
+            statement.setInt(10, route.target().verifyHostname() ? 1 : 0);
+            statement.setInt(11, route.target().rewriteHostHeader() ? 1 : 0);
+            statement.setString(12, route.id());
+            statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to update route " + route.id(), exception);
+        }
+    }
+
+    public synchronized void deleteRoute(String id) {
+        try (PreparedStatement statement = connection.prepareStatement("delete from routes where id = ?")) {
+            statement.setString(1, id);
+            statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to delete route " + id, exception);
+        }
+    }
+
+    private void setRouteParams(PreparedStatement statement, RouteConfig route) throws SQLException {
+        statement.setString(1, route.id());
+        statement.setString(2, route.listener().host());
+        statement.setInt(3, route.listener().port());
+        statement.setString(4, route.listener().transportMode().name());
+        statement.setString(5, route.listener().clientAuthMode().name());
+        statement.setString(6, route.target().host());
+        statement.setInt(7, route.target().port());
+        statement.setString(8, route.target().transportMode().name());
+        if (route.target().sniHost() != null) {
+            statement.setString(9, route.target().sniHost());
+        } else {
+            statement.setNull(9, Types.VARCHAR);
+        }
+        statement.setInt(10, route.target().insecureTrustAll() ? 1 : 0);
+        statement.setInt(11, route.target().verifyHostname() ? 1 : 0);
+        statement.setInt(12, route.target().rewriteHostHeader() ? 1 : 0);
+    }
+
+    private RouteConfig mapRoute(ResultSet resultSet) throws SQLException {
+        ListenerConfig listener = new ListenerConfig(
+                resultSet.getString("listener_host"),
+                resultSet.getInt("listener_port"),
+                TransportMode.valueOf(resultSet.getString("listener_transport")),
+                ClientAuthMode.valueOf(resultSet.getString("listener_client_auth")),
+                null);
+        TargetConfig target = new TargetConfig(
+                resultSet.getString("target_host"),
+                resultSet.getInt("target_port"),
+                TransportMode.valueOf(resultSet.getString("target_transport")),
+                resultSet.getString("target_sni_host"),
+                resultSet.getInt("target_insecure_trust_all") == 1,
+                resultSet.getInt("target_verify_hostname") == 1,
+                resultSet.getInt("target_rewrite_host_header") == 1,
+                null);
+        return new RouteConfig(resultSet.getString("id"), listener, target);
     }
 
     @Override

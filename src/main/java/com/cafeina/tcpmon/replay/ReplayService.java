@@ -3,6 +3,7 @@ package com.cafeina.tcpmon.replay;
 import com.cafeina.tcpmon.ProxyConfig;
 import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TransportMode;
+import com.cafeina.tcpmon.proxy.RouteRegistry;
 import com.cafeina.tcpmon.tls.TlsContextFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBufAllocator;
@@ -30,9 +31,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ReplayService {
     private final ProxyConfig config;
+    private final RouteRegistry registry;
 
-    public ReplayService(ProxyConfig config) {
+    public ReplayService(ProxyConfig config, RouteRegistry registry) {
         this.config = config;
+        this.registry = registry;
     }
 
     public Map<String, Object> replay(byte[] payload, String routeId, ReplayDestination destination) throws Exception {
@@ -41,7 +44,8 @@ public final class ReplayService {
         AtomicInteger bytesReceived = new AtomicInteger();
         Instant startedAt = Instant.now();
         try {
-            RouteConfig route = config.route(routeId);
+            RouteConfig route = registry.findById(routeId)
+                    .orElseThrow(() -> new IllegalArgumentException("Route not found: " + routeId));
             Endpoint endpoint = resolveEndpoint(route, destination);
             SslContext sslContext = resolveSslContext(route, destination);
             Bootstrap bootstrap = new Bootstrap()

@@ -10,6 +10,7 @@ import com.cafeina.tcpmon.TransportMode;
 import com.cafeina.tcpmon.UiConfig;
 import com.cafeina.tcpmon.session.SessionStore;
 import com.cafeina.tcpmon.util.JsonSupport;
+import com.cafeina.tcpmon.proxy.RouteRegistry;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -61,7 +62,7 @@ class TcpMonProxyIntegrationTest {
                     List.of("TLSv1.3", "TLSv1.2"),
                     List.of());
 
-            try (TcpMonProxy proxy = new TcpMonProxy(config, store)) {
+            try (TcpMonProxy proxy = new TcpMonProxy(config, new RouteRegistry(config.routes(), store), store)) {
                 proxy.start();
                 try (Socket socket = new Socket("127.0.0.1", proxyPort);
                      OutputStream outputStream = socket.getOutputStream();
@@ -122,7 +123,7 @@ class TcpMonProxyIntegrationTest {
                     List.of("TLSv1.3", "TLSv1.2"),
                     List.of());
 
-            try (TcpMonProxy proxy = new TcpMonProxy(config, store)) {
+            try (TcpMonProxy proxy = new TcpMonProxy(config, new RouteRegistry(config.routes(), store), store)) {
                 proxy.start();
                 String response = tlsClientRequest(proxyPort, "secure");
                 assertEquals("secure", response);

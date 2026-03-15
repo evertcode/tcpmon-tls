@@ -5,7 +5,7 @@ public final class WebAssets {
     }
 
     public static String indexHtml() {
-        return htmlHead() + htmlBody() + htmlScript();
+        return htmlHead() + htmlBody() + htmlScript() + htmlRouteModalScript();
     }
 
     private static String htmlHead() {
@@ -48,8 +48,8 @@ public final class WebAssets {
                       font-family: var(--sans);
                     }
                     .app {
-                      display: grid;
-                      grid-template-rows: auto 1fr;
+                      display: flex;
+                      flex-direction: column;
                       min-height: 100vh;
                     }
                     .topbar {
@@ -72,6 +72,7 @@ public final class WebAssets {
                     .layout {
                       display: grid;
                       grid-template-columns: 280px minmax(0, 1fr);
+                      flex: 1;
                       min-height: 0;
                     }
                     .sidebar {
@@ -863,6 +864,22 @@ public final class WebAssets {
                         --shadow: 0 10px 26px rgba(0,0,0,0.25);
                       }
                     }
+                    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; }
+                    .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; min-width:420px; max-width:560px; max-height:90vh; overflow-y:auto; }
+                    .form-group { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+                    .form-group label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
+                    .form-group input[type=text], .form-group input[type=number], .form-group select { background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:4px; font-size:13px; width:100%; }
+                    .form-section-title { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin:16px 0 8px; }
+                    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+                    .form-check { display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px; }
+                    .btn-danger { background:#c0392b; color:#fff; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font:inherit; font-weight:600; min-height:34px; }
+                    .btn-danger:hover { background:#a93226; }
+                    .route-actions { display:inline-flex; gap:4px; opacity:0; transition:opacity .15s; margin-left:4px; }
+                    .route-row:hover .route-actions { opacity:1; }
+                    .route-action-btn { background:transparent; border:1px solid var(--border); border-radius:4px; padding:2px 6px; font-size:11px; cursor:pointer; color:var(--text-muted); min-height:0; line-height:1.4; }
+                    .route-action-btn:hover { background:var(--surface-2); color:var(--text); }
+                    .modal-error { color:var(--danger); font-size:12px; margin-top:8px; padding:6px 8px; border:1px solid rgba(180,35,24,.2); border-radius:4px; background:rgba(180,35,24,.06); display:none; }
+                    .modal-hint { font-size:11px; color:var(--text-muted); margin-top:12px; padding:8px; border:1px solid var(--border); border-radius:4px; background:var(--surface-2); }
                   </style>
                 </head>
                 """;
@@ -881,10 +898,13 @@ public final class WebAssets {
                     </header>
                     <div id="config-panel-container"></div>
 
-                    <div class="layout">
+                    <div id="app-layout" class="layout">
                       <aside class="sidebar">
                         <div class="sidebar-section">
-                          <h2>Routes</h2>
+                          <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <h2>Routes</h2>
+                            <button class="utility" style="min-height:24px;padding:2px 8px;font-size:13px;" onclick="openAddRouteModal()" title="Add route">+</button>
+                          </div>
                         </div>
                         <div class="sidebar-section">
                           <div class="toolbar">
@@ -902,6 +922,84 @@ public final class WebAssets {
                         <div id="payloads"></div>
                         <div id="events-and-editor"></div>
                       </main>
+                    </div>
+                  </div>
+
+                  <div id="route-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeRouteModal()">
+                    <div class="modal-box">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                        <strong id="route-modal-title" style="font-size:15px;">Add Route</strong>
+                        <button class="utility" onclick="closeRouteModal()" style="min-height:0;padding:2px 8px;">✕</button>
+                      </div>
+                      <div id="route-modal-error" class="modal-error"></div>
+
+                      <div class="form-group">
+                        <label>Route ID</label>
+                        <input type="text" id="rm-id" placeholder="e.g. my-route" autocomplete="off">
+                      </div>
+
+                      <div class="form-section-title">Listener</div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Host</label>
+                          <input type="text" id="rm-listener-host" value="0.0.0.0">
+                        </div>
+                        <div class="form-group">
+                          <label>Port</label>
+                          <input type="number" id="rm-listener-port" placeholder="9001" min="1" max="65535">
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label>Transport</label>
+                        <select id="rm-listener-transport">
+                          <option value="PLAIN">PLAIN</option>
+                          <option value="TLS">TLS</option>
+                        </select>
+                      </div>
+
+                      <div class="form-section-title">Target</div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Host</label>
+                          <input type="text" id="rm-target-host" placeholder="localhost">
+                        </div>
+                        <div class="form-group">
+                          <label>Port</label>
+                          <input type="number" id="rm-target-port" placeholder="8080" min="1" max="65535">
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Transport</label>
+                          <select id="rm-target-transport">
+                            <option value="PLAIN">PLAIN</option>
+                            <option value="TLS">TLS</option>
+                          </select>
+                        </div>
+                        <div class="form-group">
+                          <label>SNI Host</label>
+                          <input type="text" id="rm-target-sni" placeholder="optional">
+                        </div>
+                      </div>
+                      <div class="form-check">
+                        <input type="checkbox" id="rm-target-insecure">
+                        <label for="rm-target-insecure">Insecure trust all</label>
+                      </div>
+                      <div class="form-check">
+                        <input type="checkbox" id="rm-target-verify" checked>
+                        <label for="rm-target-verify">Verify hostname</label>
+                      </div>
+                      <div class="form-check">
+                        <input type="checkbox" id="rm-target-rewrite">
+                        <label for="rm-target-rewrite">Rewrite Host header</label>
+                      </div>
+
+                      <p class="modal-hint">TLS material (certificates, keystores) must be configured in the config file. Only PLAIN transport is supported for routes created via UI.</p>
+
+                      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;" id="route-modal-actions">
+                        <button class="secondary" onclick="closeRouteModal()">Cancel</button>
+                        <button class="primary" onclick="submitRouteForm()">Save</button>
+                      </div>
                     </div>
                   </div>
 
@@ -961,9 +1059,7 @@ public final class WebAssets {
                       renderRouteList();
 
                       if (!allSessions.length) {
-                        activeRoute = null;
-                        activeSession = null;
-                        renderEmptyState('No sessions yet.');
+                        if (!activeRoute) renderEmptyState('No sessions yet.');
                         return;
                       }
 
@@ -1011,7 +1107,20 @@ public final class WebAssets {
 
                     function filteredRoutes() {
                       const query = document.getElementById('route-search').value.trim().toLowerCase();
-                      return groupedRoutes().filter(route => {
+                      const sessionRoutes = groupedRoutes();
+                      const sessionRouteIds = new Set(sessionRoutes.map(r => r.routeId));
+                      const configRoutes = proxyConfig ? (proxyConfig.routes || []) : [];
+                      const configOnly = configRoutes
+                        .filter(cr => !sessionRouteIds.has(cr.id))
+                        .map(cr => ({
+                          routeId: cr.id,
+                          sessions: [],
+                          targetAddress: cr.target.host + ':' + cr.target.port,
+                          clientAddress: '',
+                          status: 'CLOSED'
+                        }));
+                      const all = [...sessionRoutes, ...configOnly].sort((a, b) => a.routeId.localeCompare(b.routeId));
+                      return all.filter(route => {
                         if (!query) return true;
                         return [route.routeId, route.targetAddress, route.clientAddress].join(' ').toLowerCase().includes(query);
                       });
@@ -1061,6 +1170,10 @@ public final class WebAssets {
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
                               ${pending > 0 ? `<span class="pill ${pending >= 3 ? 'pending-alarm' : 'pending'}">${escapeHtml(pending)}</span>` : ''}
                               <span class="pill ${escapeHtml(statusClass)}">${isOpen ? 'Live' : escapeHtml(route.status)}</span>
+                              <span class="route-actions" onclick="event.stopPropagation()">
+                                <button class="route-action-btn" onclick="openEditRouteModal('${escapeAttr(route.routeId)}')" title="Edit">✏</button>
+                                <button class="route-action-btn" onclick="confirmDeleteRoute('${escapeAttr(route.routeId)}')" title="Delete">🗑</button>
+                              </span>
                             </div>
                           </div>
                           <div class="row-bottom">
@@ -1114,7 +1227,24 @@ public final class WebAssets {
                     function renderRouteHeader() {
                       const sessions = sessionsForActiveRoute();
                       if (!activeRoute) {
-                        document.getElementById('route-header').innerHTML = '<div class="empty">Select a route.</div>';
+                        document.getElementById('route-header').innerHTML = '';
+                        updateTopbarSubtitle();
+                        return;
+                      }
+                      if (!sessions.length) {
+                        const configRoute = proxyConfig && (proxyConfig.routes || []).find(r => r.id === activeRoute);
+                        const targetAddr = configRoute ? configRoute.target.host + ':' + configRoute.target.port : '';
+                        document.getElementById('route-header').innerHTML = `
+                          <section class="route-card">
+                            <div class="route-title">
+                              <div>
+                                <strong>${escapeHtml(activeRoute)}</strong>
+                                ${targetAddr ? `<span class="muted" style="font-size:12px;">\u2192 ${escapeHtml(targetAddr)}</span>` : ''}
+                              </div>
+                              <span class="pill closed">No traffic</span>
+                            </div>
+                          </section>
+                        `;
                         updateTopbarSubtitle();
                         return;
                       }
@@ -1163,6 +1293,10 @@ public final class WebAssets {
 
                     function renderRequestTable() {
                       const sessions = sessionsForActiveRoute();
+                      if (!sessions.length) {
+                        document.getElementById('request-table').innerHTML = '';
+                        return;
+                      }
                       document.getElementById('request-table').innerHTML = `
                         <section class="table-card">
                           <div class="request-toolbar">
@@ -2328,6 +2462,11 @@ public final class WebAssets {
                       try {
                         proxyConfig = await fetchJson('/api/config');
                         renderConfigButton();
+                        renderRouteList();
+                        if (!activeRoute) {
+                          const routes = filteredRoutes();
+                          if (routes.length) selectRoute(routes[0].routeId);
+                        }
                       } catch (e) { /* config panel unavailable */ }
                     }
 
@@ -2372,6 +2511,139 @@ public final class WebAssets {
                     refreshSessions(false);
                     connectEventStream();
                     loadConfig();
+                  </script>
+                """;
+    }
+
+    private static String htmlRouteModalScript() {
+        return """
+                  <script>
+                    let routeModalMode = 'add';
+                    let routeModalEditId = null;
+
+                    function openAddRouteModal() {
+                      routeModalMode = 'add';
+                      routeModalEditId = null;
+                      document.getElementById('route-modal-title').textContent = 'Add Route';
+                      document.getElementById('rm-id').value = '';
+                      document.getElementById('rm-id').disabled = false;
+                      document.getElementById('rm-listener-host').value = '0.0.0.0';
+                      document.getElementById('rm-listener-port').value = '';
+                      document.getElementById('rm-listener-transport').value = 'PLAIN';
+                      document.getElementById('rm-target-host').value = '';
+                      document.getElementById('rm-target-port').value = '';
+                      document.getElementById('rm-target-transport').value = 'PLAIN';
+                      document.getElementById('rm-target-sni').value = '';
+                      document.getElementById('rm-target-insecure').checked = false;
+                      document.getElementById('rm-target-verify').checked = true;
+                      document.getElementById('rm-target-rewrite').checked = false;
+                      document.getElementById('route-modal-error').style.display = 'none';
+                      document.getElementById('route-modal').style.display = 'flex';
+                    }
+
+                    function openEditRouteModal(routeId) {
+                      const route = proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeId);
+                      if (!route) {
+                        alert('Route config not loaded yet. Try clicking Config first.');
+                        return;
+                      }
+                      routeModalMode = 'edit';
+                      routeModalEditId = routeId;
+                      document.getElementById('route-modal-title').textContent = 'Edit Route';
+                      document.getElementById('rm-id').value = route.id;
+                      document.getElementById('rm-id').disabled = true;
+                      document.getElementById('rm-listener-host').value = route.listener.host || '0.0.0.0';
+                      document.getElementById('rm-listener-port').value = route.listener.port || '';
+                      document.getElementById('rm-listener-transport').value = route.listener.transport || 'PLAIN';
+                      document.getElementById('rm-target-host').value = route.target.host || '';
+                      document.getElementById('rm-target-port').value = route.target.port || '';
+                      document.getElementById('rm-target-transport').value = route.target.transport || 'PLAIN';
+                      document.getElementById('rm-target-sni').value = route.target.sniHost || '';
+                      document.getElementById('rm-target-insecure').checked = !!route.target.insecureTrustAll;
+                      document.getElementById('rm-target-verify').checked = route.target.verifyHostname !== false;
+                      document.getElementById('rm-target-rewrite').checked = !!route.target.rewriteHostHeader;
+                      document.getElementById('route-modal-error').style.display = 'none';
+                      document.getElementById('route-modal').style.display = 'flex';
+                    }
+
+                    function closeRouteModal() {
+                      document.getElementById('route-modal').style.display = 'none';
+                    }
+
+                    function buildRoutePayload() {
+                      return {
+                        id: document.getElementById('rm-id').value.trim(),
+                        listener: {
+                          host: document.getElementById('rm-listener-host').value.trim() || '0.0.0.0',
+                          port: parseInt(document.getElementById('rm-listener-port').value, 10),
+                          transport: document.getElementById('rm-listener-transport').value
+                        },
+                        target: {
+                          host: document.getElementById('rm-target-host').value.trim(),
+                          port: parseInt(document.getElementById('rm-target-port').value, 10),
+                          transport: document.getElementById('rm-target-transport').value,
+                          sniHost: document.getElementById('rm-target-sni').value.trim() || null,
+                          insecureTrustAll: document.getElementById('rm-target-insecure').checked,
+                          verifyHostname: document.getElementById('rm-target-verify').checked,
+                          rewriteHostHeader: document.getElementById('rm-target-rewrite').checked
+                        }
+                      };
+                    }
+
+                    function showRouteModalError(msg) {
+                      const el = document.getElementById('route-modal-error');
+                      el.textContent = msg;
+                      el.style.display = 'block';
+                    }
+
+                    async function submitRouteForm() {
+                      document.getElementById('route-modal-error').style.display = 'none';
+                      const payload = buildRoutePayload();
+                      try {
+                        if (routeModalMode === 'add') {
+                          await fetchJson('/api/routes', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                          });
+                        } else {
+                          await fetchJson('/api/routes/' + encodeURIComponent(routeModalEditId), {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                          });
+                        }
+                        closeRouteModal();
+                        await loadConfig();
+                        renderRouteList();
+                        setStatus('success', routeModalMode === 'add' ? 'Route created.' : 'Route updated.');
+                      } catch (err) {
+                        showRouteModalError(err.message || 'Error saving route.');
+                      }
+                    }
+
+                    async function confirmDeleteRoute(routeId) {
+                      if (!confirm('Delete route "' + routeId + '"? This will stop the listener immediately.')) return;
+                      try {
+                        await fetchJson('/api/routes/' + encodeURIComponent(routeId), { method: 'DELETE' });
+                        await loadConfig();
+                        if (activeRoute === routeId) {
+                          activeRoute = null;
+                          activeSession = null;
+                        }
+                        renderRouteList();
+                        renderBanner();
+                        if (activeRoute) {
+                          renderRouteHeader();
+                          renderRequestTable();
+                        } else {
+                          renderEmptyState('Route deleted.');
+                        }
+                        setStatus('success', 'Route "' + routeId + '" deleted.');
+                      } catch (err) {
+                        setStatus('error', err.message || 'Failed to delete route.');
+                      }
+                    }
                   </script>
                 </body>
                 </html>

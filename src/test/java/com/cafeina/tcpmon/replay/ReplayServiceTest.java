@@ -9,6 +9,7 @@ import com.cafeina.tcpmon.TargetConfig;
 import com.cafeina.tcpmon.TlsMaterial;
 import com.cafeina.tcpmon.TransportMode;
 import com.cafeina.tcpmon.UiConfig;
+import com.cafeina.tcpmon.proxy.RouteRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
@@ -28,7 +29,7 @@ class ReplayServiceTest {
         ProxyConfig config = replayServiceConfig(
                 new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
                 new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", true, false, false, emptyTls()));
-        ReplayService replayService = new ReplayService(config);
+        ReplayService replayService = new ReplayService(config, new RouteRegistry(config.routes(), null));
 
         ReplayService.Endpoint endpoint = replayService.resolveEndpoint(config.primaryRoute(), ReplayDestination.LISTENER);
 
@@ -51,9 +52,10 @@ class ReplayServiceTest {
                 }
             });
 
-            ReplayService replayService = new ReplayService(replayServiceConfig(
+            ProxyConfig cfg = replayServiceConfig(
                     new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
-                    new TargetConfig("127.0.0.1", serverSocket.getLocalPort(), TransportMode.PLAIN, null, false, false, false, emptyTls())));
+                    new TargetConfig("127.0.0.1", serverSocket.getLocalPort(), TransportMode.PLAIN, null, false, false, false, emptyTls()));
+            ReplayService replayService = new ReplayService(cfg, new RouteRegistry(cfg.routes(), null));
 
             Map<String, Object> result = replayService.replay(
                     "GET / HTTP/1.1\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1),
