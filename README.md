@@ -55,7 +55,7 @@ mvn -q package -DskipTests
 Resulting jar:
 
 ```text
-target/tcpmon-tls-0.1.0-SNAPSHOT.jar
+target/tcpmon-tls-0.2.0-SNAPSHOT.jar
 ```
 
 ## Quick start
@@ -63,19 +63,19 @@ target/tcpmon-tls-0.1.0-SNAPSHOT.jar
 Generate an example config file:
 
 ```bash
-java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --init-config tcpmon.json
+java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --init-config tcpmon.json
 ```
 
 You can also generate it as `YAML`:
 
 ```bash
-java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --init-config tcpmon.yaml
+java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --init-config tcpmon.yaml
 ```
 
 Start the proxy using that file:
 
 ```bash
-java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
 ## Recommended case: local HTTP -> remote HTTPS
@@ -136,7 +136,7 @@ tlsProtocols:
 Start it:
 
 ```bash
-java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
 Local test:
@@ -156,7 +156,7 @@ http://127.0.0.1:8080/
 The same example without a config file:
 
 ```bash
-java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar \
+java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar \
   --listen-host 127.0.0.1 \
   --listen-port 9000 \
   --listen-mode PLAIN \
@@ -333,7 +333,7 @@ With this file:
 Start it:
 
 ```bash
-java -jar target/tcpmon-tls-0.1.0-SNAPSHOT.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
 Notes:
@@ -406,30 +406,34 @@ Without this option, many backends will return `403`, `421`, or incorrect respon
 
 The UI shows:
 
-- session list
-- `routeId` per session
-- inbound/outbound TLS metadata
-- detected HTTP exchange list
-- request and response per exchange
-- headers and body when the payload can be parsed as HTTP
-- raw events captured for the session
+- session list with method, path, response status, duration, and response size per request
+- performance summary per route (average duration, error count)
+- request and response payload with headers and formatted body
+- TLS panel per session (inbound and outbound protocol, cipher suite, SNI)
+- TTFB indicator in the response card
+- session timing waterfall (TLS inbound, TLS outbound, wait, download, total)
+- exchange diff for keep-alive sessions with multiple HTTP exchanges
 
 ### Available actions
 
 For `CLIENT_TO_TARGET` payloads:
 
-- `Recapture request`
-  - resends the request to the local listener
-  - the request enters the proxy again
-  - it is captured as a new session
-
-- `Send direct`
-  - resends the request directly to the current target
+- `Recapture request` — resends the request through the local listener and captures it as a new session
+- `Send direct` — resends the request directly to the configured target
+- `Copy as cURL` — copies the request as a ready-to-run `curl` command
 
 For intercepted payloads:
 
 - `Forward original`
-- `Edit/Forward`
+- `Edit and forward`
+
+### Export
+
+- `Export HAR` — exports all sessions in the active route as a HAR 1.2 file, importable in Chrome DevTools or Postman
+
+### Configuration panel
+
+The topbar exposes a `Config` button that shows the active proxy configuration: routes, listener and target addresses, transport modes, and intercept mode. This reads from `GET /api/config`.
 
 ## Persistence
 
@@ -509,5 +513,5 @@ The project already includes:
 
 If you continue development, the highest-value next steps would be:
 
-- exchange import/export
-- richer filtering and search by `routeId`
+- full-text search across captured request and response bodies
+- body search across sessions within a route
