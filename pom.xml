@@ -5,9 +5,9 @@
 
     <groupId>com.cafeina</groupId>
     <artifactId>tcpmon-tls</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.2.0-SNAPSHOT</version>
     <name>tcpmon-tls</name>
-    <description>TCP/TLS monitor and replay tool</description>
+    <description>TCP/TLS monitor tool</description>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
