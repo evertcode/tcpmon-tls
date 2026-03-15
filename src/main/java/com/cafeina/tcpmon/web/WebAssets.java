@@ -5,6 +5,10 @@ public final class WebAssets {
     }
 
     public static String indexHtml() {
+        return htmlHead() + htmlBody() + htmlScript();
+    }
+
+    private static String htmlHead() {
         return """
                 <!doctype html>
                 <html lang="en">
@@ -861,6 +865,11 @@ public final class WebAssets {
                     }
                   </style>
                 </head>
+                """;
+    }
+
+    private static String htmlBody() {
+        return """
                 <body>
                   <div class="app">
                     <header class="topbar">
@@ -896,6 +905,11 @@ public final class WebAssets {
                     </div>
                   </div>
 
+                """;
+    }
+
+    private static String htmlScript() {
+        return """
                   <script>
                     let allSessions = [];
                     let activeRoute = null;
