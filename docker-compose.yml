@@ -1,0 +1,11 @@
+services:
+  tcpmon:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - sessions_data:/app/sessions
+    restart: unless-stopped
+
+volumes:
+  sessions_data:

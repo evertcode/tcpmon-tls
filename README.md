@@ -49,6 +49,28 @@ The most useful and tested flows today are:
 - Java 21
 - Maven 3.9+ to build
 
+## Docker
+
+The easiest way to run `tcpmon-tls` is with Docker:
+
+```bash
+docker compose up --build
+```
+
+Open the UI:
+
+```text
+http://localhost:8080/
+```
+
+Session data is persisted in a named Docker volume (`sessions_data`). Routes survive container restarts.
+
+To pass additional CLI flags:
+
+```bash
+docker compose run --rm tcpmon --intercept-mode REQUEST
+```
+
 ## Build
 
 ```bash
@@ -58,7 +80,7 @@ mvn -q package -DskipTests
 Resulting jar:
 
 ```text
-target/tcpmon-tls-0.2.0-SNAPSHOT.jar
+target/tcpmon-tls-0.3.0-SNAPSHOT.jar
 ```
 
 ## Quick start
@@ -66,7 +88,7 @@ target/tcpmon-tls-0.2.0-SNAPSHOT.jar
 Start the proxy:
 
 ```bash
-java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar
+java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar
 ```
 
 Open the UI and create routes from there:
@@ -145,15 +167,15 @@ The config file manages **application-level settings only**. Routes are stored i
 Generate an example:
 
 ```bash
-java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --init-config tcpmon.json
+java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --init-config tcpmon.json
 # or
-java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --init-config tcpmon.yaml
+java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --init-config tcpmon.yaml
 ```
 
 Start with a config file:
 
 ```bash
-java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
 ### Config file fields
@@ -189,7 +211,7 @@ tlsProtocols:
 ### CLI flags
 
 ```bash
-java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar \
+java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar \
   --ui-host 127.0.0.1 \
   --ui-port 8080 \
   --ui-enabled=true \
