@@ -5,7 +5,7 @@ public final class WebAssets {
     }
 
     public static String indexHtml() {
-        return htmlHead() + htmlBody() + htmlScript() + htmlRouteModalScript();
+        return htmlHead() + htmlBody() + htmlScript1() + htmlScript2() + htmlRouteModalScript();
     }
 
     private static String htmlHead() {
@@ -1116,7 +1116,7 @@ public final class WebAssets {
                 """;
     }
 
-    private static String htmlScript() {
+    private static String htmlScript1() {
         return """
                   <script>
                     let allSessions = [];
@@ -1661,7 +1661,13 @@ public final class WebAssets {
                         </article>
                       `;
                     }
+                  </script>
+                """;
+    }
 
+    private static String htmlScript2() {
+        return """
+                  <script>
                     function renderRequestActions(data, payload) {
                       if (!payload?.base64 || !data?.routeId) {
                         return '';
