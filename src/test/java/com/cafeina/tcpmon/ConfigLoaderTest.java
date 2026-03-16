@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConfigLoaderTest {
@@ -24,10 +25,11 @@ class ConfigLoaderTest {
 
         assertTrue(Files.exists(output));
         ConfigFile config = ConfigLoader.load(output);
-        assertEquals(9000, config.listener().port());
-        assertEquals("jsonplaceholder.typicode.com", config.target().host());
-        assertTrue(Boolean.TRUE.equals(config.target().insecure()));
-        assertTrue(Boolean.TRUE.equals(config.target().rewriteHostHeader()));
+        assertNotNull(config.ui());
+        assertEquals(8080, config.ui().port());
+        assertEquals("127.0.0.1", config.ui().host());
+        assertTrue(Boolean.TRUE.equals(config.ui().enabled()));
+        assertEquals("./sessions", config.sessionsDir());
     }
 
     @Test
@@ -39,9 +41,10 @@ class ConfigLoaderTest {
 
         assertTrue(Files.exists(output));
         ConfigFile config = ConfigLoader.load(output);
-        assertEquals(9000, config.listener().port());
-        assertEquals("jsonplaceholder.typicode.com", config.target().host());
-        assertTrue(Boolean.TRUE.equals(config.target().insecure()));
-        assertTrue(Boolean.TRUE.equals(config.target().rewriteHostHeader()));
+        assertNotNull(config.ui());
+        assertEquals(8080, config.ui().port());
+        assertEquals("127.0.0.1", config.ui().host());
+        assertTrue(Boolean.TRUE.equals(config.ui().enabled()));
+        assertEquals("./sessions", config.sessionsDir());
     }
 }

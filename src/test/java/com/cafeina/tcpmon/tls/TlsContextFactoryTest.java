@@ -4,6 +4,7 @@ import com.cafeina.tcpmon.ClientAuthMode;
 import com.cafeina.tcpmon.InterceptMode;
 import com.cafeina.tcpmon.ListenerConfig;
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
 import com.cafeina.tcpmon.TlsMaterial;
 import com.cafeina.tcpmon.TransportMode;
@@ -46,23 +47,24 @@ class TlsContextFactoryTest {
         SelfSignedCertificate certificate = new SelfSignedCertificate("backend.local");
         try (TlsEchoServer server = new TlsEchoServer(certificate)) {
             ProxyConfig config = new ProxyConfig(
-                    new ListenerConfig("127.0.0.1", 0, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
-                    new TargetConfig("127.0.0.1", server.port(), TransportMode.TLS, "backend.local", true, false, false, emptyTls()),
                     new UiConfig("127.0.0.1", 0, false),
                     tempDir.resolve("sessions"),
                     InterceptMode.NONE,
                     List.of("TLSv1.3", "TLSv1.2"),
                     List.of());
+            RouteConfig route = new RouteConfig("default",
+                    new ListenerConfig("127.0.0.1", 0, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
+                    new TargetConfig("127.0.0.1", server.port(), TransportMode.TLS, "backend.local", true, false, false, emptyTls()));
 
-            SslContext sslContext = TlsContextFactory.buildClientContext(config);
-            String response = sendTlsPayload(sslContext, config, "hello");
+            SslContext sslContext = TlsContextFactory.buildClientContext(config, route);
+            String response = sendTlsPayload(sslContext, route, "hello");
             assertEquals("hello", response);
         } finally {
             certificate.delete();
         }
     }
 
-    private static String sendTlsPayload(SslContext sslContext, ProxyConfig config, String payload) throws Exception {
+    private static String sendTlsPayload(SslContext sslContext, RouteConfig route, String payload) throws Exception {
         NioEventLoopGroup group = new NioEventLoopGroup(1);
         ArrayBlockingQueue<String> responses = new ArrayBlockingQueue<>(1);
         CountDownLatch latch = new CountDownLatch(1);
@@ -73,7 +75,7 @@ class TlsContextFactoryTest {
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel channel) {
-                            channel.pipeline().addLast(TlsContextFactory.newClientHandler(config, sslContext, channel.alloc()));
+                            channel.pipeline().addLast(TlsContextFactory.newClientHandler(route, sslContext, channel.alloc()));
                             channel.pipeline().addLast(new SimpleChannelInboundHandler<ByteBuf>() {
                                 @Override
                                 public void channelActive(ChannelHandlerContext context) {
@@ -96,7 +98,7 @@ class TlsContextFactoryTest {
                         }
                     });
 
-            Channel channel = bootstrap.connect(config.target().host(), config.target().port()).sync().channel();
+            Channel channel = bootstrap.connect(route.target().host(), route.target().port()).sync().channel();
             assertTrue(latch.await(10, TimeUnit.SECONDS));
             channel.close().syncUninterruptibly();
             return responses.poll(1, TimeUnit.SECONDS);

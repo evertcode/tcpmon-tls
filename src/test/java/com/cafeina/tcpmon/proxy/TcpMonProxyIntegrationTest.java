@@ -4,13 +4,13 @@ import com.cafeina.tcpmon.ClientAuthMode;
 import com.cafeina.tcpmon.InterceptMode;
 import com.cafeina.tcpmon.ListenerConfig;
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
 import com.cafeina.tcpmon.TlsMaterial;
 import com.cafeina.tcpmon.TransportMode;
 import com.cafeina.tcpmon.UiConfig;
 import com.cafeina.tcpmon.session.SessionStore;
 import com.cafeina.tcpmon.util.JsonSupport;
-import com.cafeina.tcpmon.proxy.RouteRegistry;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -53,16 +53,17 @@ class TcpMonProxyIntegrationTest {
         try (EchoServer echoServer = EchoServer.plain();
              SessionStore store = new SessionStore(tempDir.resolve("plain-sessions"), JsonSupport.objectMapper())) {
             int proxyPort = freePort();
-            ProxyConfig config = new ProxyConfig(
+            RouteConfig route = new RouteConfig("default",
                     new ListenerConfig("127.0.0.1", proxyPort, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
-                    new TargetConfig("127.0.0.1", echoServer.port(), TransportMode.PLAIN, null, false, false, false, emptyTls()),
+                    new TargetConfig("127.0.0.1", echoServer.port(), TransportMode.PLAIN, null, false, false, false, emptyTls()));
+            ProxyConfig config = new ProxyConfig(
                     new UiConfig("127.0.0.1", 0, false),
                     tempDir.resolve("plain-sessions"),
                     InterceptMode.NONE,
                     List.of("TLSv1.3", "TLSv1.2"),
                     List.of());
 
-            try (TcpMonProxy proxy = new TcpMonProxy(config, new RouteRegistry(config.routes(), store), store)) {
+            try (TcpMonProxy proxy = new TcpMonProxy(config, new RouteRegistry(List.of(route), store), store)) {
                 proxy.start();
                 try (Socket socket = new Socket("127.0.0.1", proxyPort);
                      OutputStream outputStream = socket.getOutputStream();
@@ -85,7 +86,7 @@ class TcpMonProxyIntegrationTest {
         try (TlsEchoServer echoServer = new TlsEchoServer(backendCertificate);
              SessionStore store = new SessionStore(tempDir.resolve("tls-sessions"), JsonSupport.objectMapper())) {
             int proxyPort = freePort();
-            ProxyConfig config = new ProxyConfig(
+            RouteConfig route = new RouteConfig("default",
                     new ListenerConfig(
                             "127.0.0.1",
                             proxyPort,
@@ -116,14 +117,15 @@ class TcpMonProxyIntegrationTest {
                                     backendCertificate.certificate().toPath(),
                                     null,
                                     "PKCS12",
-                                    "PKCS12")),
+                                    "PKCS12")));
+            ProxyConfig config = new ProxyConfig(
                     new UiConfig("127.0.0.1", 0, false),
                     tempDir.resolve("tls-sessions"),
                     InterceptMode.NONE,
                     List.of("TLSv1.3", "TLSv1.2"),
                     List.of());
 
-            try (TcpMonProxy proxy = new TcpMonProxy(config, new RouteRegistry(config.routes(), store), store)) {
+            try (TcpMonProxy proxy = new TcpMonProxy(config, new RouteRegistry(List.of(route), store), store)) {
                 proxy.start();
                 String response = tlsClientRequest(proxyPort, "secure");
                 assertEquals("secure", response);

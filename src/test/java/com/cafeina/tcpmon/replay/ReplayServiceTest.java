@@ -26,12 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ReplayServiceTest {
     @Test
     void resolvesListenerEndpointForRecaptureMode() {
-        ProxyConfig config = replayServiceConfig(
-                new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
-                new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", true, false, false, emptyTls()));
-        ReplayService replayService = new ReplayService(config, new RouteRegistry(config.routes(), null));
+        ListenerConfig listener = new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls());
+        TargetConfig target = new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", true, false, false, emptyTls());
+        RouteConfig route = new RouteConfig("default", listener, target);
+        ProxyConfig config = replayServiceConfig();
+        ReplayService replayService = new ReplayService(config, new RouteRegistry(List.of(route), null));
 
-        ReplayService.Endpoint endpoint = replayService.resolveEndpoint(config.primaryRoute(), ReplayDestination.LISTENER);
+        ReplayService.Endpoint endpoint = replayService.resolveEndpoint(route, ReplayDestination.LISTENER);
 
         assertEquals("127.0.0.1", endpoint.host());
         assertEquals(9000, endpoint.port());
@@ -52,10 +53,11 @@ class ReplayServiceTest {
                 }
             });
 
-            ProxyConfig cfg = replayServiceConfig(
-                    new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
-                    new TargetConfig("127.0.0.1", serverSocket.getLocalPort(), TransportMode.PLAIN, null, false, false, false, emptyTls()));
-            ReplayService replayService = new ReplayService(cfg, new RouteRegistry(cfg.routes(), null));
+            ListenerConfig listener = new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls());
+            TargetConfig target = new TargetConfig("127.0.0.1", serverSocket.getLocalPort(), TransportMode.PLAIN, null, false, false, false, emptyTls());
+            RouteConfig route = new RouteConfig("default", listener, target);
+            ProxyConfig cfg = replayServiceConfig();
+            ReplayService replayService = new ReplayService(cfg, new RouteRegistry(List.of(route), null));
 
             Map<String, Object> result = replayService.replay(
                     "GET / HTTP/1.1\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1),
@@ -71,9 +73,8 @@ class ReplayServiceTest {
         return new TlsMaterial(null, null, null, null, null, null, "PKCS12", "PKCS12");
     }
 
-    private static ProxyConfig replayServiceConfig(ListenerConfig listener, TargetConfig target) {
+    private static ProxyConfig replayServiceConfig() {
         return new ProxyConfig(
-                List.of(new RouteConfig("default", listener, target)),
                 new UiConfig("127.0.0.1", 8080, true),
                 Path.of("./sessions"),
                 InterceptMode.NONE,

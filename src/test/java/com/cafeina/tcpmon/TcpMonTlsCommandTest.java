@@ -7,8 +7,8 @@ import picocli.CommandLine;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TcpMonTlsCommandTest {
@@ -16,62 +16,40 @@ class TcpMonTlsCommandTest {
     Path tempDir;
 
     @Test
-    void acceptsBooleanFlagsWithoutExplicitValue() {
+    void defaultsApplyWhenNoFlagsGiven() {
         TcpMonTlsCommand command = new TcpMonTlsCommand();
-        CommandLine commandLine = new CommandLine(command);
-
-        commandLine.parseArgs(
-                "--listen-port", "9000",
-                "--target-host", "example.com",
-                "--target-port", "443",
-                "--target-insecure",
-                "--rewrite-host-header");
+        new CommandLine(command).parseArgs();
 
         ProxyConfig config = command.toConfig();
-        assertTrue(config.target().insecureTrustAll());
-        assertTrue(config.target().rewriteHostHeader());
+        assertEquals("127.0.0.1", config.ui().host());
+        assertEquals(8080, config.ui().port());
         assertTrue(config.ui().enabled());
+        assertEquals(InterceptMode.NONE, config.interceptMode());
     }
 
     @Test
-    void acceptsBooleanFlagsWithExplicitValue() {
+    void cliFlagsOverrideDefaults() {
         TcpMonTlsCommand command = new TcpMonTlsCommand();
-        CommandLine commandLine = new CommandLine(command);
-
-        commandLine.parseArgs(
-                "--listen-port", "9000",
-                "--target-host", "example.com",
-                "--target-port", "443",
-                "--target-insecure=true",
-                "--rewrite-host-header=true",
+        new CommandLine(command).parseArgs(
+                "--ui-host", "0.0.0.0",
+                "--ui-port", "9090",
                 "--ui-enabled=false",
-                "--target-verify-hostname=true");
+                "--intercept-mode", "BOTH",
+                "--sessions-dir", "/tmp/s");
 
         ProxyConfig config = command.toConfig();
-        assertTrue(config.target().insecureTrustAll());
-        assertTrue(config.target().rewriteHostHeader());
-        assertTrue(config.target().verifyHostname());
+        assertEquals("0.0.0.0", config.ui().host());
+        assertEquals(9090, config.ui().port());
         assertFalse(config.ui().enabled());
+        assertEquals(InterceptMode.BOTH, config.interceptMode());
+        assertEquals(Path.of("/tmp/s"), config.sessionsDir());
     }
 
     @Test
-    void loadsConfigurationFromJsonFile() throws Exception {
+    void loadsAppSettingsFromJsonFile() throws Exception {
         Path configPath = tempDir.resolve("tcpmon.json");
         Files.writeString(configPath, """
                 {
-                  "listener": {
-                    "host": "127.0.0.1",
-                    "port": 9100,
-                    "mode": "PLAIN"
-                  },
-                  "target": {
-                    "host": "jsonplaceholder.typicode.com",
-                    "port": 443,
-                    "mode": "TLS",
-                    "sni": "jsonplaceholder.typicode.com",
-                    "insecure": true,
-                    "rewriteHostHeader": true
-                  },
                   "ui": {
                     "host": "127.0.0.1",
                     "port": 8081,
@@ -84,35 +62,22 @@ class TcpMonTlsCommandTest {
                 """);
 
         TcpMonTlsCommand command = new TcpMonTlsCommand();
-        CommandLine commandLine = new CommandLine(command);
-        commandLine.parseArgs("--config", configPath.toString());
+        new CommandLine(command).parseArgs("--config", configPath.toString());
 
         ProxyConfig config = command.toConfig();
-        assertEquals(9100, config.listener().port());
-        assertEquals("jsonplaceholder.typicode.com", config.target().host());
-        assertTrue(config.target().insecureTrustAll());
-        assertTrue(config.target().rewriteHostHeader());
         assertEquals(8081, config.ui().port());
+        assertEquals("127.0.0.1", config.ui().host());
+        assertTrue(config.ui().enabled());
+        assertEquals(2, config.enabledProtocols().size());
     }
 
     @Test
-    void loadsConfigurationFromYamlFile() throws Exception {
+    void loadsAppSettingsFromYamlFile() throws Exception {
         Path configPath = tempDir.resolve("tcpmon.yaml");
         Files.writeString(configPath, """
-                listener:
-                  host: 127.0.0.1
-                  port: 9100
-                  mode: PLAIN
-                target:
-                  host: jsonplaceholder.typicode.com
-                  port: 443
-                  mode: TLS
-                  sni: jsonplaceholder.typicode.com
-                  insecure: true
-                  rewriteHostHeader: true
                 ui:
                   host: 127.0.0.1
-                  port: 8081
+                  port: 8082
                   enabled: true
                 sessionsDir: ./sessions-yaml
                 interceptMode: NONE
@@ -122,104 +87,42 @@ class TcpMonTlsCommandTest {
                 """);
 
         TcpMonTlsCommand command = new TcpMonTlsCommand();
-        CommandLine commandLine = new CommandLine(command);
-        commandLine.parseArgs("--config", configPath.toString());
+        new CommandLine(command).parseArgs("--config", configPath.toString());
 
         ProxyConfig config = command.toConfig();
-        assertEquals(9100, config.listener().port());
-        assertEquals("jsonplaceholder.typicode.com", config.target().host());
-        assertTrue(config.target().insecureTrustAll());
-        assertTrue(config.target().rewriteHostHeader());
-        assertEquals(8081, config.ui().port());
+        assertEquals(8082, config.ui().port());
+        assertEquals(2, config.enabledProtocols().size());
     }
 
     @Test
-    void cliOverridesConfigFileValues() throws Exception {
+    void cliFlagsOverrideFileValues() throws Exception {
         Path configPath = tempDir.resolve("tcpmon.json");
         Files.writeString(configPath, """
                 {
-                  "listener": { "port": 9100 },
-                  "target": {
-                    "host": "jsonplaceholder.typicode.com",
-                    "port": 443,
-                    "mode": "TLS",
-                    "rewriteHostHeader": false
-                  },
-                  "ui": { "enabled": false }
+                  "ui": { "port": 8081, "enabled": true }
                 }
                 """);
 
         TcpMonTlsCommand command = new TcpMonTlsCommand();
-        CommandLine commandLine = new CommandLine(command);
-        commandLine.parseArgs(
+        new CommandLine(command).parseArgs(
                 "--config", configPath.toString(),
-                "--listen-port", "9200",
-                "--rewrite-host-header=true",
-                "--ui-enabled=true");
+                "--ui-port", "9999",
+                "--ui-enabled=false");
 
         ProxyConfig config = command.toConfig();
-        assertEquals(9200, config.listener().port());
-        assertTrue(config.target().rewriteHostHeader());
-        assertTrue(config.ui().enabled());
+        assertEquals(9999, config.ui().port());
+        assertFalse(config.ui().enabled());
     }
 
     @Test
-    void loadsMultipleRoutesFromJsonFile() throws Exception {
-        Path configPath = tempDir.resolve("tcpmon-routes.json");
-        Files.writeString(configPath, """
-                {
-                  "routes": [
-                    {
-                      "id": "public-http",
-                      "listener": {
-                        "host": "127.0.0.1",
-                        "port": 9000,
-                        "mode": "PLAIN"
-                      },
-                      "target": {
-                        "host": "jsonplaceholder.typicode.com",
-                        "port": 443,
-                        "mode": "TLS",
-                        "sni": "jsonplaceholder.typicode.com",
-                        "insecure": true,
-                        "rewriteHostHeader": true
-                      }
-                    },
-                    {
-                      "id": "internal-http",
-                      "listener": {
-                        "host": "127.0.0.1",
-                        "port": 9001,
-                        "mode": "PLAIN"
-                      },
-                      "target": {
-                        "host": "example.org",
-                        "port": 80,
-                        "mode": "PLAIN"
-                      }
-                    }
-                  ],
-                  "ui": {
-                    "host": "127.0.0.1",
-                    "port": 8081,
-                    "enabled": true
-                  }
-                }
-                """);
-
+    void writesExampleConfig(@TempDir Path dir) throws Exception {
+        Path out = dir.resolve("example.json");
         TcpMonTlsCommand command = new TcpMonTlsCommand();
-        CommandLine commandLine = new CommandLine(command);
-        commandLine.parseArgs("--config", configPath.toString());
+        command.writeExampleConfig(out);
 
-        ProxyConfig config = command.toConfig();
-        assertEquals(2, config.routes().size());
-        assertEquals("public-http", config.routes().get(0).id());
-        assertEquals(9000, config.routes().get(0).listener().port());
-        assertEquals("jsonplaceholder.typicode.com", config.routes().get(0).target().host());
-        assertTrue(config.routes().get(0).target().rewriteHostHeader());
-        assertEquals("internal-http", config.routes().get(1).id());
-        assertEquals(9001, config.routes().get(1).listener().port());
-        assertEquals("example.org", config.routes().get(1).target().host());
-        assertEquals(8081, config.ui().port());
+        assertTrue(Files.exists(out));
+        String content = Files.readString(out);
+        assertTrue(content.contains("ui"));
+        assertTrue(content.contains("sessionsDir"));
     }
 }

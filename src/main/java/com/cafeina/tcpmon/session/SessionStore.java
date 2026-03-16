@@ -5,6 +5,7 @@ import com.cafeina.tcpmon.Direction;
 import com.cafeina.tcpmon.ListenerConfig;
 import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
+import com.cafeina.tcpmon.TlsMaterial;
 import com.cafeina.tcpmon.TransportMode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -363,6 +364,27 @@ public final class SessionStore implements AutoCloseable {
                     )
                     """);
         }
+        addRouteTlsColumnsIfNeeded();
+    }
+
+    private void addRouteTlsColumnsIfNeeded() {
+        String[][] cols = {
+            {"listener_tls_cert", "TEXT"}, {"listener_tls_key", "TEXT"},
+            {"listener_tls_keystore", "TEXT"}, {"listener_tls_keystore_password", "TEXT"},
+            {"listener_tls_keystore_type", "TEXT"}, {"listener_tls_truststore", "TEXT"},
+            {"listener_tls_truststore_password", "TEXT"}, {"listener_tls_truststore_type", "TEXT"},
+            {"target_tls_cert", "TEXT"}, {"target_tls_key", "TEXT"},
+            {"target_tls_keystore", "TEXT"}, {"target_tls_keystore_password", "TEXT"},
+            {"target_tls_keystore_type", "TEXT"}, {"target_tls_truststore", "TEXT"},
+            {"target_tls_truststore_password", "TEXT"}, {"target_tls_truststore_type", "TEXT"},
+        };
+        for (String[] col : cols) {
+            try (Statement st = connection.createStatement()) {
+                st.execute("ALTER TABLE routes ADD COLUMN " + col[0] + " " + col[1]);
+            } catch (SQLException ignored) {
+                // column already exists
+            }
+        }
     }
 
     private void mergeTlsDetails(String sessionId, boolean inbound, Map<String, Object> details) {
@@ -588,8 +610,14 @@ public final class SessionStore implements AutoCloseable {
                 insert into routes (
                     id, listener_host, listener_port, listener_transport, listener_client_auth,
                     target_host, target_port, target_transport, target_sni_host,
-                    target_insecure_trust_all, target_verify_hostname, target_rewrite_host_header
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    target_insecure_trust_all, target_verify_hostname, target_rewrite_host_header,
+                    listener_tls_cert, listener_tls_key, listener_tls_keystore,
+                    listener_tls_keystore_password, listener_tls_keystore_type,
+                    listener_tls_truststore, listener_tls_truststore_password, listener_tls_truststore_type,
+                    target_tls_cert, target_tls_key, target_tls_keystore,
+                    target_tls_keystore_password, target_tls_keystore_type,
+                    target_tls_truststore, target_tls_truststore_password, target_tls_truststore_type
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)) {
             setRouteParams(statement, route);
             statement.executeUpdate();
@@ -603,7 +631,13 @@ public final class SessionStore implements AutoCloseable {
                 update routes set
                     listener_host = ?, listener_port = ?, listener_transport = ?, listener_client_auth = ?,
                     target_host = ?, target_port = ?, target_transport = ?, target_sni_host = ?,
-                    target_insecure_trust_all = ?, target_verify_hostname = ?, target_rewrite_host_header = ?
+                    target_insecure_trust_all = ?, target_verify_hostname = ?, target_rewrite_host_header = ?,
+                    listener_tls_cert = ?, listener_tls_key = ?, listener_tls_keystore = ?,
+                    listener_tls_keystore_password = ?, listener_tls_keystore_type = ?,
+                    listener_tls_truststore = ?, listener_tls_truststore_password = ?, listener_tls_truststore_type = ?,
+                    target_tls_cert = ?, target_tls_key = ?, target_tls_keystore = ?,
+                    target_tls_keystore_password = ?, target_tls_keystore_type = ?,
+                    target_tls_truststore = ?, target_tls_truststore_password = ?, target_tls_truststore_type = ?
                 where id = ?
                 """)) {
             statement.setString(1, route.listener().host());
@@ -613,15 +647,13 @@ public final class SessionStore implements AutoCloseable {
             statement.setString(5, route.target().host());
             statement.setInt(6, route.target().port());
             statement.setString(7, route.target().transportMode().name());
-            if (route.target().sniHost() != null) {
-                statement.setString(8, route.target().sniHost());
-            } else {
-                statement.setNull(8, Types.VARCHAR);
-            }
+            setNullableString(statement, 8, route.target().sniHost());
             statement.setInt(9, route.target().insecureTrustAll() ? 1 : 0);
             statement.setInt(10, route.target().verifyHostname() ? 1 : 0);
             statement.setInt(11, route.target().rewriteHostHeader() ? 1 : 0);
-            statement.setString(12, route.id());
+            setTlsMaterialParams(statement, 12, route.listener().tlsMaterial());
+            setTlsMaterialParams(statement, 20, route.target().tlsMaterial());
+            statement.setString(28, route.id());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to update route " + route.id(), exception);
@@ -646,14 +678,45 @@ public final class SessionStore implements AutoCloseable {
         statement.setString(6, route.target().host());
         statement.setInt(7, route.target().port());
         statement.setString(8, route.target().transportMode().name());
-        if (route.target().sniHost() != null) {
-            statement.setString(9, route.target().sniHost());
-        } else {
-            statement.setNull(9, Types.VARCHAR);
-        }
+        setNullableString(statement, 9, route.target().sniHost());
         statement.setInt(10, route.target().insecureTrustAll() ? 1 : 0);
         statement.setInt(11, route.target().verifyHostname() ? 1 : 0);
         statement.setInt(12, route.target().rewriteHostHeader() ? 1 : 0);
+        setTlsMaterialParams(statement, 13, route.listener().tlsMaterial());
+        setTlsMaterialParams(statement, 21, route.target().tlsMaterial());
+    }
+
+    private static void setNullableString(PreparedStatement st, int index, String value) throws SQLException {
+        if (value != null) {
+            st.setString(index, value);
+        } else {
+            st.setNull(index, Types.VARCHAR);
+        }
+    }
+
+    private static void setNullablePath(PreparedStatement st, int index, Path path) throws SQLException {
+        if (path != null) {
+            st.setString(index, path.toString());
+        } else {
+            st.setNull(index, Types.VARCHAR);
+        }
+    }
+
+    private static void setTlsMaterialParams(PreparedStatement st, int offset, TlsMaterial tls) throws SQLException {
+        if (tls == null) {
+            for (int i = 0; i < 8; i++) {
+                st.setNull(offset + i, Types.VARCHAR);
+            }
+            return;
+        }
+        setNullablePath(st, offset,     tls.certificateFile());
+        setNullablePath(st, offset + 1, tls.privateKeyFile());
+        setNullablePath(st, offset + 2, tls.keyStoreFile());
+        setNullableString(st, offset + 3, tls.keyStorePassword());
+        setNullableString(st, offset + 4, tls.keyStoreType());
+        setNullablePath(st, offset + 5, tls.trustStoreFile());
+        setNullableString(st, offset + 6, tls.trustStorePassword());
+        setNullableString(st, offset + 7, tls.trustStoreType());
     }
 
     private RouteConfig mapRoute(ResultSet resultSet) throws SQLException {
@@ -662,7 +725,7 @@ public final class SessionStore implements AutoCloseable {
                 resultSet.getInt("listener_port"),
                 TransportMode.valueOf(resultSet.getString("listener_transport")),
                 ClientAuthMode.valueOf(resultSet.getString("listener_client_auth")),
-                null);
+                readTlsMaterial(resultSet, "listener"));
         TargetConfig target = new TargetConfig(
                 resultSet.getString("target_host"),
                 resultSet.getInt("target_port"),
@@ -671,8 +734,28 @@ public final class SessionStore implements AutoCloseable {
                 resultSet.getInt("target_insecure_trust_all") == 1,
                 resultSet.getInt("target_verify_hostname") == 1,
                 resultSet.getInt("target_rewrite_host_header") == 1,
-                null);
+                readTlsMaterial(resultSet, "target"));
         return new RouteConfig(resultSet.getString("id"), listener, target);
+    }
+
+    private static TlsMaterial readTlsMaterial(ResultSet rs, String prefix) throws SQLException {
+        String cert = rs.getString(prefix + "_tls_cert");
+        String key = rs.getString(prefix + "_tls_key");
+        String keystore = rs.getString(prefix + "_tls_keystore");
+        String keystorePassword = rs.getString(prefix + "_tls_keystore_password");
+        String keystoreType = rs.getString(prefix + "_tls_keystore_type");
+        String truststore = rs.getString(prefix + "_tls_truststore");
+        String truststorePassword = rs.getString(prefix + "_tls_truststore_password");
+        String truststoreType = rs.getString(prefix + "_tls_truststore_type");
+        return new TlsMaterial(
+                cert != null && !cert.isBlank() ? Path.of(cert) : null,
+                key != null && !key.isBlank() ? Path.of(key) : null,
+                keystore != null && !keystore.isBlank() ? Path.of(keystore) : null,
+                keystorePassword,
+                truststore != null && !truststore.isBlank() ? Path.of(truststore) : null,
+                truststorePassword,
+                keystoreType != null ? keystoreType : "PKCS12",
+                truststoreType != null ? truststoreType : "PKCS12");
     }
 
     @Override

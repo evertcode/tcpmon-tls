@@ -27,10 +27,6 @@ public final class TlsContextFactory {
     private TlsContextFactory() {
     }
 
-    public static SslContext buildServerContext(ProxyConfig config) throws GeneralSecurityException, IOException {
-        return buildServerContext(config, config.listener());
-    }
-
     public static SslContext buildServerContext(ProxyConfig config, RouteConfig route) throws GeneralSecurityException, IOException {
         return buildServerContext(config, route.listener());
     }
@@ -64,10 +60,6 @@ public final class TlsContextFactory {
         return builder.build();
     }
 
-    public static SslContext buildClientContext(ProxyConfig config) throws GeneralSecurityException, IOException {
-        return buildClientContext(config, config.target());
-    }
-
     public static SslContext buildClientContext(ProxyConfig config, RouteConfig route) throws GeneralSecurityException, IOException {
         return buildClientContext(config, route.target());
     }
@@ -76,31 +68,31 @@ public final class TlsContextFactory {
         TlsMaterial material = target.tlsMaterial();
         SslContextBuilder builder = SslContextBuilder.forClient();
         applySharedSettings(builder, config.enabledProtocols(), config.enabledCiphers());
-        if (material.certificateFile() != null && material.privateKeyFile() != null) {
-            builder.keyManager(material.certificateFile().toFile(), material.privateKeyFile().toFile());
-        } else if (material.keyStoreFile() != null) {
-            builder.keyManager(loadKeyManagerFactory(
-                    material.keyStoreFile(),
-                    material.keyStorePassword(),
-                    material.keyStoreType()));
-        }
-        if (material.trustStoreFile() != null) {
-            if (isPem(material.trustStoreFile())) {
-                builder.trustManager(material.trustStoreFile().toFile());
-            } else {
-                builder.trustManager(loadTrustManagerFactory(
-                        material.trustStoreFile(),
-                    material.trustStorePassword(),
-                    material.trustStoreType()));
+        if (material != null) {
+            if (material.certificateFile() != null && material.privateKeyFile() != null) {
+                builder.keyManager(material.certificateFile().toFile(), material.privateKeyFile().toFile());
+            } else if (material.keyStoreFile() != null) {
+                builder.keyManager(loadKeyManagerFactory(
+                        material.keyStoreFile(),
+                        material.keyStorePassword(),
+                        material.keyStoreType()));
+            }
+            if (material.trustStoreFile() != null) {
+                if (isPem(material.trustStoreFile())) {
+                    builder.trustManager(material.trustStoreFile().toFile());
+                } else {
+                    builder.trustManager(loadTrustManagerFactory(
+                            material.trustStoreFile(),
+                            material.trustStorePassword(),
+                            material.trustStoreType()));
+                }
+            } else if (target.insecureTrustAll()) {
+                builder.trustManager(InsecureTrustManagerFactory.INSTANCE);
             }
         } else if (target.insecureTrustAll()) {
             builder.trustManager(InsecureTrustManagerFactory.INSTANCE);
         }
         return builder.build();
-    }
-
-    public static SslHandler newClientHandler(ProxyConfig config, SslContext context, ByteBufAllocator allocator) {
-        return newClientHandler(config.target(), context, allocator);
     }
 
     public static SslHandler newClientHandler(RouteConfig route, SslContext context, ByteBufAllocator allocator) {

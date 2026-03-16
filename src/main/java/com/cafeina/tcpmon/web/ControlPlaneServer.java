@@ -5,6 +5,7 @@ import com.cafeina.tcpmon.ListenerConfig;
 import com.cafeina.tcpmon.ProxyConfig;
 import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
+import com.cafeina.tcpmon.TlsMaterial;
 import com.cafeina.tcpmon.TransportMode;
 import com.cafeina.tcpmon.UiConfig;
 import com.cafeina.tcpmon.Direction;
@@ -237,11 +238,6 @@ public final class ControlPlaneServer implements AutoCloseable {
             return;
         }
 
-        if (route.listener().transportMode() == TransportMode.TLS || route.target().transportMode() == TransportMode.TLS) {
-            sendJson(exchange, 400, Map.of("error", "TLS transport requires TLS material configured in the config file; use PLAIN for routes created via UI"));
-            return;
-        }
-
         boolean added = registry.add(route);
         if (!added) {
             sendJson(exchange, 409, Map.of("error", "Route with ID already exists: " + route.id()));
@@ -279,11 +275,6 @@ public final class ControlPlaneServer implements AutoCloseable {
             updated = parseRouteFromJson(body, id);
         } catch (IllegalArgumentException e) {
             sendJson(exchange, 400, Map.of("error", e.getMessage()));
-            return;
-        }
-
-        if (updated.listener().transportMode() == TransportMode.TLS || updated.target().transportMode() == TransportMode.TLS) {
-            sendJson(exchange, 400, Map.of("error", "TLS transport requires TLS material configured in the config file; use PLAIN for routes created via UI"));
             return;
         }
 
@@ -350,9 +341,40 @@ public final class ControlPlaneServer implements AutoCloseable {
         boolean verifyHostname = targetNode.path("verifyHostname").asBoolean(true);
         boolean rewriteHostHeader = targetNode.path("rewriteHostHeader").asBoolean(false);
 
-        ListenerConfig listener = new ListenerConfig(listenerHost, listenerPort, listenerTransport, clientAuth, null);
-        TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, null);
+        TlsMaterial listenerTls = parseTlsMaterial(listenerNode);
+        TlsMaterial targetTls = parseTlsMaterial(targetNode);
+
+        ListenerConfig listener = new ListenerConfig(listenerHost, listenerPort, listenerTransport, clientAuth, listenerTls);
+        TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, targetTls);
         return new RouteConfig(id, listener, target);
+    }
+
+    private static TlsMaterial parseTlsMaterial(JsonNode node) {
+        String cert = nullIfBlank(node.path("tlsCert").asText(null));
+        String key = nullIfBlank(node.path("tlsKey").asText(null));
+        String keystore = nullIfBlank(node.path("tlsKeystore").asText(null));
+        String keystorePassword = nullIfBlank(node.path("tlsKeystorePassword").asText(null));
+        String keystoreType = nullIfBlank(node.path("tlsKeystoreType").asText(null));
+        String truststore = nullIfBlank(node.path("tlsTruststore").asText(null));
+        String truststorePassword = nullIfBlank(node.path("tlsTruststorePassword").asText(null));
+        String truststoreType = nullIfBlank(node.path("tlsTruststoreType").asText(null));
+        if (cert == null && key == null && keystore == null && truststore == null
+                && keystorePassword == null && truststorePassword == null) {
+            return null;
+        }
+        return new TlsMaterial(
+                cert != null ? java.nio.file.Path.of(cert) : null,
+                key != null ? java.nio.file.Path.of(key) : null,
+                keystore != null ? java.nio.file.Path.of(keystore) : null,
+                keystorePassword,
+                truststore != null ? java.nio.file.Path.of(truststore) : null,
+                truststorePassword,
+                keystoreType != null ? keystoreType : "PKCS12",
+                truststoreType != null ? truststoreType : "PKCS12");
+    }
+
+    private static String nullIfBlank(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 
     private TransportMode parseTransport(String value) {
@@ -383,19 +405,34 @@ public final class ControlPlaneServer implements AutoCloseable {
             listener.put("port", route.listener().port());
             listener.put("transport", route.listener().transportMode().name());
             listener.put("clientAuth", route.listener().clientAuthMode().name());
+            putTlsMaterial(listener, route.listener().tlsMaterial());
             routeMap.put("listener", listener);
             Map<String, Object> target = new LinkedHashMap<>();
             target.put("host", route.target().host());
             target.put("port", route.target().port());
             target.put("transport", route.target().transportMode().name());
+            target.put("sniHost", route.target().sniHost());
             target.put("insecureTrustAll", route.target().insecureTrustAll());
             target.put("verifyHostname", route.target().verifyHostname());
             target.put("rewriteHostHeader", route.target().rewriteHostHeader());
+            putTlsMaterial(target, route.target().tlsMaterial());
             routeMap.put("target", target);
             routes.add(routeMap);
         }
         result.put("routes", routes);
         return result;
+    }
+
+    private static void putTlsMaterial(Map<String, Object> map, TlsMaterial tls) {
+        if (tls == null) return;
+        if (tls.certificateFile() != null) map.put("tlsCert", tls.certificateFile().toString());
+        if (tls.privateKeyFile() != null) map.put("tlsKey", tls.privateKeyFile().toString());
+        if (tls.keyStoreFile() != null) map.put("tlsKeystore", tls.keyStoreFile().toString());
+        if (tls.keyStorePassword() != null) map.put("tlsKeystorePassword", tls.keyStorePassword());
+        if (tls.keyStoreType() != null) map.put("tlsKeystoreType", tls.keyStoreType());
+        if (tls.trustStoreFile() != null) map.put("tlsTruststore", tls.trustStoreFile().toString());
+        if (tls.trustStorePassword() != null) map.put("tlsTruststorePassword", tls.trustStorePassword());
+        if (tls.trustStoreType() != null) map.put("tlsTruststoreType", tls.trustStoreType());
     }
 
     private JsonNode readJsonBody(HttpExchange exchange) throws IOException {
