@@ -16,6 +16,7 @@ import io.netty.handler.ssl.SslContext;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public final class TcpMonProxy implements AutoCloseable {
     private final ProxyConfig config;
@@ -75,7 +76,12 @@ public final class TcpMonProxy implements AutoCloseable {
         for (Channel ch : channelsByRouteId.values()) {
             ch.close().syncUninterruptibly();
         }
-        workerGroup.shutdownGracefully().syncUninterruptibly();
-        bossGroup.shutdownGracefully().syncUninterruptibly();
+        channelsByRouteId.clear();
+        try {
+            workerGroup.shutdownGracefully(0, 100, TimeUnit.MILLISECONDS).await(3, TimeUnit.SECONDS);
+            bossGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).await(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
