@@ -8,12 +8,13 @@
 
 ## Highlights
 
-- multiple listeners and targets per process using `routes[]`
+- routes created and managed from the web UI, persisted in SQLite
+- multiple listeners and targets per process
 - HTTP `request/response` inspection from a local web UI
 - interception, structured editing, and forwarding of requests
 - replay to the target and recapture through the local listener
 - `TLS` and `mTLS` support for inbound and outbound connections
-- `JSON` or `YAML` configuration and executable `jar` packaging
+- `JSON` or `YAML` config file for application-level settings only
 
 ## Typical use cases
 
@@ -32,11 +33,11 @@ The most useful and tested flows today are:
 
 ## What it does
 
-- exposes a local TCP or TLS listener
-- forwards traffic to a TCP or TLS target
+- exposes local TCP or TLS listeners defined via the UI
+- forwards traffic to TCP or TLS targets
 - supports inbound and outbound `mTLS`
-- persists session history locally
-- exposes a local web UI for inspection
+- persists routes and session history in SQLite
+- exposes a local web UI for inspection and route management
 - separates HTTP `request` and `response` messages when possible
 - supports multiple HTTP exchanges within a single keep-alive session
 - can resend a request:
@@ -62,43 +63,103 @@ target/tcpmon-tls-0.2.0-SNAPSHOT.jar
 
 ## Quick start
 
-Generate an example config file:
+Start the proxy:
+
+```bash
+java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar
+```
+
+Open the UI and create routes from there:
+
+```text
+http://127.0.0.1:8080/
+```
+
+The app starts with no routes. Use the `+` button in the sidebar to add one. Routes persist across restarts — no config file needed.
+
+## Routes
+
+Routes are the core concept. Each route defines:
+
+- a **listener** — local address and port where clients connect
+- a **target** — remote host, port, and transport mode
+
+Routes are created, edited, and deleted from the web UI. They are stored in the SQLite database and reloaded automatically on restart.
+
+### Adding a route
+
+Click `+` in the sidebar. Fill in:
+
+| Field | Description |
+|---|---|
+| Route ID | Unique identifier for the route |
+| Listener Host | Local bind address (`0.0.0.0` or `127.0.0.1`) |
+| Listener Port | Local port clients connect to |
+| Listener Transport | `PLAIN` or `TLS` |
+| Target Host | Remote hostname or IP |
+| Target Port | Remote port |
+| Target Transport | `PLAIN` or `TLS` |
+| Rewrite Host header | Rewrite `Host` to match target (recommended for HTTP->HTTPS) |
+
+When **Target Transport** is `TLS`, additional fields appear:
+
+| Field | Description |
+|---|---|
+| SNI Host | Hostname announced in the TLS handshake (defaults to target host) |
+| Verify hostname | Enable hostname verification |
+| Trust all certificates | Disable certificate validation (local testing only) |
+| Client Certificate / Keystore | Outbound mTLS material |
+| Truststore | Trust material for validating the remote certificate |
+
+When **Listener Transport** is `TLS`, additional fields appear:
+
+| Field | Description |
+|---|---|
+| Certificate file / Keystore | Server certificate for the local TLS listener |
+| Truststore | Trust material for validating inbound client certificates |
+| Client Authentication | `None`, `Optional`, or `Require` (for inbound mTLS) |
+
+### Typical route: local HTTP → remote HTTPS
+
+| Field | Value |
+|---|---|
+| Listener Host | `127.0.0.1` |
+| Listener Port | `9000` |
+| Listener Transport | `PLAIN` |
+| Target Host | `jsonplaceholder.typicode.com` |
+| Target Port | `443` |
+| Target Transport | `TLS` |
+| Rewrite Host header | ✓ |
+| Trust all certificates | ✓ (or provide a truststore) |
+
+Test:
+
+```bash
+curl -v http://127.0.0.1:9000/posts/1
+```
+
+## Configuration file
+
+The config file manages **application-level settings only**. Routes are stored in the database, not in the config file.
+
+Generate an example:
 
 ```bash
 java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --init-config tcpmon.json
-```
-
-You can also generate it as `YAML`:
-
-```bash
+# or
 java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --init-config tcpmon.yaml
 ```
 
-Start the proxy using that file:
+Start with a config file:
 
 ```bash
 java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
-## Recommended case: local HTTP -> remote HTTPS
-
-Example using `jsonplaceholder`:
+### Config file fields
 
 ```json
 {
-  "listener": {
-    "host": "127.0.0.1",
-    "port": 9000,
-    "mode": "PLAIN"
-  },
-  "target": {
-    "host": "jsonplaceholder.typicode.com",
-    "port": 443,
-    "mode": "TLS",
-    "sni": "jsonplaceholder.typicode.com",
-    "insecure": true,
-    "rewriteHostHeader": true
-  },
   "ui": {
     "host": "127.0.0.1",
     "port": 8080,
@@ -106,24 +167,14 @@ Example using `jsonplaceholder`:
   },
   "sessionsDir": "./sessions",
   "interceptMode": "NONE",
-  "tlsProtocols": ["TLSv1.3", "TLSv1.2"]
+  "tlsProtocols": ["TLSv1.3", "TLSv1.2"],
+  "tlsCiphers": []
 }
 ```
 
-The same example in `YAML`:
+The same in `YAML`:
 
 ```yaml
-listener:
-  host: 127.0.0.1
-  port: 9000
-  mode: PLAIN
-target:
-  host: jsonplaceholder.typicode.com
-  port: 443
-  mode: TLS
-  sni: jsonplaceholder.typicode.com
-  insecure: true
-  rewriteHostHeader: true
 ui:
   host: 127.0.0.1
   port: 8080
@@ -135,279 +186,58 @@ tlsProtocols:
   - TLSv1.2
 ```
 
-Start it:
-
-```bash
-java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --config tcpmon.json
-```
-
-Local test:
-
-```bash
-curl -v http://127.0.0.1:9000/posts/1
-```
-
-Local UI:
-
-```text
-http://127.0.0.1:8080/
-```
-
-## Running with CLI flags
-
-The same example without a config file:
+### CLI flags
 
 ```bash
 java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar \
-  --listen-host 127.0.0.1 \
-  --listen-port 9000 \
-  --listen-mode PLAIN \
-  --target-host jsonplaceholder.typicode.com \
-  --target-port 443 \
-  --target-mode TLS \
-  --target-sni=jsonplaceholder.typicode.com \
-  --target-insecure=true \
-  --rewrite-host-header=true \
-  --ui-enabled=true \
   --ui-host 127.0.0.1 \
-  --ui-port 8080
+  --ui-port 8080 \
+  --ui-enabled=true \
+  --sessions-dir ./sessions \
+  --intercept-mode NONE \
+  --config tcpmon.json
 ```
 
-## Most important options
-
-### Local listener
-
-- `--listen-host`
-  Local bind address for the proxy listener. Use `127.0.0.1` for local-only access or `0.0.0.0` to accept connections from other hosts.
-- `--listen-port`
-  Local port where clients connect to `tcpmon-tls`.
-- `--listen-mode=PLAIN|TLS`
-  Controls whether the local listener accepts plain TCP/HTTP or TLS/HTTPS connections.
-- `--listen-client-auth=NONE|OPTIONAL|REQUIRE`
-  Enables client-certificate validation on the local listener. Use `REQUIRE` when you want inbound `mTLS`.
-- `--listen-cert`
-  PEM certificate presented by the local TLS listener.
-- `--listen-key`
-  PEM private key that matches `--listen-cert`.
-- `--listen-keystore`
-  Alternative to PEM files when the local listener certificate is stored in `JKS` or `PKCS12`.
-- `--listen-truststore`
-  Trust material used to validate client certificates when inbound client auth is enabled.
-
-### Remote target
-
-- `--target-host`
-  Hostname or IP of the remote backend that receives forwarded traffic.
-- `--target-port`
-  Remote backend port.
-- `--target-mode=PLAIN|TLS`
-  Controls whether the outbound connection to the backend is plain TCP/HTTP or TLS/HTTPS.
-- `--target-sni`
-  Hostname announced in the outbound TLS handshake. Useful when connecting by IP or when the backend uses TLS virtual hosting.
-- `--target-insecure`
-  Disables outbound certificate validation. Intended for local testing only.
-- `--target-verify-hostname`
-  Enables hostname verification for outbound TLS. Use this when you want stricter remote certificate validation.
-- `--rewrite-host-header`
-  Rewrites the HTTP `Host` header to match the configured target. Useful when clients connect to `localhost` but the backend expects its own hostname.
-- `--target-cert`
-  PEM client certificate for outbound `mTLS`.
-- `--target-key`
-  PEM private key for `--target-cert`.
-- `--target-keystore`
-  Alternative to PEM files when the outbound client certificate is stored in `JKS` or `PKCS12`.
-- `--target-truststore`
-  Trust material used to validate the remote server certificate.
-
-### UI and sessions
-
-- `--ui-enabled`
-  Enables the local control-plane UI.
-- `--ui-host`
-  Bind address for the local web UI.
-- `--ui-port`
-  Port used by the local web UI.
-- `--sessions-dir`
-  Directory where session history is persisted. The SQLite database is created here as `sessions.db`.
-- `--intercept-mode=NONE|REQUEST|RESPONSE|BOTH`
-  Chooses which traffic direction is paused for manual forward/edit in the UI.
-
-### File-based configuration
-
-- `--config <path>`
-  Loads runtime configuration from a `JSON` or `YAML` file.
-- `--init-config <path>`
-  Writes an example config file to the given path. The output format is inferred from the extension, for example `.json`, `.yaml`, or `.yml`.
-
-File-based configuration supports both `JSON` and `YAML`, in two modes:
-
-- simple mode: `listener` + `target`
-- multi-route mode: `routes[]`
-
-## Multi-route in a single process
-
-You can define multiple listeners, each with its own target, within the same process.
-
-Example:
-
-```json
-{
-  "routes": [
-    {
-      "id": "public-api",
-      "listener": {
-        "host": "127.0.0.1",
-        "port": 9000,
-        "mode": "PLAIN"
-      },
-      "target": {
-        "host": "jsonplaceholder.typicode.com",
-        "port": 443,
-        "mode": "TLS",
-        "sni": "jsonplaceholder.typicode.com",
-        "insecure": true,
-        "rewriteHostHeader": true
-      }
-    },
-    {
-      "id": "legacy-http",
-      "listener": {
-        "host": "127.0.0.1",
-        "port": 9001,
-        "mode": "PLAIN"
-      },
-      "target": {
-        "host": "example.org",
-        "port": 80,
-        "mode": "PLAIN"
-      }
-    }
-  ],
-  "ui": {
-    "host": "127.0.0.1",
-    "port": 8080,
-    "enabled": true
-  },
-  "sessionsDir": "./sessions",
-  "interceptMode": "NONE"
-}
-```
-
-The same example in `YAML`:
-
-```yaml
-routes:
-  - id: public-api
-    listener:
-      host: 127.0.0.1
-      port: 9000
-      mode: PLAIN
-    target:
-      host: jsonplaceholder.typicode.com
-      port: 443
-      mode: TLS
-      sni: jsonplaceholder.typicode.com
-      insecure: true
-      rewriteHostHeader: true
-  - id: legacy-http
-    listener:
-      host: 127.0.0.1
-      port: 9001
-      mode: PLAIN
-    target:
-      host: example.org
-      port: 80
-      mode: PLAIN
-ui:
-  host: 127.0.0.1
-  port: 8080
-  enabled: true
-sessionsDir: ./sessions
-interceptMode: NONE
-```
-
-With this file:
-
-- `127.0.0.1:9000` points to the TLS target defined in `public-api`
-- `127.0.0.1:9001` points to the plain target defined in `legacy-http`
-- each session is tagged with its `routeId`
-
-Start it:
-
-```bash
-java -jar target/tcpmon-tls-0.2.0-SNAPSHOT.jar --config tcpmon.json
-```
-
-Notes:
-
-- when you use `routes[]`, that list fully defines the listeners and targets for the process
-- the current CLI flags are still useful for single-route mode
-- the UI shows `routeId` per session so you can tell which listener produced the traffic
-
-## Boolean CLI flags
-
-Boolean options support both styles:
-
-```bash
---target-insecure
---target-insecure=true
-```
-
-The same applies to:
-
-- `--ui-enabled`
-- `--target-verify-hostname`
-- `--rewrite-host-header`
+| Flag | Description |
+|---|---|
+| `--config <path>` | Load settings from a JSON or YAML file |
+| `--init-config <path>` | Write an example config to the given path |
+| `--ui-host` | Bind address for the web UI |
+| `--ui-port` | Port for the web UI |
+| `--ui-enabled` | Enable or disable the web UI |
+| `--sessions-dir` | Directory for the SQLite session database |
+| `--intercept-mode` | `NONE`, `REQUEST`, `RESPONSE`, or `BOTH` |
 
 ## Certificates and TLS
 
-TLS material can be loaded from:
+TLS material can be provided as:
 
-- `PEM`
-- `JKS`
-- `PKCS12`
+- `PEM` certificate + private key files
+- `JKS` or `PKCS12` keystore
 
-Typical usage:
+Both are supported for listener (server) and target (client) sides.
 
-- `cert + key PEM` for server/client certificates
-- `truststore PEM/JKS/P12` to validate peers
+### When to use SNI Host
 
-### When to use `--target-sni`
+Controls the hostname sent in the TLS handshake to the remote target. Useful when:
 
-It controls the hostname sent in the TLS handshake to the remote target.
-
-It is useful when:
-
-- the socket connects to an IP address but the certificate is issued for a hostname
+- connecting by IP but the certificate is issued for a hostname
 - the remote server uses TLS virtual hosting
-- you want to decouple `target-host` from the name announced in SNI
+- you want to decouple the target host from the SNI announcement
 
-## `--target-insecure`
+### `Trust all certificates`
 
-Disables remote certificate validation for outbound TLS.
+Disables remote certificate validation for outbound TLS. Intended for local testing or environments with internal certificates. Should not be used in production.
 
-It is intended for:
+### `Rewrite Host header`
 
-- local testing
-- environments with internal or not-yet-trusted certificates
-
-It should not be the default in production.
-
-## `--rewrite-host-header`
-
-Rewrites the HTTP `Host` header before sending the request to the remote target.
-
-This is useful in flows like:
-
-- `curl http://127.0.0.1:9000/...`
-- remote HTTPS target expecting `Host: api.example.com`
-
-Without this option, many backends will return `403`, `421`, or incorrect responses.
+Rewrites the HTTP `Host` header before sending the request to the remote target. Needed in flows like `curl http://127.0.0.1:9000/...` where the backend expects `Host: api.example.com`. Without this, many backends return `403`, `421`, or incorrect responses.
 
 ## Local UI
 
 The UI shows:
 
+- route list with Add, Edit, and Delete actions
 - session list with method, path, response status, duration, and response size per request
 - performance summary per route (average duration, error count)
 - request and response payload with headers and formatted body
@@ -439,9 +269,7 @@ The topbar exposes a `Config` button that shows the active proxy configuration: 
 
 ## Persistence
 
-Session history is stored under the directory configured in `sessionsDir`.
-
-Current storage:
+Session history and routes are stored under the directory configured in `sessionsDir`.
 
 ```text
 sessions/
@@ -450,6 +278,7 @@ sessions/
 
 ### What is stored
 
+- routes (listener, target, transport, TLS material paths)
 - session open/close metadata
 - lifecycle events and errors
 - TLS metadata
@@ -503,17 +332,3 @@ src/main/java/com/cafeina/tcpmon/
 ├── util/       # helpers
 └── web/        # local API and UI
 ```
-
-## Current status
-
-The project already includes:
-
-- a working build
-- unit and integration tests
-- a usable local UI
-- a practical workflow for HTTP/HTTPS API debugging
-
-If you continue development, the highest-value next steps would be:
-
-- full-text search across captured request and response bodies
-- body search across sessions within a route
