@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.3.0] - 2026-03-16
+
+### Route management from the UI
+
+- Routes are now created, edited, and deleted entirely from the web UI
+- Routes persist in SQLite and reload automatically on restart — no config file needed
+- The app starts with zero routes if the database is empty; this is not an error
+- Add/Edit route modal redesigned:
+  - TLS sections for listener and target, shown only when transport is `TLS`
+  - SNI Host, Verify hostname, and Trust all certificates moved inside the target TLS section so they are hidden for `PLAIN` transport
+  - Client Authentication field for listener TLS (`None`, `Optional`, `Require`)
+  - Keystore type merged into a single row with file and password fields
+  - `— or keystore —` separator between cert+key and keystore options to communicate they are alternatives
+  - Subsection labels inside TLS panels (Server Certificate, Truststore, Client Certificate)
+  - Section headers redesigned as styled dividers with a horizontal rule
+  - Modal header border separating title from form content
+  - Modal widened to 620px max
+
+### Config file
+
+- Config file now manages application-level settings only: `ui`, `sessionsDir`, `interceptMode`, `tlsProtocols`, `tlsCiphers`
+- `listener`, `target`, and `routes[]` fields removed from the config file schema
+- All `--listen-*` and `--target-*` CLI flags removed
+
+### Backend
+
+- `routes` table extended with 16 nullable TLS material columns via idempotent `ALTER TABLE` migration (safe against existing databases)
+- `SessionStore` persists and reloads full TLS material (cert, key, keystore, truststore paths and passwords) for each route
+- `ControlPlaneServer` accepts and returns TLS material in route create/update payloads
+- `TlsContextFactory.buildClientContext` handles null `TlsMaterial` to support target TLS with `insecureTrustAll` and no client certificate
+
+### Bug fixes
+
+- Route header showed only `→ target:port` before any requests were made; it now always shows `listener:port → target:port`
+- SNI Host was not pre-filled when opening the Edit modal
+- `Ctrl+C` sometimes failed to terminate the process: replaced `syncUninterruptibly()` with `await(timeout)` in `TcpMonProxy.close` so the shutdown hook returns even if Netty worker threads crash during buffer pool cleanup
+
+---
+
 ## [0.2.0] - 2026-03-14
 
 ### Control plane — UI redesign
