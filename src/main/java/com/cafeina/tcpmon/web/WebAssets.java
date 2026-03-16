@@ -15,7 +15,7 @@ public final class WebAssets {
                 <head>
                   <meta charset="utf-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1">
-                  <title>tcpmon-tls</title>
+                  <title>TCPMON TLS</title>
                   <style>
                     :root {
                       --canvas: #f4f5f7;
@@ -865,12 +865,18 @@ public final class WebAssets {
                       }
                     }
                     .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; }
-                    .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; min-width:420px; max-width:560px; max-height:90vh; overflow-y:auto; }
+                    .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:0; min-width:440px; max-width:620px; max-height:90vh; overflow-y:auto; }
+                    .modal-hdr { display:flex; justify-content:space-between; align-items:center; padding:16px 20px 14px; border-bottom:1px solid var(--border); }
+                    .modal-body { padding:16px 20px 20px; }
                     .form-group { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
                     .form-group label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
                     .form-group input[type=text], .form-group input[type=number], .form-group select { background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:4px; font-size:13px; width:100%; }
-                    .form-section-title { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin:16px 0 8px; }
+                    .form-section-hdr { display:flex; align-items:center; gap:8px; margin:18px 0 10px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
+                    .form-section-hdr::after { content:''; flex:1; height:1px; background:var(--border); }
                     .form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+                    .form-row-3 { display:grid; grid-template-columns:2fr 2fr 1fr; gap:8px; }
+                    .tls-alt-or { text-align:center; font-size:11px; color:var(--text-muted); margin:4px 0 8px; opacity:.7; }
+                    .tls-subsection-label { font-size:10px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
                     .form-check { display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px; }
                     .btn-danger { background:#c0392b; color:#fff; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font:inherit; font-weight:600; min-height:34px; }
                     .btn-danger:hover { background:#a93226; }
@@ -927,78 +933,182 @@ public final class WebAssets {
 
                   <div id="route-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeRouteModal()">
                     <div class="modal-box">
-                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                      <div class="modal-hdr">
                         <strong id="route-modal-title" style="font-size:15px;">Add Route</strong>
                         <button class="utility" onclick="closeRouteModal()" style="min-height:0;padding:2px 8px;">✕</button>
                       </div>
-                      <div id="route-modal-error" class="modal-error"></div>
+                      <div class="modal-body">
+                        <div id="route-modal-error" class="modal-error"></div>
 
-                      <div class="form-group">
-                        <label>Route ID</label>
-                        <input type="text" id="rm-id" placeholder="e.g. my-route" autocomplete="off">
-                      </div>
+                        <div class="form-group" style="margin-top:4px;">
+                          <label>Route ID</label>
+                          <input type="text" id="rm-id" placeholder="e.g. my-route" autocomplete="off">
+                        </div>
 
-                      <div class="form-section-title">Listener</div>
-                      <div class="form-row">
-                        <div class="form-group">
-                          <label>Host</label>
-                          <input type="text" id="rm-listener-host" value="0.0.0.0">
+                        <div class="form-section-hdr">Listener</div>
+                        <div class="form-row">
+                          <div class="form-group">
+                            <label>Host</label>
+                            <input type="text" id="rm-listener-host" value="0.0.0.0">
+                          </div>
+                          <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="rm-listener-port" placeholder="9001" min="1" max="65535">
+                          </div>
                         </div>
-                        <div class="form-group">
-                          <label>Port</label>
-                          <input type="number" id="rm-listener-port" placeholder="9001" min="1" max="65535">
-                        </div>
-                      </div>
-                      <div class="form-group">
-                        <label>Transport</label>
-                        <select id="rm-listener-transport">
-                          <option value="PLAIN">PLAIN</option>
-                          <option value="TLS">TLS</option>
-                        </select>
-                      </div>
-
-                      <div class="form-section-title">Target</div>
-                      <div class="form-row">
-                        <div class="form-group">
-                          <label>Host</label>
-                          <input type="text" id="rm-target-host" placeholder="localhost">
-                        </div>
-                        <div class="form-group">
-                          <label>Port</label>
-                          <input type="number" id="rm-target-port" placeholder="8080" min="1" max="65535">
-                        </div>
-                      </div>
-                      <div class="form-row">
                         <div class="form-group">
                           <label>Transport</label>
-                          <select id="rm-target-transport">
+                          <select id="rm-listener-transport" onchange="toggleListenerTls(this.value)">
                             <option value="PLAIN">PLAIN</option>
                             <option value="TLS">TLS</option>
                           </select>
                         </div>
-                        <div class="form-group">
-                          <label>SNI Host</label>
-                          <input type="text" id="rm-target-sni" placeholder="optional">
+                        <div id="listener-tls-fields" style="display:none;border-left:2px solid #334155;padding-left:12px;margin-top:4px;">
+                          <div class="tls-subsection-label">Server Certificate</div>
+                          <div class="form-row">
+                            <div class="form-group">
+                              <label>Certificate file</label>
+                              <input type="text" id="rm-listener-tls-cert" placeholder="/path/to/cert.pem">
+                            </div>
+                            <div class="form-group">
+                              <label>Private key file</label>
+                              <input type="text" id="rm-listener-tls-key" placeholder="/path/to/key.pem">
+                            </div>
+                          </div>
+                          <div class="tls-alt-or">— or keystore —</div>
+                          <div class="form-row-3">
+                            <div class="form-group">
+                              <label>Keystore file</label>
+                              <input type="text" id="rm-listener-tls-keystore" placeholder="/path/to/keystore.p12">
+                            </div>
+                            <div class="form-group">
+                              <label>Password</label>
+                              <input type="password" id="rm-listener-tls-keystore-pwd" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                              <label>Type</label>
+                              <select id="rm-listener-tls-keystore-type">
+                                <option value="PKCS12">PKCS12</option>
+                                <option value="JKS">JKS</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
+                          <div class="form-row-3">
+                            <div class="form-group">
+                              <label>Truststore file</label>
+                              <input type="text" id="rm-listener-tls-truststore" placeholder="/path/to/truststore.p12">
+                            </div>
+                            <div class="form-group">
+                              <label>Password</label>
+                              <input type="password" id="rm-listener-tls-truststore-pwd" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                              <label>Type</label>
+                              <select id="rm-listener-tls-truststore-type">
+                                <option value="PKCS12">PKCS12</option>
+                                <option value="JKS">JKS</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div class="form-group" style="margin-top:8px;">
+                            <label>Client Authentication</label>
+                            <select id="rm-listener-client-auth">
+                              <option value="NONE">None</option>
+                              <option value="OPTIONAL">Optional</option>
+                              <option value="REQUIRE">Require</option>
+                            </select>
+                          </div>
                         </div>
-                      </div>
-                      <div class="form-check">
-                        <input type="checkbox" id="rm-target-insecure">
-                        <label for="rm-target-insecure">Insecure trust all</label>
-                      </div>
-                      <div class="form-check">
-                        <input type="checkbox" id="rm-target-verify" checked>
-                        <label for="rm-target-verify">Verify hostname</label>
-                      </div>
-                      <div class="form-check">
-                        <input type="checkbox" id="rm-target-rewrite">
-                        <label for="rm-target-rewrite">Rewrite Host header</label>
-                      </div>
 
-                      <p class="modal-hint">TLS material (certificates, keystores) must be configured in the config file. Only PLAIN transport is supported for routes created via UI.</p>
+                        <div class="form-section-hdr">Target</div>
+                        <div class="form-row">
+                          <div class="form-group">
+                            <label>Host</label>
+                            <input type="text" id="rm-target-host" placeholder="localhost">
+                          </div>
+                          <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="rm-target-port" placeholder="8080" min="1" max="65535">
+                          </div>
+                        </div>
+                        <div class="form-group">
+                          <label>Transport</label>
+                          <select id="rm-target-transport" onchange="toggleTargetTls(this.value)">
+                            <option value="PLAIN">PLAIN</option>
+                            <option value="TLS">TLS</option>
+                          </select>
+                        </div>
+                        <div class="form-check">
+                          <input type="checkbox" id="rm-target-rewrite">
+                          <label for="rm-target-rewrite">Rewrite Host header</label>
+                        </div>
+                        <div id="target-tls-fields" style="display:none;border-left:2px solid #334155;padding-left:12px;margin-top:4px;">
+                          <div class="form-group">
+                            <label>SNI Host <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;">(overrides target host)</span></label>
+                            <input type="text" id="rm-target-sni" placeholder="defaults to target host">
+                          </div>
+                          <div class="form-check">
+                            <input type="checkbox" id="rm-target-verify" checked>
+                            <label for="rm-target-verify">Verify hostname</label>
+                          </div>
+                          <div class="form-check" style="margin-bottom:10px;">
+                            <input type="checkbox" id="rm-target-insecure">
+                            <label for="rm-target-insecure">Trust all certificates (insecure)</label>
+                          </div>
+                          <div class="tls-subsection-label">Client Certificate</div>
+                          <div class="form-row">
+                            <div class="form-group">
+                              <label>Certificate file</label>
+                              <input type="text" id="rm-target-tls-cert" placeholder="/path/to/cert.pem">
+                            </div>
+                            <div class="form-group">
+                              <label>Private key file</label>
+                              <input type="text" id="rm-target-tls-key" placeholder="/path/to/key.pem">
+                            </div>
+                          </div>
+                          <div class="tls-alt-or">— or keystore —</div>
+                          <div class="form-row-3">
+                            <div class="form-group">
+                              <label>Keystore file</label>
+                              <input type="text" id="rm-target-tls-keystore" placeholder="/path/to/keystore.p12">
+                            </div>
+                            <div class="form-group">
+                              <label>Password</label>
+                              <input type="password" id="rm-target-tls-keystore-pwd" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                              <label>Type</label>
+                              <select id="rm-target-tls-keystore-type">
+                                <option value="PKCS12">PKCS12</option>
+                                <option value="JKS">JKS</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
+                          <div class="form-row-3">
+                            <div class="form-group">
+                              <label>Truststore file</label>
+                              <input type="text" id="rm-target-tls-truststore" placeholder="/path/to/truststore.p12">
+                            </div>
+                            <div class="form-group">
+                              <label>Password</label>
+                              <input type="password" id="rm-target-tls-truststore-pwd" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                              <label>Type</label>
+                              <select id="rm-target-tls-truststore-type">
+                                <option value="PKCS12">PKCS12</option>
+                                <option value="JKS">JKS</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
 
-                      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;" id="route-modal-actions">
-                        <button class="secondary" onclick="closeRouteModal()">Cancel</button>
-                        <button class="primary" onclick="submitRouteForm()">Save</button>
+                        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;" id="route-modal-actions">
+                          <button class="secondary" onclick="closeRouteModal()">Cancel</button>
+                          <button class="primary" onclick="submitRouteForm()">Save</button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1233,13 +1343,14 @@ public final class WebAssets {
                       }
                       if (!sessions.length) {
                         const configRoute = proxyConfig && (proxyConfig.routes || []).find(r => r.id === activeRoute);
+                        const listenerAddr = configRoute ? configRoute.listener.host + ':' + configRoute.listener.port : '';
                         const targetAddr = configRoute ? configRoute.target.host + ':' + configRoute.target.port : '';
                         document.getElementById('route-header').innerHTML = `
                           <section class="route-card">
                             <div class="route-title">
                               <div>
                                 <strong>${escapeHtml(activeRoute)}</strong>
-                                ${targetAddr ? `<span class="muted" style="font-size:12px;">\u2192 ${escapeHtml(targetAddr)}</span>` : ''}
+                                ${listenerAddr || targetAddr ? `<span class="muted" style="font-size:12px;">${escapeHtml(listenerAddr)} \u2192 ${escapeHtml(targetAddr)}</span>` : ''}
                               </div>
                               <span class="pill closed">No traffic</span>
                             </div>
@@ -2521,6 +2632,13 @@ public final class WebAssets {
                     let routeModalMode = 'add';
                     let routeModalEditId = null;
 
+                    function toggleListenerTls(val) {
+                      document.getElementById('listener-tls-fields').style.display = val === 'TLS' ? '' : 'none';
+                    }
+                    function toggleTargetTls(val) {
+                      document.getElementById('target-tls-fields').style.display = val === 'TLS' ? '' : 'none';
+                    }
+
                     function openAddRouteModal() {
                       routeModalMode = 'add';
                       routeModalEditId = null;
@@ -2530,9 +2648,28 @@ public final class WebAssets {
                       document.getElementById('rm-listener-host').value = '0.0.0.0';
                       document.getElementById('rm-listener-port').value = '';
                       document.getElementById('rm-listener-transport').value = 'PLAIN';
+                      document.getElementById('listener-tls-fields').style.display = 'none';
+                      document.getElementById('rm-listener-tls-cert').value = '';
+                      document.getElementById('rm-listener-tls-key').value = '';
+                      document.getElementById('rm-listener-tls-keystore').value = '';
+                      document.getElementById('rm-listener-tls-keystore-pwd').value = '';
+                      document.getElementById('rm-listener-tls-keystore-type').value = 'PKCS12';
+                      document.getElementById('rm-listener-tls-truststore').value = '';
+                      document.getElementById('rm-listener-tls-truststore-pwd').value = '';
+                      document.getElementById('rm-listener-tls-truststore-type').value = 'PKCS12';
+                      document.getElementById('rm-listener-client-auth').value = 'NONE';
                       document.getElementById('rm-target-host').value = '';
                       document.getElementById('rm-target-port').value = '';
                       document.getElementById('rm-target-transport').value = 'PLAIN';
+                      document.getElementById('target-tls-fields').style.display = 'none';
+                      document.getElementById('rm-target-tls-cert').value = '';
+                      document.getElementById('rm-target-tls-key').value = '';
+                      document.getElementById('rm-target-tls-keystore').value = '';
+                      document.getElementById('rm-target-tls-keystore-pwd').value = '';
+                      document.getElementById('rm-target-tls-keystore-type').value = 'PKCS12';
+                      document.getElementById('rm-target-tls-truststore').value = '';
+                      document.getElementById('rm-target-tls-truststore-pwd').value = '';
+                      document.getElementById('rm-target-tls-truststore-type').value = 'PKCS12';
                       document.getElementById('rm-target-sni').value = '';
                       document.getElementById('rm-target-insecure').checked = false;
                       document.getElementById('rm-target-verify').checked = true;
@@ -2554,10 +2691,31 @@ public final class WebAssets {
                       document.getElementById('rm-id').disabled = true;
                       document.getElementById('rm-listener-host').value = route.listener.host || '0.0.0.0';
                       document.getElementById('rm-listener-port').value = route.listener.port || '';
-                      document.getElementById('rm-listener-transport').value = route.listener.transport || 'PLAIN';
+                      const listenerTransport = route.listener.transport || 'PLAIN';
+                      document.getElementById('rm-listener-transport').value = listenerTransport;
+                      toggleListenerTls(listenerTransport);
+                      document.getElementById('rm-listener-tls-cert').value = route.listener.tlsCert || '';
+                      document.getElementById('rm-listener-tls-key').value = route.listener.tlsKey || '';
+                      document.getElementById('rm-listener-tls-keystore').value = route.listener.tlsKeystore || '';
+                      document.getElementById('rm-listener-tls-keystore-pwd').value = route.listener.tlsKeystorePassword || '';
+                      document.getElementById('rm-listener-tls-keystore-type').value = route.listener.tlsKeystoreType || 'PKCS12';
+                      document.getElementById('rm-listener-tls-truststore').value = route.listener.tlsTruststore || '';
+                      document.getElementById('rm-listener-tls-truststore-pwd').value = route.listener.tlsTruststorePassword || '';
+                      document.getElementById('rm-listener-tls-truststore-type').value = route.listener.tlsTruststoreType || 'PKCS12';
+                      document.getElementById('rm-listener-client-auth').value = route.listener.clientAuth || 'NONE';
                       document.getElementById('rm-target-host').value = route.target.host || '';
                       document.getElementById('rm-target-port').value = route.target.port || '';
-                      document.getElementById('rm-target-transport').value = route.target.transport || 'PLAIN';
+                      const targetTransport = route.target.transport || 'PLAIN';
+                      document.getElementById('rm-target-transport').value = targetTransport;
+                      toggleTargetTls(targetTransport);
+                      document.getElementById('rm-target-tls-cert').value = route.target.tlsCert || '';
+                      document.getElementById('rm-target-tls-key').value = route.target.tlsKey || '';
+                      document.getElementById('rm-target-tls-keystore').value = route.target.tlsKeystore || '';
+                      document.getElementById('rm-target-tls-keystore-pwd').value = route.target.tlsKeystorePassword || '';
+                      document.getElementById('rm-target-tls-keystore-type').value = route.target.tlsKeystoreType || 'PKCS12';
+                      document.getElementById('rm-target-tls-truststore').value = route.target.tlsTruststore || '';
+                      document.getElementById('rm-target-tls-truststore-pwd').value = route.target.tlsTruststorePassword || '';
+                      document.getElementById('rm-target-tls-truststore-type').value = route.target.tlsTruststoreType || 'PKCS12';
                       document.getElementById('rm-target-sni').value = route.target.sniHost || '';
                       document.getElementById('rm-target-insecure').checked = !!route.target.insecureTrustAll;
                       document.getElementById('rm-target-verify').checked = route.target.verifyHostname !== false;
@@ -2570,24 +2728,69 @@ public final class WebAssets {
                       document.getElementById('route-modal').style.display = 'none';
                     }
 
+                    function tlsFieldVal(id) {
+                      const v = document.getElementById(id).value.trim();
+                      return v || undefined;
+                    }
+
                     function buildRoutePayload() {
-                      return {
+                      const listenerTransport = document.getElementById('rm-listener-transport').value;
+                      const targetTransport = document.getElementById('rm-target-transport').value;
+                      const payload = {
                         id: document.getElementById('rm-id').value.trim(),
                         listener: {
                           host: document.getElementById('rm-listener-host').value.trim() || '0.0.0.0',
                           port: parseInt(document.getElementById('rm-listener-port').value, 10),
-                          transport: document.getElementById('rm-listener-transport').value
+                          transport: listenerTransport
                         },
                         target: {
                           host: document.getElementById('rm-target-host').value.trim(),
                           port: parseInt(document.getElementById('rm-target-port').value, 10),
-                          transport: document.getElementById('rm-target-transport').value,
+                          transport: targetTransport,
                           sniHost: document.getElementById('rm-target-sni').value.trim() || null,
                           insecureTrustAll: document.getElementById('rm-target-insecure').checked,
                           verifyHostname: document.getElementById('rm-target-verify').checked,
                           rewriteHostHeader: document.getElementById('rm-target-rewrite').checked
                         }
                       };
+                      if (listenerTransport === 'TLS') {
+                        const cert = tlsFieldVal('rm-listener-tls-cert');
+                        const key = tlsFieldVal('rm-listener-tls-key');
+                        const ks = tlsFieldVal('rm-listener-tls-keystore');
+                        const ksPwd = tlsFieldVal('rm-listener-tls-keystore-pwd');
+                        const ksType = tlsFieldVal('rm-listener-tls-keystore-type');
+                        const ts = tlsFieldVal('rm-listener-tls-truststore');
+                        const tsPwd = tlsFieldVal('rm-listener-tls-truststore-pwd');
+                        const tsType = tlsFieldVal('rm-listener-tls-truststore-type');
+                        if (cert) payload.listener.tlsCert = cert;
+                        if (key) payload.listener.tlsKey = key;
+                        if (ks) payload.listener.tlsKeystore = ks;
+                        if (ksPwd) payload.listener.tlsKeystorePassword = ksPwd;
+                        if (ksType) payload.listener.tlsKeystoreType = ksType;
+                        if (ts) payload.listener.tlsTruststore = ts;
+                        if (tsPwd) payload.listener.tlsTruststorePassword = tsPwd;
+                        if (tsType) payload.listener.tlsTruststoreType = tsType;
+                        payload.listener.clientAuth = document.getElementById('rm-listener-client-auth').value;
+                      }
+                      if (targetTransport === 'TLS') {
+                        const cert = tlsFieldVal('rm-target-tls-cert');
+                        const key = tlsFieldVal('rm-target-tls-key');
+                        const ks = tlsFieldVal('rm-target-tls-keystore');
+                        const ksPwd = tlsFieldVal('rm-target-tls-keystore-pwd');
+                        const ksType = tlsFieldVal('rm-target-tls-keystore-type');
+                        const ts = tlsFieldVal('rm-target-tls-truststore');
+                        const tsPwd = tlsFieldVal('rm-target-tls-truststore-pwd');
+                        const tsType = tlsFieldVal('rm-target-tls-truststore-type');
+                        if (cert) payload.target.tlsCert = cert;
+                        if (key) payload.target.tlsKey = key;
+                        if (ks) payload.target.tlsKeystore = ks;
+                        if (ksPwd) payload.target.tlsKeystorePassword = ksPwd;
+                        if (ksType) payload.target.tlsKeystoreType = ksType;
+                        if (ts) payload.target.tlsTruststore = ts;
+                        if (tsPwd) payload.target.tlsTruststorePassword = tsPwd;
+                        if (tsType) payload.target.tlsTruststoreType = tsType;
+                      }
+                      return payload;
                     }
 
                     function showRouteModalError(msg) {
