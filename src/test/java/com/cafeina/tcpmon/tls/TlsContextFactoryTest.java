@@ -47,7 +47,7 @@ class TlsContextFactoryTest {
         SelfSignedCertificate certificate = new SelfSignedCertificate("backend.local");
         try (TlsEchoServer server = new TlsEchoServer(certificate)) {
             ProxyConfig config = new ProxyConfig(
-                    new UiConfig("127.0.0.1", 0, false),
+                    new UiConfig("127.0.0.1", 0, false, null, null),
                     tempDir.resolve("sessions"),
                     InterceptMode.NONE,
                     List.of("TLSv1.3", "TLSv1.2"),

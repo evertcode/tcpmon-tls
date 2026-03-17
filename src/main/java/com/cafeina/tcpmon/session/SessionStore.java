@@ -7,6 +7,7 @@ import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
 import com.cafeina.tcpmon.TlsMaterial;
 import com.cafeina.tcpmon.TransportMode;
+import com.cafeina.tcpmon.security.PasswordEncryptor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,15 +43,21 @@ public final class SessionStore implements AutoCloseable {
     private final Path rootDir;
     private final Path dbPath;
     private final ObjectMapper objectMapper;
+    private final PasswordEncryptor passwordEncryptor;
     private final Connection connection;
     private final Map<String, PendingPayload> pendingPayloads = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private final AtomicLong ids = new AtomicLong();
 
     public SessionStore(Path rootDir, ObjectMapper objectMapper) throws IOException {
+        this(rootDir, objectMapper, loadEncryptor(rootDir));
+    }
+
+    public SessionStore(Path rootDir, ObjectMapper objectMapper, PasswordEncryptor passwordEncryptor) throws IOException {
         this.rootDir = rootDir;
         this.dbPath = rootDir.resolve("sessions.db");
         this.objectMapper = objectMapper;
+        this.passwordEncryptor = passwordEncryptor;
         Files.createDirectories(this.rootDir);
         try {
             this.connection = DriverManager.getConnection("jdbc:sqlite:" + dbPath.toAbsolutePath());
@@ -59,6 +66,11 @@ public final class SessionStore implements AutoCloseable {
         } catch (SQLException exception) {
             throw new IOException("Unable to open SQLite session store", exception);
         }
+    }
+
+    private static PasswordEncryptor loadEncryptor(Path rootDir) throws IOException {
+        Files.createDirectories(rootDir);
+        return PasswordEncryptor.fromKeyFile(rootDir.resolve("db.key"));
     }
 
     public synchronized String openSession(String routeId, String clientAddress, String listenerAddress, String targetAddress) {
@@ -702,7 +714,7 @@ public final class SessionStore implements AutoCloseable {
         }
     }
 
-    private static void setTlsMaterialParams(PreparedStatement st, int offset, TlsMaterial tls) throws SQLException {
+    private void setTlsMaterialParams(PreparedStatement st, int offset, TlsMaterial tls) throws SQLException {
         if (tls == null) {
             for (int i = 0; i < 8; i++) {
                 st.setNull(offset + i, Types.VARCHAR);
@@ -712,11 +724,19 @@ public final class SessionStore implements AutoCloseable {
         setNullablePath(st, offset,     tls.certificateFile());
         setNullablePath(st, offset + 1, tls.privateKeyFile());
         setNullablePath(st, offset + 2, tls.keyStoreFile());
-        setNullableString(st, offset + 3, tls.keyStorePassword());
+        setNullableString(st, offset + 3, encryptPassword(tls.keyStorePassword()));
         setNullableString(st, offset + 4, tls.keyStoreType());
         setNullablePath(st, offset + 5, tls.trustStoreFile());
-        setNullableString(st, offset + 6, tls.trustStorePassword());
+        setNullableString(st, offset + 6, encryptPassword(tls.trustStorePassword()));
         setNullableString(st, offset + 7, tls.trustStoreType());
+    }
+
+    private String encryptPassword(String password) {
+        return passwordEncryptor.encrypt(password);
+    }
+
+    private String decryptPassword(String value) {
+        return passwordEncryptor.decrypt(value);
     }
 
     private RouteConfig mapRoute(ResultSet resultSet) throws SQLException {
@@ -738,14 +758,14 @@ public final class SessionStore implements AutoCloseable {
         return new RouteConfig(resultSet.getString("id"), listener, target);
     }
 
-    private static TlsMaterial readTlsMaterial(ResultSet rs, String prefix) throws SQLException {
+    private TlsMaterial readTlsMaterial(ResultSet rs, String prefix) throws SQLException {
         String cert = rs.getString(prefix + "_tls_cert");
         String key = rs.getString(prefix + "_tls_key");
         String keystore = rs.getString(prefix + "_tls_keystore");
-        String keystorePassword = rs.getString(prefix + "_tls_keystore_password");
+        String keystorePassword = decryptPassword(rs.getString(prefix + "_tls_keystore_password"));
         String keystoreType = rs.getString(prefix + "_tls_keystore_type");
         String truststore = rs.getString(prefix + "_tls_truststore");
-        String truststorePassword = rs.getString(prefix + "_tls_truststore_password");
+        String truststorePassword = decryptPassword(rs.getString(prefix + "_tls_truststore_password"));
         String truststoreType = rs.getString(prefix + "_tls_truststore_type");
         return new TlsMaterial(
                 cert != null && !cert.isBlank() ? Path.of(cert) : null,
