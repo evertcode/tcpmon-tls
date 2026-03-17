@@ -239,23 +239,86 @@ test('buildExchangeButtons creates exchange selectors and compare action', () =>
 test('buildSelectedSessionLabel prefers loaded session details for active selection', () => {
   const ctx = loadWebHelpers();
 
-  const label = ctx.buildSelectedSessionLabel(
-    ctx.resolveActiveSessionSummary(
-      [{ sessionId: 'session-1', requestMethod: '', requestPath: '' }],
-      'session-1',
-      {
-        sessionId: 'session-1',
-        latestRequest: {
-          request: {
-            method: 'POST',
-            path: '/v1/messages',
-            query: 'limit=10'
-          }
+  const activeSession = ctx.resolveActiveSessionSummary(
+    [{ sessionId: 'session-1', requestMethod: '', requestPath: '', clientAddress: '' }],
+    'session-1',
+    {
+      sessionId: 'session-1',
+      clientAddress: '127.0.0.1:54321',
+      latestRequest: {
+        request: {
+          method: 'POST',
+          path: '/v1/messages',
+          query: 'limit=10'
         }
       }
-    ),
+    }
+  );
+
+  const label = ctx.buildSelectedSessionLabel(
+    activeSession,
     'session-1'
   );
 
   assert.equal(label, 'POST /v1/messages?limit=10');
+  assert.equal(activeSession.clientAddress, '127.0.0.1:54321');
+});
+
+test('calculateAverageDuration ignores missing durations and rounds the average', () => {
+  const ctx = loadWebHelpers();
+
+  const avg = ctx.calculateAverageDuration([
+    { durationMs: 100 },
+    { durationMs: null },
+    { durationMs: 301 }
+  ]);
+
+  assert.equal(avg, 201);
+  assert.equal(ctx.calculateAverageDuration([{ durationMs: null }]), null);
+});
+
+test('buildRouteHeaderViewModel splits route health from active selection context', () => {
+  const ctx = loadWebHelpers();
+
+  const model = ctx.buildRouteHeaderViewModel(
+    'route-a',
+    [
+      {
+        sessionId: 's2',
+        listenerAddress: '127.0.0.1:9000',
+        targetAddress: 'api.example.com:443',
+        clientAddress: '127.0.0.1:55000',
+        durationMs: 150,
+        pendingCount: 2,
+        requestMethod: 'GET',
+        requestPath: '/health',
+        responseStatusCode: '200',
+        startedAt: '2026-03-17T10:00:00.000Z',
+        live: false
+      },
+      {
+        sessionId: 's1',
+        listenerAddress: '127.0.0.1:9000',
+        targetAddress: 'api.example.com:443',
+        clientAddress: '127.0.0.1:54000',
+        durationMs: null,
+        pendingCount: 1,
+        requestMethod: 'POST',
+        requestPath: '/v1/messages',
+        responseStatusCode: '',
+        startedAt: '2026-03-17T10:01:00.000Z',
+        live: true
+      }
+    ],
+    's1',
+    null
+  );
+
+  assert.equal(model.total, 2);
+  assert.equal(model.liveCount, 1);
+  assert.equal(model.pendingCount, 3);
+  assert.equal(model.avgDurationMs, 150);
+  assert.equal(model.activeSelection.label, 'POST /v1/messages');
+  assert.equal(model.activeSelection.clientAddress, '127.0.0.1:54000');
+  assert.equal(model.activeSelection.statusCode, '');
 });

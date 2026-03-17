@@ -91,24 +91,64 @@ function renderRouteHeader() {
     updateTopbarSubtitle();
     return;
   }
+  const routeHeaderData = buildRouteHeaderViewModel(
+    selectedRouteId,
+    sessions,
+    selectedSessionId,
+    getState('lastLoadedSession')
+  );
+  header.replaceChildren(buildRouteHeaderCard(routeHeaderData));
+  updateTopbarSubtitle();
+}
+
+function buildRouteHeaderViewModel(routeId, sessions, selectedSessionId, lastLoadedSession) {
   const first = sessions[0] || {};
-  const open = sessions.filter(session => isSessionLive(session)).length;
-  const pending = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
-  const activeSessionObj = resolveActiveSessionSummary(sessions, selectedSessionId, getState('lastLoadedSession'));
-  const selectedLabel = buildSelectedSessionLabel(activeSessionObj, selectedSessionId);
-  const pendingStatClass = pending >= 3 ? 'stat-danger' : pending > 0 ? 'stat-warn' : '';
-  header.replaceChildren(buildRouteHeaderCard({
-    routeId: selectedRouteId,
+  const liveCount = sessions.filter(session => isSessionLive(session)).length;
+  const pendingCount = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
+  const activeSession = resolveActiveSessionSummary(sessions, selectedSessionId, lastLoadedSession);
+  const avgDurationMs = calculateAverageDuration(sessions);
+  return {
+    routeId,
     listenerAddress: first.listenerAddress || '',
     targetAddress: first.targetAddress || '',
     total: sessions.length,
-    open,
-    pending,
-    pendingStatClass,
-    clientAddress: first.clientAddress || 'Unknown',
-    selectedLabel
-  }));
-  updateTopbarSubtitle();
+    liveCount,
+    pendingCount,
+    avgDurationMs,
+    pendingStatClass: pendingCount >= 3 ? 'stat-danger' : pendingCount > 0 ? 'stat-warn' : '',
+    stateLabel: liveCount > 0 ? 'Live' : 'Closed',
+    stateClass: liveCount > 0 ? 'state-live' : 'state-closed',
+    activeSelection: buildActiveSelectionViewModel(activeSession, selectedSessionId)
+  };
+}
+
+function calculateAverageDuration(sessions) {
+  const withDuration = sessions.filter(session => session.durationMs != null && !Number.isNaN(Number(session.durationMs)));
+  if (!withDuration.length) {
+    return null;
+  }
+  return Math.round(withDuration.reduce((sum, session) => sum + Number(session.durationMs), 0) / withDuration.length);
+}
+
+function buildActiveSelectionViewModel(activeSession, selectedSessionId) {
+  if (!activeSession) {
+    return {
+      empty: true,
+      label: 'No request selected',
+      clientAddress: 'Select a captured request to inspect client, status, duration and timing.',
+      statusCode: '',
+      durationMs: null,
+      startedAt: ''
+    };
+  }
+  return {
+    empty: false,
+    label: buildSelectedSessionLabel(activeSession, selectedSessionId),
+    clientAddress: activeSession.clientAddress || 'Unknown client',
+    statusCode: String(activeSession.responseStatusCode || ''),
+    durationMs: activeSession.durationMs == null ? null : Number(activeSession.durationMs),
+    startedAt: activeSession.startedAt || ''
+  };
 }
 
 function resolveActiveSessionSummary(sessions, selectedSessionId, lastLoadedSession) {
@@ -120,6 +160,18 @@ function resolveActiveSessionSummary(sessions, selectedSessionId, lastLoadedSess
     return {
       ...sessionSummary,
       sessionId: selectedSessionId,
+      clientAddress: sessionSummary && sessionSummary.clientAddress
+        ? sessionSummary.clientAddress
+        : (lastLoadedSession.clientAddress || ''),
+      responseStatusCode: sessionSummary && sessionSummary.responseStatusCode
+        ? sessionSummary.responseStatusCode
+        : extractSelectedResponseStatusCode(lastLoadedSession),
+      durationMs: sessionSummary && sessionSummary.durationMs != null
+        ? sessionSummary.durationMs
+        : (lastLoadedSession.durationMs != null ? lastLoadedSession.durationMs : null),
+      startedAt: sessionSummary && sessionSummary.startedAt
+        ? sessionSummary.startedAt
+        : (lastLoadedSession.startedAt || ''),
       requestMethod: sessionSummary && sessionSummary.requestMethod
         ? sessionSummary.requestMethod
         : ((lastLoadedSession.latestRequest || {}).request || {}).method,
@@ -129,6 +181,12 @@ function resolveActiveSessionSummary(sessions, selectedSessionId, lastLoadedSess
     };
   }
   return sessionSummary;
+}
+
+function extractSelectedResponseStatusCode(session) {
+  const response = (session && session.latestResponse) || {};
+  const value = ((response.response || {}).statusCode);
+  return value == null ? '' : String(value);
 }
 
 function buildSelectedSessionPath(session) {
@@ -354,13 +412,13 @@ function buildRouteHeaderCard(data) {
       routeId: data.routeId,
       listenerAddress: data.listenerAddress,
       targetAddress: data.targetAddress,
-      stateLabel: data.open > 0 ? 'Live' : 'Closed',
-      stateClass: data.open > 0 ? 'state-live' : 'state-closed',
-      pending: data.pending,
+      stateLabel: data.stateLabel,
+      stateClass: data.stateClass,
+      pending: data.pendingCount,
       showExport: true
     }),
-    buildRouteStats(data.total, data.open, data.pending, data.pendingStatClass),
-    buildRouteMetaGrid(data.clientAddress, data.selectedLabel)
+    buildRouteStats(data.total, data.liveCount, data.pendingCount, data.avgDurationMs, data.pendingStatClass),
+    buildActiveSelectionPanel(data.activeSelection)
   );
   return card;
 }
@@ -474,13 +532,14 @@ function buildRouteHeaderEmptyHint(text) {
   return hint;
 }
 
-function buildRouteStats(total, open, pending, pendingStatClass) {
+function buildRouteStats(total, liveCount, pendingCount, avgDurationMs, pendingStatClass) {
   const stats = document.createElement('div');
   stats.className = 'route-stats';
   stats.append(
-    buildRouteStatBlock(total, 'Total'),
-    buildRouteStatBlock(open, 'Open'),
-    buildRouteStatBlock(pending, 'Pending', pendingStatClass)
+    buildRouteStatBlock(String(total), 'Captured'),
+    buildRouteStatBlock(String(liveCount), 'Live'),
+    buildRouteStatBlock(String(pendingCount), 'Pending', pendingStatClass),
+    buildRouteStatBlock(formatMetricDuration(avgDurationMs), 'Avg duration', avgDurationMs == null ? '' : durationMetricClass(avgDurationMs))
   );
   return stats;
 }
@@ -501,24 +560,98 @@ function buildRouteStatBlock(value, label, extraClass = '') {
   return block;
 }
 
-function buildRouteMetaGrid(clientAddress, selectedLabel) {
-  const grid = document.createElement('div');
-  grid.className = 'route-meta-grid';
-  grid.append(
-    buildRouteMetaItem('Client', clientAddress, 'mono route-meta-value'),
-    buildRouteMetaItem('Selected request', selectedLabel, 'mono route-meta-value route-meta-selected')
-  );
-  return grid;
+function formatMetricDuration(ms) {
+  if (ms == null || Number.isNaN(Number(ms))) {
+    return '—';
+  }
+  const value = Number(ms);
+  return value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(1)} s`;
 }
 
-function buildRouteMetaItem(label, value, valueClass = '') {
+function durationMetricClass(ms) {
+  if (ms == null || Number.isNaN(Number(ms))) {
+    return '';
+  }
+  const value = Number(ms);
+  return value < 200 ? 'stat-good' : value < 1000 ? 'stat-warn' : 'stat-danger';
+}
+
+function buildActiveSelectionPanel(selection) {
+  const panel = document.createElement('section');
+  panel.className = `route-selection-panel${selection.empty ? ' empty' : ''}`;
+
+  const header = document.createElement('div');
+  header.className = 'route-selection-header';
+
+  const eyebrow = document.createElement('span');
+  eyebrow.className = 'label';
+  eyebrow.textContent = 'Selected request';
+
+  const title = document.createElement('div');
+  title.className = `route-selection-request mono${selection.empty ? ' muted' : ''}`;
+  title.textContent = selection.label;
+
+  header.append(eyebrow, title);
+
+  if (selection.empty) {
+    const emptyCopy = document.createElement('div');
+    emptyCopy.className = 'route-selection-empty';
+    emptyCopy.textContent = selection.clientAddress;
+    panel.append(header, emptyCopy);
+    return panel;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'route-selection-grid';
+  grid.append(
+    buildSelectionMetaItem('Client', selection.clientAddress, 'mono route-selection-value'),
+    buildSelectionStatusItem(selection.statusCode),
+    buildSelectionMetaItem('Duration', formatMetricDuration(selection.durationMs), `route-selection-value ${durationMetricClass(selection.durationMs)}`),
+    buildSelectionMetaItem('Started', formatTime(selection.startedAt) || '—', 'route-selection-value')
+  );
+
+  panel.append(header, grid);
+  return panel;
+}
+
+function buildSelectionMetaItem(label, value, valueClass = 'route-selection-value') {
   const item = document.createElement('div');
+  item.className = 'route-selection-item';
+
   const key = document.createElement('span');
   key.className = 'label';
   key.textContent = label;
+
   const content = document.createElement('span');
   content.className = valueClass;
   content.textContent = value;
+
+  item.append(key, content);
+  return item;
+}
+
+function buildSelectionStatusItem(statusCode) {
+  const item = document.createElement('div');
+  item.className = 'route-selection-item';
+
+  const key = document.createElement('span');
+  key.className = 'label';
+  key.textContent = 'Status';
+
+  const content = document.createElement('span');
+  content.className = 'route-selection-value';
+  if (!statusCode) {
+    content.className += ' muted';
+    content.textContent = '—';
+  } else {
+    const badge = document.createElement('span');
+    const first = statusCode.charAt(0);
+    const cls = first === '2' ? 'status-2xx' : first === '3' ? 'status-3xx' : first === '4' ? 'status-4xx' : first === '5' ? 'status-5xx' : 'status-other';
+    badge.className = `status-badge ${cls}`;
+    badge.textContent = statusCode;
+    content.appendChild(badge);
+  }
+
   item.append(key, content);
   return item;
 }
