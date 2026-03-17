@@ -110,6 +110,7 @@ function loadWebHelpers() {
   const context = createBrowserLikeContext();
   loadScript(context, 'state.js');
   loadScript(context, 'utils.js');
+  loadScript(context, 'routes.js');
   loadScript(context, 'details.js');
   loadScript(context, 'actions.js');
   return context;
@@ -233,4 +234,28 @@ test('buildExchangeButtons creates exchange selectors and compare action', () =>
   assert.equal(actions.children[1].className, 'primary');
   assert.equal(actions.children[3].dataset.action, 'toggle-diff-mode');
   assert.equal(actions.children[3].textContent, 'Compare');
+});
+
+test('buildSelectedSessionLabel prefers loaded session details for active selection', () => {
+  const ctx = loadWebHelpers();
+
+  const label = ctx.buildSelectedSessionLabel(
+    ctx.resolveActiveSessionSummary(
+      [{ sessionId: 'session-1', requestMethod: '', requestPath: '' }],
+      'session-1',
+      {
+        sessionId: 'session-1',
+        latestRequest: {
+          request: {
+            method: 'POST',
+            path: '/v1/messages',
+            query: 'limit=10'
+          }
+        }
+      }
+    ),
+    'session-1'
+  );
+
+  assert.equal(label, 'POST /v1/messages?limit=10');
 });

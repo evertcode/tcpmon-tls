@@ -94,10 +94,8 @@ function renderRouteHeader() {
   const first = sessions[0] || {};
   const open = sessions.filter(session => isSessionLive(session)).length;
   const pending = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
-  const activeSessionObj = sessions.find(session => session.sessionId === selectedSessionId);
-  const selectedLabel = activeSessionObj
-    ? (activeSessionObj.requestMethod ? activeSessionObj.requestMethod + ' ' : '') + (activeSessionObj.requestPath || activeSessionObj.sessionId.slice(0, 8) + '\u2026')
-    : 'None';
+  const activeSessionObj = resolveActiveSessionSummary(sessions, selectedSessionId, getState('lastLoadedSession'));
+  const selectedLabel = buildSelectedSessionLabel(activeSessionObj, selectedSessionId);
   const pendingStatClass = pending >= 3 ? 'stat-danger' : pending > 0 ? 'stat-warn' : '';
   header.replaceChildren(buildRouteHeaderCard({
     routeId: selectedRouteId,
@@ -111,6 +109,48 @@ function renderRouteHeader() {
     selectedLabel
   }));
   updateTopbarSubtitle();
+}
+
+function resolveActiveSessionSummary(sessions, selectedSessionId, lastLoadedSession) {
+  if (!selectedSessionId) {
+    return null;
+  }
+  const sessionSummary = sessions.find(session => session.sessionId === selectedSessionId) || null;
+  if (lastLoadedSession && lastLoadedSession.sessionId === selectedSessionId) {
+    return {
+      ...sessionSummary,
+      sessionId: selectedSessionId,
+      requestMethod: sessionSummary && sessionSummary.requestMethod
+        ? sessionSummary.requestMethod
+        : ((lastLoadedSession.latestRequest || {}).request || {}).method,
+      requestPath: sessionSummary && sessionSummary.requestPath
+        ? sessionSummary.requestPath
+        : buildSelectedSessionPath(lastLoadedSession)
+    };
+  }
+  return sessionSummary;
+}
+
+function buildSelectedSessionPath(session) {
+  if (!session) {
+    return '';
+  }
+  const request = (session.latestRequest || {}).request || {};
+  const path = request.path || '';
+  const query = request.query || '';
+  if (path && query) {
+    return `${path}?${query}`;
+  }
+  return path;
+}
+
+function buildSelectedSessionLabel(session, selectedSessionId) {
+  if (!session) {
+    return 'None';
+  }
+  const method = session.requestMethod ? `${session.requestMethod} ` : '';
+  const path = session.requestPath || (selectedSessionId ? `${selectedSessionId.slice(0, 8)}\u2026` : '');
+  return `${method}${path}`.trim() || 'None';
 }
 
 async function loadConfig() {
@@ -291,73 +331,147 @@ function renderConfigPanel() {
 
 function buildRouteHeaderEmptyCard(routeId, listenerAddr, targetAddr) {
   const card = document.createElement('section');
-  card.className = 'route-card';
-  const title = document.createElement('div');
-  title.className = 'route-title';
-
-  const left = document.createElement('div');
-  const strong = document.createElement('strong');
-  strong.textContent = routeId;
-  left.appendChild(strong);
-  if (listenerAddr || targetAddr) {
-    const subtitle = document.createElement('span');
-    subtitle.className = 'muted';
-    subtitle.style.fontSize = '12px';
-    subtitle.textContent = `${listenerAddr} → ${targetAddr}`;
-    left.appendChild(subtitle);
-  }
-
-  const status = document.createElement('span');
-  status.className = 'pill closed';
-  status.textContent = 'No traffic';
-
-  title.append(left, status);
-  card.appendChild(title);
+  card.className = 'route-card route-header-card route-header-card-empty';
+  card.append(
+    buildRouteHeaderTop({
+      routeId,
+      listenerAddress: listenerAddr,
+      targetAddress: targetAddr,
+      stateLabel: 'No traffic',
+      stateClass: 'state-idle',
+      showExport: false
+    }),
+    buildRouteHeaderEmptyHint('This route is configured, but no sessions have been captured yet.')
+  );
   return card;
 }
 
 function buildRouteHeaderCard(data) {
   const card = document.createElement('section');
-  card.className = 'route-card';
+  card.className = 'route-card route-header-card';
   card.append(
-    buildRouteHeaderTitle(data),
+    buildRouteHeaderTop({
+      routeId: data.routeId,
+      listenerAddress: data.listenerAddress,
+      targetAddress: data.targetAddress,
+      stateLabel: data.open > 0 ? 'Live' : 'Closed',
+      stateClass: data.open > 0 ? 'state-live' : 'state-closed',
+      pending: data.pending,
+      showExport: true
+    }),
     buildRouteStats(data.total, data.open, data.pending, data.pendingStatClass),
     buildRouteMetaGrid(data.clientAddress, data.selectedLabel)
   );
   return card;
 }
 
-function buildRouteHeaderTitle(data) {
-  const title = document.createElement('div');
-  title.className = 'route-title';
+function buildRouteHeaderTop(data) {
+  const top = document.createElement('div');
+  top.className = 'route-header-top';
+  top.append(
+    buildRouteHeaderIdentity(data.routeId, data.listenerAddress, data.targetAddress),
+    buildRouteHeaderActions(data.stateLabel, data.stateClass, data.pending || 0, data.showExport)
+  );
+  return top;
+}
 
-  const left = document.createElement('div');
-  const strong = document.createElement('strong');
-  strong.textContent = data.routeId;
-  const subtitle = document.createElement('span');
-  subtitle.className = 'muted';
-  subtitle.style.fontSize = '12px';
-  subtitle.textContent = `${data.listenerAddress} → ${data.targetAddress}`;
-  left.append(strong, subtitle);
+function buildRouteHeaderIdentity(routeId, listenerAddress, targetAddress) {
+  const identity = document.createElement('div');
+  identity.className = 'route-header-identity';
 
-  const right = document.createElement('div');
-  right.style.display = 'flex';
-  right.style.gap = '8px';
-  right.style.alignItems = 'center';
-  right.style.flexShrink = '0';
+  const titleRow = document.createElement('div');
+  titleRow.className = 'route-header-title-row';
 
-  const exportButton = document.createElement('button');
-  exportButton.className = 'utility';
-  exportButton.dataset.action = 'export-har';
-  exportButton.textContent = 'Export HAR';
+  const eyebrow = document.createElement('span');
+  eyebrow.className = 'route-header-eyebrow';
+  eyebrow.textContent = 'Active route';
 
-  const status = document.createElement('span');
-  status.className = `pill ${data.open > 0 ? 'open' : 'closed'}`;
-  status.textContent = data.open > 0 ? 'Live' : 'Closed';
+  const title = document.createElement('strong');
+  title.className = 'route-header-name';
+  title.textContent = routeId;
 
-  right.append(exportButton, status);
-  title.append(left, right);
-  return title;
+  const flow = document.createElement('div');
+  flow.className = 'route-header-flow';
+
+  const listener = document.createElement('span');
+  listener.className = 'route-endpoint mono';
+  listener.textContent = listenerAddress || 'Listener unavailable';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'route-flow-arrow';
+  arrow.textContent = '→';
+
+  const target = document.createElement('span');
+  target.className = 'route-endpoint mono';
+  target.textContent = targetAddress || 'Target unavailable';
+
+  flow.append(listener, arrow, target);
+  titleRow.append(eyebrow, title);
+  identity.append(titleRow, flow);
+  return identity;
+}
+
+function buildRouteHeaderActions(stateLabel, stateClass, pending, showExport) {
+  const actions = document.createElement('div');
+  actions.className = 'route-header-actions';
+
+  const statusCluster = document.createElement('div');
+  statusCluster.className = 'route-status-cluster';
+  statusCluster.appendChild(buildRouteStateBadge(stateLabel, stateClass));
+  if (pending > 0) {
+    statusCluster.appendChild(buildRoutePendingBadge(pending));
+  }
+
+  actions.appendChild(statusCluster);
+
+  if (showExport) {
+    const exportButton = document.createElement('button');
+    exportButton.className = 'utility';
+    exportButton.dataset.action = 'export-har';
+    exportButton.textContent = 'Export HAR';
+    actions.appendChild(exportButton);
+  }
+
+  return actions;
+}
+
+function buildRouteStateBadge(label, stateClass) {
+  const badge = document.createElement('div');
+  badge.className = `route-state-badge ${stateClass}`;
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'route-state-label';
+  labelEl.textContent = 'State';
+
+  const valueEl = document.createElement('strong');
+  valueEl.className = 'route-state-value';
+  valueEl.textContent = label;
+
+  badge.append(labelEl, valueEl);
+  return badge;
+}
+
+function buildRoutePendingBadge(pending) {
+  const badge = document.createElement('div');
+  badge.className = `route-pending-badge${pending >= 3 ? ' high' : ''}`;
+
+  const label = document.createElement('span');
+  label.className = 'route-pending-label';
+  label.textContent = 'Pending';
+
+  const value = document.createElement('strong');
+  value.className = 'route-pending-value';
+  value.textContent = String(pending);
+
+  badge.append(label, value);
+  return badge;
+}
+
+function buildRouteHeaderEmptyHint(text) {
+  const hint = document.createElement('div');
+  hint.className = 'route-header-empty-hint';
+  hint.textContent = text;
+  return hint;
 }
 
 function buildRouteStats(total, open, pending, pendingStatClass) {
@@ -391,8 +505,8 @@ function buildRouteMetaGrid(clientAddress, selectedLabel) {
   const grid = document.createElement('div');
   grid.className = 'route-meta-grid';
   grid.append(
-    buildRouteMetaItem('Client', clientAddress, 'mono'),
-    buildRouteMetaItem('Selected', selectedLabel, 'mono')
+    buildRouteMetaItem('Client', clientAddress, 'mono route-meta-value'),
+    buildRouteMetaItem('Selected request', selectedLabel, 'mono route-meta-value route-meta-selected')
   );
   return grid;
 }

@@ -3,6 +3,9 @@ async function loadSessionDetails(sessionId) {
   if (payloadsEl) payloadsEl.classList.add('loading-overlay');
   const data = await fetchJson('/api/sessions/' + sessionId);
   setState('lastLoadedSession', data);
+  if (getState('activeSession') === sessionId) {
+    renderRouteHeader();
+  }
   if (payloadsEl) payloadsEl.classList.remove('loading-overlay');
   const exchanges = data.exchanges || [];
   const activeExchangeIndex = getState('activeExchangeIndex');
