@@ -54,6 +54,7 @@ public final class SessionStore implements AutoCloseable {
     private final Connection connection;
     private final ExecutorService writeExecutor = Executors.newSingleThreadExecutor(new SessionWriterThreadFactory());
     private final Map<String, PendingPayload> pendingPayloads = new ConcurrentHashMap<>();
+    private final Map<String, String> sessionRouteIds = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private final AtomicLong ids = new AtomicLong();
     private final AtomicBoolean closing = new AtomicBoolean();
@@ -109,6 +110,7 @@ public final class SessionStore implements AutoCloseable {
             statement.setString(8, "{}");
             statement.setString(9, "{}");
             statement.executeUpdate();
+            sessionRouteIds.put(sessionId, routeId);
             publishChange(new SessionChangeEvent("session-created", sessionId, routeId, now, null));
             return sessionId;
         } catch (SQLException exception) {
@@ -128,6 +130,7 @@ public final class SessionStore implements AutoCloseable {
             statement.setString(3, sessionId);
             statement.executeUpdate();
             publishChange(new SessionChangeEvent("session-closed", sessionId, routeIdForSession(sessionId), Instant.now(), status));
+            sessionRouteIds.remove(sessionId);
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to close session " + sessionId, exception);
         }
@@ -334,6 +337,10 @@ public final class SessionStore implements AutoCloseable {
     }
 
     public synchronized String routeIdForSession(String sessionId) {
+        String cached = sessionRouteIds.get(sessionId);
+        if (cached != null) {
+            return cached;
+        }
         try (PreparedStatement statement = connection.prepareStatement("select route_id from sessions where session_id = ?")) {
             statement.setString(1, sessionId);
             try (ResultSet resultSet = statement.executeQuery()) {

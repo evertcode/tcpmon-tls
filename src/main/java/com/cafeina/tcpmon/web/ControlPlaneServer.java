@@ -170,10 +170,20 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (!requireAuth(exchange)) return;
         String path = exchange.getRequestURI().getPath();
         if ("GET".equalsIgnoreCase(exchange.getRequestMethod()) && "/api/sessions".equals(path)) {
-            sendJson(exchange, 200, Map.of(
-                    "sessions", summarizeSessions(),
-                    "requests", summarizeRequests()
-            ));
+            List<Map<String, Object>> rawSummaries = sessionStore.listSessions();
+            List<Map<String, Object>> sessions = new ArrayList<>();
+            List<Map<String, Object>> requests = new ArrayList<>();
+            for (Map<String, Object> summary : rawSummaries) {
+                Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
+                sessions.add(summarizeSession(summary, details));
+                requests.addAll(summarizeRequestRows(summary, details));
+            }
+            requests.sort((left, right) -> {
+                Instant l = left.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
+                Instant r = right.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
+                return r.compareTo(l);
+            });
+            sendJson(exchange, 200, Map.of("sessions", sessions, "requests", requests));
             return;
         }
 
@@ -854,15 +864,12 @@ public final class ControlPlaneServer implements AutoCloseable {
         return enriched;
     }
 
-    private List<Map<String, Object>> summarizeSessions() {
-        return sessionStore.listSessions().stream()
-                .map(this::summarizeSession)
-                .toList();
-    }
-
     private List<Map<String, Object>> summarizeRequests() {
         return sessionStore.listSessions().stream()
-                .flatMap(summary -> summarizeRequestRows(summary).stream())
+                .flatMap(summary -> {
+                    Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
+                    return summarizeRequestRows(summary, details).stream();
+                })
                 .sorted((left, right) -> {
                     Instant l = left.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
                     Instant r = right.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
@@ -872,9 +879,12 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private Map<String, Object> summarizeSession(Map<String, Object> summary) {
+        Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
+        return summarizeSession(summary, details);
+    }
+
+    private Map<String, Object> summarizeSession(Map<String, Object> summary, Map<String, Object> details) {
         Map<String, Object> enriched = new LinkedHashMap<>(summary);
-        String sessionId = String.valueOf(summary.get("sessionId"));
-        Map<String, Object> details = sessionStore.sessionDetails(sessionId);
         if (details == null) {
             return enriched;
         }
@@ -919,8 +929,11 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private List<Map<String, Object>> summarizeRequestRows(Map<String, Object> summary) {
-        String sessionId = String.valueOf(summary.get("sessionId"));
-        Map<String, Object> details = sessionStore.sessionDetails(sessionId);
+        Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
+        return summarizeRequestRows(summary, details);
+    }
+
+    private List<Map<String, Object>> summarizeRequestRows(Map<String, Object> summary, Map<String, Object> details) {
         if (details == null) {
             return List.of();
         }

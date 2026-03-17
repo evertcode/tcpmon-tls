@@ -266,6 +266,7 @@ async function handleSessionChange(event) {
   }
   if (affectsActiveSession) {
     scheduleDetailRefresh();
+    scheduleListRefresh();
     return;
   }
   if (affectsActiveRoute) {
@@ -354,11 +355,13 @@ function updateTopbarSubtitle() {
     return;
   }
   const sessions = sessionsForActiveRoute();
+  const requestRows = requestRowsForActiveRoute();
   const pending = sessions.reduce((sum, s) => sum + Number(s.pendingCount || 0), 0);
   if (pending > 0) {
     el.textContent = activeRoute + ' — ' + pending + ' pending';
   } else {
-    el.textContent = activeRoute + ' — ' + sessions.length + ' request' + (sessions.length !== 1 ? 's' : '');
+    const count = requestRows.length;
+    el.textContent = activeRoute + ' — ' + count + ' request' + (count !== 1 ? 's' : '');
   }
 }
 
