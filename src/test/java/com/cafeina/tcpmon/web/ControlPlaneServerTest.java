@@ -208,6 +208,52 @@ class ControlPlaneServerTest {
     }
 
     @Test
+    void summarizesKeepAliveConnectionAsMultipleRequestRows(@TempDir Path tempDir) throws Exception {
+        ProxyConfig config = new ProxyConfig(
+                new UiConfig("127.0.0.1", 8080, true, "token", null),
+                tempDir,
+                com.cafeina.tcpmon.InterceptMode.NONE,
+                List.of("TLSv1.3"),
+                List.of());
+        RouteConfig route = new RouteConfig(
+                "route-a",
+                new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null),
+                new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null));
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            String sessionId = store.openSession("route-a", "client", "listener", "target");
+            store.recordPayload(sessionId, Direction.CLIENT_TO_TARGET, (
+                    "GET /one HTTP/1.1\r\nHost: example.com\r\n\r\n" +
+                    "GET /two HTTP/1.1\r\nHost: example.com\r\n\r\n"
+            ).getBytes(), null, Map.of());
+            store.recordPayload(sessionId, Direction.TARGET_TO_CLIENT, (
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK" +
+                    "HTTP/1.1 201 Created\r\nContent-Length: 3\r\n\r\nYES"
+            ).getBytes(), null, Map.of());
+
+            ControlPlaneServer server = new ControlPlaneServer(
+                    config,
+                    new RouteRegistry(List.of(route), store),
+                    (TcpMonProxy) null,
+                    store,
+                    new ReplayService(config, new RouteRegistry(List.of(route), null)));
+
+            var method = ControlPlaneServer.class.getDeclaredMethod("summarizeRequests");
+            method.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) method.invoke(server);
+
+            assertEquals(2, rows.size());
+            assertEquals("/one", rows.get(0).get("requestPath"));
+            assertEquals("200", rows.get(0).get("responseStatusCode"));
+            assertEquals(0, rows.get(0).get("exchangeIndex"));
+            assertEquals("/two", rows.get(1).get("requestPath"));
+            assertEquals("201", rows.get(1).get("responseStatusCode"));
+            assertEquals(1, rows.get(1).get("exchangeIndex"));
+        }
+    }
+
+    @Test
     void loadsStaticWebAssetsFromClasspath() {
         String index = ControlPlaneServer.readWebText("/index.html");
         String favicon = ControlPlaneServer.readWebText("/favicon.svg");

@@ -170,7 +170,10 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (!requireAuth(exchange)) return;
         String path = exchange.getRequestURI().getPath();
         if ("GET".equalsIgnoreCase(exchange.getRequestMethod()) && "/api/sessions".equals(path)) {
-            sendJson(exchange, 200, Map.of("sessions", summarizeSessions()));
+            sendJson(exchange, 200, Map.of(
+                    "sessions", summarizeSessions(),
+                    "requests", summarizeRequests()
+            ));
             return;
         }
 
@@ -857,6 +860,17 @@ public final class ControlPlaneServer implements AutoCloseable {
                 .toList();
     }
 
+    private List<Map<String, Object>> summarizeRequests() {
+        return sessionStore.listSessions().stream()
+                .flatMap(summary -> summarizeRequestRows(summary).stream())
+                .sorted((left, right) -> {
+                    Instant l = left.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
+                    Instant r = right.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
+                    return r.compareTo(l);
+                })
+                .toList();
+    }
+
     private Map<String, Object> summarizeSession(Map<String, Object> summary) {
         Map<String, Object> enriched = new LinkedHashMap<>(summary);
         String sessionId = String.valueOf(summary.get("sessionId"));
@@ -904,6 +918,49 @@ public final class ControlPlaneServer implements AutoCloseable {
         return enriched;
     }
 
+    private List<Map<String, Object>> summarizeRequestRows(Map<String, Object> summary) {
+        String sessionId = String.valueOf(summary.get("sessionId"));
+        Map<String, Object> details = sessionStore.sessionDetails(sessionId);
+        if (details == null) {
+            return List.of();
+        }
+        Object eventsValue = details.get("events");
+        if (!(eventsValue instanceof List<?> rawEvents)) {
+            return List.of();
+        }
+
+        List<SessionEvent> typedEvents = new ArrayList<>();
+        for (Object rawEvent : rawEvents) {
+            if (rawEvent instanceof SessionEvent event) {
+                typedEvents.add(event);
+            }
+        }
+
+        List<Map<String, Object>> requests = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.CLIENT_TO_TARGET);
+        List<Map<String, Object>> responses = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.TARGET_TO_CLIENT);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int index = 0; index < requests.size(); index++) {
+            Map<String, Object> request = requests.get(index);
+            Map<String, Object> response = index < responses.size() ? responses.get(index) : null;
+            Map<String, Object> row = new LinkedHashMap<>(summary);
+            row.put("exchangeIndex", index);
+            row.put("requestMethod", extractRequestMethod(request));
+            row.put("requestPath", extractRequestPath(request));
+            row.put("responseStatusCode", extractResponseStatusCode(response));
+            row.put("startedAt", requestTimestamp(request, summary.get("startedAt")));
+            row.put("durationMs", requestDuration(request, response));
+            if (response != null) {
+                Object size = response.get("size");
+                if (size instanceof Number number) {
+                    row.put("responseSizeBytes", number.longValue());
+                }
+            }
+            row.put("live", isSessionLive(summary.get("status"), requests, responses) && index == requests.size() - 1 && response == null);
+            rows.add(row);
+        }
+        return rows;
+    }
+
     private static boolean isSessionLive(Object statusValue, List<Map<String, Object>> requests, List<Map<String, Object>> responses) {
         String status = statusValue == null ? "" : statusValue.toString();
         if (!"OPEN".equalsIgnoreCase(status)) {
@@ -921,6 +978,25 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
         Object timestamp = response.get("timestamp");
         return timestamp instanceof Instant instant ? instant : null;
+    }
+
+    private static Instant requestTimestamp(Map<String, Object> request, Object fallback) {
+        if (request != null) {
+            Object timestamp = request.get("timestamp");
+            if (timestamp instanceof Instant instant) {
+                return instant;
+            }
+        }
+        return fallback instanceof Instant instant ? instant : null;
+    }
+
+    private static Long requestDuration(Map<String, Object> request, Map<String, Object> response) {
+        Instant start = requestTimestamp(request, null);
+        Instant end = responseTimestamp(response);
+        if (start == null || end == null || end.isBefore(start)) {
+            return null;
+        }
+        return Duration.between(start, end).toMillis();
     }
 
     private static String extractRequestMethod(Map<String, Object> request) {

@@ -241,7 +241,9 @@ test('buildSelectedSessionLabel prefers loaded session details for active select
 
   const activeSession = ctx.resolveActiveSessionSummary(
     [{ sessionId: 'session-1', requestMethod: '', requestPath: '', clientAddress: '' }],
+    [],
     'session-1',
+    0,
     {
       sessionId: 'session-1',
       clientAddress: '127.0.0.1:54321',
@@ -310,7 +312,32 @@ test('buildRouteHeaderViewModel splits route health from active selection contex
         live: true
       }
     ],
+    [
+      {
+        sessionId: 's1',
+        routeId: 'route-a',
+        exchangeIndex: 0,
+        requestMethod: 'POST',
+        requestPath: '/v1/messages',
+        responseStatusCode: '',
+        clientAddress: '127.0.0.1:54000',
+        durationMs: null,
+        startedAt: '2026-03-17T10:01:00.000Z'
+      },
+      {
+        sessionId: 's2',
+        routeId: 'route-a',
+        exchangeIndex: 0,
+        requestMethod: 'GET',
+        requestPath: '/health',
+        responseStatusCode: '200',
+        clientAddress: '127.0.0.1:55000',
+        durationMs: 150,
+        startedAt: '2026-03-17T10:00:00.000Z'
+      }
+    ],
     's1',
+    0,
     null
   );
 

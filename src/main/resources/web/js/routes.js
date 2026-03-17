@@ -1,5 +1,6 @@
 function groupedRoutes() {
   const sessions = getState('allSessions');
+  const requestRows = getState('allRequests');
   const map = new Map();
   for (const session of sessions) {
     const routeId = session.routeId || 'default';
@@ -17,6 +18,12 @@ function groupedRoutes() {
     if (String(session.status || '').toUpperCase() === 'ERROR') current.status = 'ERROR';
     map.set(routeId, current);
   }
+  for (const route of map.values()) {
+    const routeRequests = requestRows.filter(request => request.routeId === route.routeId);
+    route.requestCount = routeRequests.length;
+    route.avgDurationMs = calculateAverageDuration(routeRequests);
+    route.errorCount = routeRequests.filter(request => String(request.responseStatusCode || '').startsWith('5') || String(request.status || '') === 'ERROR').length;
+  }
   return [...map.values()].sort((a, b) => a.routeId.localeCompare(b.routeId));
 }
 
@@ -33,7 +40,10 @@ function filteredRoutes() {
       sessions: [],
       targetAddress: cr.target.host + ':' + cr.target.port,
       clientAddress: '',
-      status: 'CLOSED'
+      status: 'CLOSED',
+      requestCount: 0,
+      avgDurationMs: null,
+      errorCount: 0
     }));
   const all = [...sessionRoutes, ...configOnly].sort((a, b) => a.routeId.localeCompare(b.routeId));
   return all.filter(route => {
@@ -68,7 +78,15 @@ function selectRoute(routeId) {
     requestStatusCodeFilterValue: ''
   });
   const sessions = sessionsForActiveRoute();
-  setState('activeSession', sessions[0] ? sessions[0].sessionId : null);
+  const requestRows = requestRowsForActiveRoute();
+  if (requestRows.length) {
+    patchState({
+      activeSession: requestRows[0].sessionId,
+      activeExchangeIndex: Number(requestRows[0].exchangeIndex || 0)
+    });
+  } else {
+    setState('activeSession', sessions[0] ? sessions[0].sessionId : null);
+  }
   renderRouteSelectionState();
 }
 
@@ -77,6 +95,7 @@ function renderRouteHeader() {
   const selectedSessionId = getState('activeSession');
   const config = getState('proxyConfig');
   const sessions = sessionsForActiveRoute();
+  const requestRows = requestRowsForActiveRoute();
   const header = document.getElementById('route-header');
   if (!selectedRouteId) {
     header.replaceChildren();
@@ -94,24 +113,26 @@ function renderRouteHeader() {
   const routeHeaderData = buildRouteHeaderViewModel(
     selectedRouteId,
     sessions,
+    requestRows,
     selectedSessionId,
+    getState('activeExchangeIndex'),
     getState('lastLoadedSession')
   );
   header.replaceChildren(buildRouteHeaderCard(routeHeaderData));
   updateTopbarSubtitle();
 }
 
-function buildRouteHeaderViewModel(routeId, sessions, selectedSessionId, lastLoadedSession) {
+function buildRouteHeaderViewModel(routeId, sessions, requestRows, selectedSessionId, selectedExchangeIndex, lastLoadedSession) {
   const first = sessions[0] || {};
   const liveCount = sessions.filter(session => isSessionLive(session)).length;
   const pendingCount = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
-  const activeSession = resolveActiveSessionSummary(sessions, selectedSessionId, lastLoadedSession);
-  const avgDurationMs = calculateAverageDuration(sessions);
+  const activeSession = resolveActiveSessionSummary(sessions, requestRows, selectedSessionId, selectedExchangeIndex, lastLoadedSession);
+  const avgDurationMs = calculateAverageDuration(requestRows);
   return {
     routeId,
     listenerAddress: first.listenerAddress || '',
     targetAddress: first.targetAddress || '',
-    total: sessions.length,
+    total: requestRows.length,
     liveCount,
     pendingCount,
     avgDurationMs,
@@ -149,11 +170,20 @@ function buildActiveSelectionViewModel(activeSession, selectedSessionId) {
   };
 }
 
-function resolveActiveSessionSummary(sessions, selectedSessionId, lastLoadedSession) {
+function resolveActiveSessionSummary(sessions, requestRows, selectedSessionId, selectedExchangeIndex, lastLoadedSession) {
   if (!selectedSessionId) {
     return null;
   }
+  const requestSummary = requestRows.find(request =>
+    request.sessionId === selectedSessionId && Number(request.exchangeIndex || 0) === Number(selectedExchangeIndex || 0)
+  ) || null;
   const sessionSummary = sessions.find(session => session.sessionId === selectedSessionId) || null;
+  if (requestSummary) {
+    return {
+      ...sessionSummary,
+      ...requestSummary
+    };
+  }
   if (lastLoadedSession && lastLoadedSession.sessionId === selectedSessionId) {
     return {
       ...sessionSummary,
@@ -239,11 +269,8 @@ function buildRouteListItem(route, selectedRouteId) {
   const isOpen = statusClass === 'open';
   const isError = statusClass === 'error';
   const latest = route.sessions.slice().sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')))[0];
-  const withDuration = route.sessions.filter(s => s.durationMs != null);
-  const avgDuration = withDuration.length
-    ? Math.round(withDuration.reduce((sum, s) => sum + Number(s.durationMs), 0) / withDuration.length)
-    : null;
-  const errors = route.sessions.filter(s => String(s.responseStatusCode || '').startsWith('5') || String(s.status || '') === 'ERROR').length;
+  const avgDuration = route.avgDurationMs;
+  const errors = route.errorCount || 0;
 
   const row = document.createElement('div');
   row.className = `route-row${route.routeId === selectedRouteId ? ' active' : ''}${isOpen ? ' status-open' : isError ? ' status-error' : ''}`;
@@ -288,7 +315,7 @@ function buildRouteListItem(route, selectedRouteId) {
   const reqPill = document.createElement('span');
   reqPill.className = 'pill route';
   reqPill.style.flexShrink = '0';
-  reqPill.textContent = `${route.sessions.length} req`;
+  reqPill.textContent = `${route.requestCount || 0} req`;
   bottom.append(targetLine, reqPill);
 
   row.append(top, bottom);

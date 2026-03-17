@@ -5,9 +5,12 @@ async function refreshSessions(preserveSelection = true) {
 async function refreshSessionsView(preserveSelection = true, refreshDetail = true) {
   const data = await fetchJson('/api/sessions');
   setState('allSessions', Array.isArray(data.sessions) ? data.sessions : []);
+  setState('allRequests', Array.isArray(data.requests) ? data.requests : []);
   const sessions = getState('allSessions');
+  const requestRows = getState('allRequests');
   const selectedRouteId = getState('activeRoute');
   const selectedSessionId = getState('activeSession');
+  const selectedExchangeIndex = getState('activeExchangeIndex');
 
   if (!sessions.length) {
     renderApp({
@@ -23,8 +26,22 @@ async function refreshSessionsView(preserveSelection = true, refreshDetail = tru
   }
 
   const routeSessions = sessionsForActiveRoute();
-  if (!preserveSelection || !selectedSessionId || !routeSessions.some(session => session.sessionId === selectedSessionId)) {
-    setState('activeSession', routeSessions[0] ? routeSessions[0].sessionId : null);
+  const routeRequests = requestRowsForActiveRoute();
+  const hasSelectedRequest = preserveSelection
+    && selectedSessionId
+    && routeRequests.some(request => request.sessionId === selectedSessionId && Number(request.exchangeIndex || 0) === selectedExchangeIndex);
+  if (routeRequests.length) {
+    if (!hasSelectedRequest) {
+      patchState({
+        activeSession: routeRequests[0].sessionId,
+        activeExchangeIndex: Number(routeRequests[0].exchangeIndex || 0)
+      });
+    }
+  } else if (!preserveSelection || !selectedSessionId || !routeSessions.some(session => session.sessionId === selectedSessionId)) {
+    patchState({
+      activeSession: routeSessions[0] ? routeSessions[0].sessionId : null,
+      activeExchangeIndex: 0
+    });
   }
 
   await renderApp({
@@ -40,12 +57,23 @@ function sessionsForActiveRoute() {
     .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
 }
 
+function requestRowsForActiveRoute() {
+  const requestRows = getState('allRequests');
+  const selectedRouteId = getState('activeRoute');
+  return requestRows
+    .filter(request => (request.routeId || 'default') === selectedRouteId)
+    .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
+}
+
 function renderRequestTable() {
-  const sessions = sessionsForActiveRoute();
+  const requestRows = requestRowsForActiveRoute();
   const requestSearchValue = getState('requestSearchValue');
   const container = document.getElementById('request-table');
-  if (!sessions.length) {
-    container.replaceChildren();
+  if (!requestRows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'No HTTP requests captured for this route yet.';
+    container.replaceChildren(empty);
     return;
   }
   const card = document.createElement('section');
@@ -61,12 +89,12 @@ function renderRequestTable() {
   searchInput.placeholder = 'Filter requests in this route';
   toolbar.appendChild(searchInput);
 
-  const methodFilter = buildSelectElement('request-method-filter', renderMethodOptions(sessions));
-  const statusCodeFilter = buildSelectElement('request-status-code-filter', renderStatusCodeOptions(sessions));
+  const methodFilter = buildSelectElement('request-method-filter', renderMethodOptions(requestRows));
+  const statusCodeFilter = buildSelectElement('request-status-code-filter', renderStatusCodeOptions(requestRows));
   toolbar.append(methodFilter, statusCodeFilter);
 
   card.appendChild(toolbar);
-  card.appendChild(renderRequestTableContent(sessions));
+  card.appendChild(renderRequestTableContent(requestRows));
   container.replaceChildren(card);
 }
 
@@ -83,7 +111,7 @@ function buildSelectElement(id, options) {
   return select;
 }
 
-function renderRequestTableContent(sessions) {
+function renderRequestTableContent(requestRows) {
   const requestSearchValue = getState('requestSearchValue');
   const requestMethodFilterValue = getState('requestMethodFilterValue');
   const requestStatusCodeFilterValue = getState('requestStatusCodeFilterValue');
@@ -91,19 +119,19 @@ function renderRequestTableContent(sessions) {
   const query = requestSearchValue.trim().toLowerCase();
   const methodFilter = requestMethodFilterValue;
   const statusCodeFilter = requestStatusCodeFilterValue;
-  const filtered = sessions.filter(session => {
-    if (methodFilter && String(session.requestMethod || '') !== methodFilter) return false;
-    if (statusCodeFilter && String(session.responseStatusCode || '') !== statusCodeFilter) return false;
+  const filtered = requestRows.filter(request => {
+    if (methodFilter && String(request.requestMethod || '') !== methodFilter) return false;
+    if (statusCodeFilter && String(request.responseStatusCode || '') !== statusCodeFilter) return false;
     if (!query) return true;
     return [
-      session.sessionId,
-      session.requestMethod,
-      session.requestPath,
-      session.responseStatusCode,
-      session.clientAddress,
-      session.targetAddress,
-      session.startedAt,
-      session.status
+      request.sessionId,
+      request.requestMethod,
+      request.requestPath,
+      request.responseStatusCode,
+      request.clientAddress,
+      request.targetAddress,
+      request.startedAt,
+      request.status
     ].join(' ').toLowerCase().includes(query);
   });
   if (!filtered.length) {
@@ -117,17 +145,18 @@ function renderRequestTableContent(sessions) {
   setState('requestPage', Math.min(getState('requestPage'), totalPages));
   const requestPage = getState('requestPage');
   const activeSession = getState('activeSession');
+  const activeExchangeIndex = getState('activeExchangeIndex');
   const pageStart = (requestPage - 1) * requestPageSize;
   const pageItems = filtered.slice(pageStart, pageStart + requestPageSize);
   const fragment = document.createDocumentFragment();
-  fragment.appendChild(buildRequestTableElement(pageItems, activeSession));
+  fragment.appendChild(buildRequestTableElement(pageItems, activeSession, activeExchangeIndex));
   fragment.appendChild(buildRequestTableFooter(pageStart, pageItems.length, filtered.length, requestPage, totalPages));
   return fragment;
 }
 
-function renderMethodOptions(sessions) {
+function renderMethodOptions(requestRows) {
   const requestMethodFilterValue = getState('requestMethodFilterValue');
-  const methods = [...new Set(sessions.map(session => String(session.requestMethod || '')).filter(Boolean))].sort();
+  const methods = [...new Set(requestRows.map(request => String(request.requestMethod || '')).filter(Boolean))].sort();
   return [{ value: '', label: 'All methods', selected: requestMethodFilterValue === '' }]
     .concat(methods.map(method => ({
       value: method,
@@ -136,9 +165,9 @@ function renderMethodOptions(sessions) {
     })));
 }
 
-function renderStatusCodeOptions(sessions) {
+function renderStatusCodeOptions(requestRows) {
   const requestStatusCodeFilterValue = getState('requestStatusCodeFilterValue');
-  const statusCodes = [...new Set(sessions.map(session => String(session.responseStatusCode || '')).filter(Boolean))].sort();
+  const statusCodes = [...new Set(requestRows.map(request => String(request.responseStatusCode || '')).filter(Boolean))].sort();
   return [{ value: '', label: 'All responses', selected: requestStatusCodeFilterValue === '' }]
     .concat(statusCodes.map(code => ({
       value: code,
@@ -181,7 +210,7 @@ function changeRequestPage(delta) {
   renderRequestTable();
 }
 
-function buildRequestTableElement(pageItems, activeSession) {
+function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex) {
   const table = document.createElement('table');
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
@@ -193,19 +222,21 @@ function buildRequestTableElement(pageItems, activeSession) {
   thead.appendChild(headerRow);
 
   const tbody = document.createElement('tbody');
-  for (const session of pageItems) {
+  for (const request of pageItems) {
     const row = document.createElement('tr');
-    row.className = `session-entry${session.sessionId === activeSession ? ' active' : ''}`;
+    const exchangeIndex = Number(request.exchangeIndex || 0);
+    row.className = `session-entry${request.sessionId === activeSession && exchangeIndex === activeExchangeIndex ? ' active' : ''}`;
     row.dataset.action = 'select-session';
-    row.dataset.sessionId = session.sessionId;
+    row.dataset.sessionId = request.sessionId;
+    row.dataset.exchangeIndex = String(exchangeIndex);
 
-    row.appendChild(buildTextCell(session.requestMethod || ''));
-    row.appendChild(buildPathCell(session));
-    row.appendChild(buildStatusCell(session.responseStatusCode));
-    row.appendChild(buildDurationCell(session.durationMs));
-    row.appendChild(buildBytesCell(session.responseSizeBytes));
-    row.appendChild(buildTextCell(session.clientAddress || '', 'mono'));
-    row.appendChild(buildTextCell(formatTime(session.startedAt)));
+    row.appendChild(buildTextCell(request.requestMethod || ''));
+    row.appendChild(buildPathCell(request));
+    row.appendChild(buildStatusCell(request.responseStatusCode));
+    row.appendChild(buildDurationCell(request.durationMs));
+    row.appendChild(buildBytesCell(request.responseSizeBytes));
+    row.appendChild(buildTextCell(request.clientAddress || '', 'mono'));
+    row.appendChild(buildTextCell(formatTime(request.startedAt)));
     tbody.appendChild(row);
   }
 
@@ -320,10 +351,10 @@ function buildBytesCell(bytes) {
   return cell;
 }
 
-async function selectSession(sessionId) {
+async function selectSession(sessionId, exchangeIndex = 0) {
   patchState({
     activeSession: sessionId,
-    activeExchangeIndex: 0,
+    activeExchangeIndex: Number(exchangeIndex || 0),
     diffMode: false
   });
   await renderApp({

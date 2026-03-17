@@ -1,5 +1,6 @@
 window.uiState = {
   allSessions: [],
+  allRequests: [],
   activeRoute: null,
   lastLoadedSession: null,
   proxyConfig: null,

@@ -133,7 +133,7 @@ function bindUiEvents() {
         toggleConfigPanel();
         break;
       case 'select-session':
-        await selectSession(actionEl.dataset.sessionId);
+        await selectSession(actionEl.dataset.sessionId, Number(actionEl.dataset.exchangeIndex || 0));
         break;
       case 'change-request-page':
         changeRequestPage(Number(actionEl.dataset.delta || 0));
