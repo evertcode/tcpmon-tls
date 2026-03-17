@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tcpmon-tls control plane</title>
+  <link rel="stylesheet" href="/assets/styles/app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-title">
+        <strong>tcpmon-tls control plane</strong>
+        <span id="topbar-subtitle" class="muted">Select route, inspect recorded requests, open one to view request and response.</span>
+      </div>
+      <div id="topbar-config"></div>
+    </header>
+    <div id="config-panel-container"></div>
+
+    <div id="app-layout" class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h2>Routes</h2>
+            <button id="add-route-btn" class="utility" style="min-height:24px;padding:2px 8px;font-size:13px;" title="Add route">+</button>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <div class="toolbar">
+            <input id="route-search" type="search" placeholder="Search route or target">
+            <button id="refresh-routes-btn" class="utility">Refresh</button>
+          </div>
+        </div>
+        <div id="routes" class="route-list"></div>
+      </aside>
+
+      <main class="content">
+        <div id="status-banner"></div>
+        <div id="route-header"></div>
+        <div id="request-table"></div>
+        <div id="payloads"></div>
+        <div id="events-and-editor"></div>
+      </main>
+    </div>
+  </div>
+
+  <div id="route-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-hdr">
+        <strong id="route-modal-title" style="font-size:15px;">Add Route</strong>
+        <button id="route-modal-close-btn" class="utility" style="min-height:0;padding:2px 8px;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="route-modal-error" class="modal-error"></div>
+
+        <div class="form-group" style="margin-top:4px;">
+          <label>Route ID</label>
+          <input type="text" id="rm-id" placeholder="e.g. my-route" autocomplete="off">
+        </div>
+
+        <div class="form-section-hdr">Listener</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Host</label>
+            <input type="text" id="rm-listener-host" value="0.0.0.0">
+          </div>
+          <div class="form-group">
+            <label>Port</label>
+            <input type="number" id="rm-listener-port" placeholder="9001" min="1" max="65535">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Transport</label>
+          <select id="rm-listener-transport">
+            <option value="PLAIN">PLAIN</option>
+            <option value="TLS">TLS</option>
+          </select>
+        </div>
+        <div id="listener-tls-fields" style="display:none;border-left:2px solid #334155;padding-left:12px;margin-top:4px;">
+          <div class="tls-subsection-label">Server Certificate</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Certificate file</label>
+              <input type="text" id="rm-listener-tls-cert" placeholder="/path/to/cert.pem">
+            </div>
+            <div class="form-group">
+              <label>Private key file</label>
+              <input type="text" id="rm-listener-tls-key" placeholder="/path/to/key.pem">
+            </div>
+          </div>
+          <div class="tls-alt-or">- or keystore -</div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Keystore file</label>
+              <input type="text" id="rm-listener-tls-keystore" placeholder="/path/to/keystore.p12">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="rm-listener-tls-keystore-pwd" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Type</label>
+              <select id="rm-listener-tls-keystore-type">
+                <option value="PKCS12">PKCS12</option>
+                <option value="JKS">JKS</option>
+              </select>
+            </div>
+          </div>
+          <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Truststore file</label>
+              <input type="text" id="rm-listener-tls-truststore" placeholder="/path/to/truststore.p12">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="rm-listener-tls-truststore-pwd" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Type</label>
+              <select id="rm-listener-tls-truststore-type">
+                <option value="PKCS12">PKCS12</option>
+                <option value="JKS">JKS</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:8px;">
+            <label>Client Authentication</label>
+            <select id="rm-listener-client-auth">
+              <option value="NONE">None</option>
+              <option value="OPTIONAL">Optional</option>
+              <option value="REQUIRE">Require</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-section-hdr">Target</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Host</label>
+            <input type="text" id="rm-target-host" placeholder="localhost">
+          </div>
+          <div class="form-group">
+            <label>Port</label>
+            <input type="number" id="rm-target-port" placeholder="8080" min="1" max="65535">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Transport</label>
+          <select id="rm-target-transport">
+            <option value="PLAIN">PLAIN</option>
+            <option value="TLS">TLS</option>
+          </select>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" id="rm-target-rewrite">
+          <label for="rm-target-rewrite">Rewrite Host header</label>
+        </div>
+        <div id="target-tls-fields" style="display:none;border-left:2px solid #334155;padding-left:12px;margin-top:4px;">
+          <div class="form-group">
+            <label>SNI Host <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;">(overrides target host)</span></label>
+            <input type="text" id="rm-target-sni" placeholder="defaults to target host">
+          </div>
+          <div class="form-check">
+            <input type="checkbox" id="rm-target-verify" checked>
+            <label for="rm-target-verify">Verify hostname</label>
+          </div>
+          <div class="form-check" style="margin-bottom:10px;">
+            <input type="checkbox" id="rm-target-insecure">
+            <label for="rm-target-insecure">Trust all certificates (insecure)</label>
+          </div>
+          <div class="tls-subsection-label">Client Certificate</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Certificate file</label>
+              <input type="text" id="rm-target-tls-cert" placeholder="/path/to/cert.pem">
+            </div>
+            <div class="form-group">
+              <label>Private key file</label>
+              <input type="text" id="rm-target-tls-key" placeholder="/path/to/key.pem">
+            </div>
+          </div>
+          <div class="tls-alt-or">- or keystore -</div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Keystore file</label>
+              <input type="text" id="rm-target-tls-keystore" placeholder="/path/to/keystore.p12">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="rm-target-tls-keystore-pwd" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Type</label>
+              <select id="rm-target-tls-keystore-type">
+                <option value="PKCS12">PKCS12</option>
+                <option value="JKS">JKS</option>
+              </select>
+            </div>
+          </div>
+          <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label>Truststore file</label>
+              <input type="text" id="rm-target-tls-truststore" placeholder="/path/to/truststore.p12">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="rm-target-tls-truststore-pwd" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Type</label>
+              <select id="rm-target-tls-truststore-type">
+                <option value="PKCS12">PKCS12</option>
+                <option value="JKS">JKS</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;" id="route-modal-actions">
+          <button id="route-modal-cancel-btn" class="secondary">Cancel</button>
+          <button id="route-modal-save-btn" class="primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script defer src="/assets/js/state.js"></script>
+  <script defer src="/assets/js/utils.js"></script>
+  <script defer src="/assets/js/api.js"></script>
+  <script defer src="/assets/js/routes.js"></script>
+  <script defer src="/assets/js/sessions.js"></script>
+  <script defer src="/assets/js/details.js"></script>
+  <script defer src="/assets/js/actions.js"></script>
+  <script defer src="/assets/js/app.js"></script>
+  <script defer src="/assets/js/route-modal.js"></script>
+</body>
+</html>

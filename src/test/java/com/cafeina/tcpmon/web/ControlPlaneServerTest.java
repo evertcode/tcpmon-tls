@@ -20,6 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -166,5 +167,98 @@ class ControlPlaneServerTest {
             assertEquals(1, payload.get("sessionCount"));
             assertEquals(0, payload.get("liveUpdateClients"));
         }
+    }
+
+    @Test
+    void summarizesCompletedKeepAliveExchangeAsNotLiveAndWithDuration(@TempDir Path tempDir) throws Exception {
+        ProxyConfig config = new ProxyConfig(
+                new UiConfig("127.0.0.1", 8080, true, "token", null),
+                tempDir,
+                com.cafeina.tcpmon.InterceptMode.NONE,
+                List.of("TLSv1.3"),
+                List.of());
+        RouteConfig route = new RouteConfig(
+                "route-a",
+                new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null),
+                new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null));
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            String sessionId = store.openSession("route-a", "client", "listener", "target");
+            store.recordPayload(sessionId, Direction.CLIENT_TO_TARGET, "GET /health HTTP/1.1\r\nHost: example.com\r\n\r\n".getBytes(), null, Map.of());
+            store.recordPayload(sessionId, Direction.TARGET_TO_CLIENT, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK".getBytes(), null, Map.of());
+
+            ControlPlaneServer server = new ControlPlaneServer(
+                    config,
+                    new RouteRegistry(List.of(route), store),
+                    (TcpMonProxy) null,
+                    store,
+                    new ReplayService(config, new RouteRegistry(List.of(route), null)));
+
+            var method = ControlPlaneServer.class.getDeclaredMethod("summarizeSession", Map.class);
+            method.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = (Map<String, Object>) method.invoke(server, store.listSessions().getFirst());
+
+            assertEquals("GET", payload.get("requestMethod"));
+            assertEquals("/health", payload.get("requestPath"));
+            assertEquals("200", payload.get("responseStatusCode"));
+            assertEquals(Boolean.FALSE, payload.get("live"));
+            assertTrue(payload.get("durationMs") instanceof Long);
+        }
+    }
+
+    @Test
+    void loadsStaticWebAssetsFromClasspath() {
+        String index = ControlPlaneServer.readWebText("/index.html");
+        String stateJs = ControlPlaneServer.readWebText("/js/state.js");
+        String js = ControlPlaneServer.readWebText("/js/app.js");
+        String css = ControlPlaneServer.readWebText("/styles/app.css");
+        String routesJs = ControlPlaneServer.readWebText("/js/routes.js");
+        String sessionsJs = ControlPlaneServer.readWebText("/js/sessions.js");
+        String detailsJs = ControlPlaneServer.readWebText("/js/details.js");
+        String actionsJs = ControlPlaneServer.readWebText("/js/actions.js");
+
+        assertTrue(index.contains("/assets/styles/app.css"));
+        assertTrue(index.contains("/assets/js/state.js"));
+        assertTrue(index.contains("/assets/js/utils.js"));
+        assertTrue(index.contains("/assets/js/api.js"));
+        assertTrue(index.contains("/assets/js/routes.js"));
+        assertTrue(index.contains("/assets/js/sessions.js"));
+        assertTrue(index.contains("/assets/js/details.js"));
+        assertTrue(index.contains("/assets/js/actions.js"));
+        assertTrue(index.contains("/assets/js/app.js"));
+        assertTrue(stateJs.contains("window.uiState"));
+        assertTrue(stateJs.contains("function setState("));
+        assertTrue(stateJs.contains("function patchState("));
+        assertFalse(stateJs.contains("Object.defineProperty(window"));
+        assertFalse(index.contains("onclick="));
+        assertFalse(index.contains("oninput="));
+        assertFalse(index.contains("onchange="));
+        assertTrue(js.contains("initApp()"));
+        assertTrue(js.contains("function renderApp("));
+        assertTrue(js.contains("function renderListSection()"));
+        assertTrue(js.contains("function renderSelectedSessionDetail()"));
+        assertTrue(css.contains(".topbar"));
+        assertTrue(routesJs.contains("function renderRouteList()"));
+        assertTrue(routesJs.contains("function buildRouteListItem("));
+        assertTrue(routesJs.contains("row.dataset.action = 'select-route'"));
+        assertTrue(sessionsJs.contains("function renderRequestTable()"));
+        assertTrue(sessionsJs.contains("function buildRequestTableElement("));
+        assertTrue(sessionsJs.contains("row.dataset.action = 'select-session'"));
+        assertTrue(detailsJs.contains("function renderPayloads("));
+        assertTrue(detailsJs.contains("getState('lastLoadedSession')"));
+        assertTrue(detailsJs.contains("function buildPayloadHeadersDetails("));
+        assertTrue(detailsJs.contains("details.dataset.action = 'toggle-payload-headers'"));
+        assertTrue(actionsJs.contains("async function exportHar()"));
+        assertTrue(actionsJs.contains("getState('lastLoadedSession')"));
+        assertTrue(actionsJs.contains("function buildPayloadActionButton("));
+    }
+
+    @Test
+    void resolvesAssetContentTypes() {
+        assertEquals("text/css; charset=utf-8", ControlPlaneServer.assetContentType("app.css"));
+        assertEquals("text/javascript; charset=utf-8", ControlPlaneServer.assetContentType("app.js"));
+        assertEquals("text/html; charset=utf-8", ControlPlaneServer.assetContentType("index.html"));
+        assertEquals("application/octet-stream", ControlPlaneServer.assetContentType("binary.bin"));
     }
 }

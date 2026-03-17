@@ -1,0 +1,127 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+
+const repoRoot = path.resolve(import.meta.dirname, '..', '..', '..');
+const webRoot = path.join(repoRoot, 'src', 'main', 'resources', 'web');
+const jsRoot = path.join(webRoot, 'js');
+
+function createBrowserLikeContext() {
+  const context = {
+    console,
+    Date,
+    setTimeout,
+    clearTimeout,
+    URL,
+    Blob,
+    navigator: {},
+    fetch: () => { throw new Error('fetch not implemented in unit test'); },
+    document: {},
+    window: null,
+    globalThis: null
+  };
+  context.window = context;
+  context.globalThis = context;
+  return vm.createContext(context);
+}
+
+function loadScript(context, fileName) {
+  const source = fs.readFileSync(path.join(jsRoot, fileName), 'utf8');
+  vm.runInContext(source, context, { filename: fileName });
+}
+
+function loadWebHelpers() {
+  const context = createBrowserLikeContext();
+  loadScript(context, 'utils.js');
+  loadScript(context, 'details.js');
+  loadScript(context, 'actions.js');
+  return context;
+}
+
+test('formatDuration renders timing classes and placeholders', () => {
+  const ctx = loadWebHelpers();
+
+  assert.equal(ctx.formatDuration(null), '<span class="muted">—</span>');
+  assert.equal(ctx.formatDuration('oops'), '<span class="muted">—</span>');
+  assert.equal(ctx.formatDuration(150), '<span class="timing-fast">150 ms</span>');
+  assert.equal(ctx.formatDuration(750), '<span class="timing-medium">750 ms</span>');
+  assert.equal(ctx.formatDuration(1500), '<span class="timing-slow">1.5 s</span>');
+});
+
+test('formatBytes renders bytes, kilobytes and megabytes', () => {
+  const ctx = loadWebHelpers();
+
+  assert.equal(ctx.formatBytes(null), '<span class="muted">—</span>');
+  assert.equal(ctx.formatBytes(0), '<span class="muted">0 B</span>');
+  assert.equal(ctx.formatBytes(12), '12 B');
+  assert.equal(ctx.formatBytes(2048), '2.0 KB');
+  assert.equal(ctx.formatBytes(3 * 1024 * 1024), '3.0 MB');
+});
+
+test('formatBody pretty prints json and xml payloads', () => {
+  const ctx = loadWebHelpers();
+
+  const jsonBody = ctx.formatBody({
+    isHttp: true,
+    bodyText: '{"a":1,"b":{"c":2}}',
+    headers: [{ name: 'Content-Type', value: 'application/json' }]
+  });
+  assert.equal(jsonBody, '{\n  "a": 1,\n  "b": {\n    "c": 2\n  }\n}');
+
+  const xmlBody = ctx.formatBody({
+    isHttp: true,
+    bodyText: '<root><child>ok</child></root>',
+    headers: [{ name: 'Content-Type', value: 'application/xml' }]
+  });
+  assert.equal(xmlBody, '<root>\n  <child>ok</child>\n</root>');
+});
+
+test('prettyPrintXml indents nested elements', () => {
+  const ctx = loadWebHelpers();
+
+  assert.equal(
+    ctx.prettyPrintXml('<a><b/><c><d>v</d></c></a>'),
+    '<a>\n  <b/>\n  <c>\n    <d>v</d>\n  </c>\n</a>'
+  );
+});
+
+test('calcTtfb returns milliseconds between first request and response payload', () => {
+  const ctx = loadWebHelpers();
+
+  const ttfb = ctx.calcTtfb([
+    { type: 'PAYLOAD', direction: 'CLIENT_TO_TARGET', timestamp: '2026-03-17T10:00:00.000Z' },
+    { type: 'PAYLOAD', direction: 'TARGET_TO_CLIENT', timestamp: '2026-03-17T10:00:00.125Z' }
+  ]);
+
+  assert.equal(ttfb, 125);
+  assert.equal(ctx.calcTtfb([]), null);
+});
+
+test('generateCurl builds a reproducible curl command from decoded request data', () => {
+  const ctx = loadWebHelpers();
+
+  const curl = ctx.generateCurl('api.example.com:443', {
+    isHttp: true,
+    request: {
+      method: 'POST',
+      path: '/v1/messages',
+      query: 'limit=10'
+    },
+    headers: [
+      { name: 'Content-Type', value: 'application/json' },
+      { name: 'X-Custom', value: "it's ok" },
+      { name: 'Content-Length', value: '99' }
+    ],
+    bodyText: '{"hello":"world"}'
+  });
+
+  assert.equal(
+    curl,
+    "curl -X POST 'https://api.example.com:443/v1/messages?limit=10' \\\n" +
+      "  -H 'Content-Type: application/json' \\\n" +
+      "  -H 'X-Custom: it\\'s ok' \\\n" +
+      "  -d '{\"hello\":\"world\"}'"
+  );
+});

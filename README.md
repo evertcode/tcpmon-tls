@@ -401,8 +401,12 @@ When a direction is intercepted:
 Run tests:
 
 ```bash
+npm run test:all
 mvn -q test
+npm run test:web
 ```
+
+`npm run test:all` runs both suites. `mvn -q test` covers the Java backend and control plane. `npm run test:web` runs the lightweight frontend helper suite with Node's built-in test runner, without extra dependencies.
 
 ## Project structure
 

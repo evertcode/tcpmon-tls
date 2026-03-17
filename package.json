@@ -1,0 +1,8 @@
+{
+  "name": "tcpmon-tls",
+  "private": true,
+  "scripts": {
+    "test:web": "node --test src/test/js/web-helpers.test.mjs",
+    "test:all": "npm run test:web && mvn -q test"
+  }
+}

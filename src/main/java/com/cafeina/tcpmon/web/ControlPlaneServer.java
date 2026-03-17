@@ -63,6 +63,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     private static final int MAX_SSE_CLIENTS = 32;
     private static final int HTTP_EXECUTOR_THREADS = Math.max(4, Math.min(16, Runtime.getRuntime().availableProcessors() * 2));
     private static final int HTTP_EXECUTOR_QUEUE_CAPACITY = 256;
+    private static final String WEB_ROOT = "/web";
 
     private final ProxyConfig proxyConfig;
     private final RouteRegistry registry;
@@ -105,6 +106,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         } else {
             server = HttpServer.create(address, 0);
         }
+        server.createContext("/assets/", this::handleAsset);
         server.createContext("/", this::handleRoot);
         server.createContext("/api/events", this::handleEvents);
         server.createContext("/api/sessions", this::handleSessions);
@@ -124,7 +126,44 @@ public final class ControlPlaneServer implements AutoCloseable {
             send(exchange, 405, "text/plain", "Method not allowed");
             return;
         }
-        send(exchange, 200, "text/html; charset=utf-8", WebAssets.indexHtml());
+        String path = exchange.getRequestURI().getPath();
+        if ("/".equals(path) || path.isBlank()) {
+            send(exchange, 200, "text/html; charset=utf-8", readWebText("/index.html"));
+            return;
+        }
+        send(exchange, 404, "text/plain; charset=utf-8", "Not found");
+    }
+
+    private void handleAsset(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            send(exchange, 405, "text/plain", "Method not allowed");
+            return;
+        }
+        String path = exchange.getRequestURI().getPath();
+        if (!path.startsWith("/assets/")) {
+            send(exchange, 404, "text/plain; charset=utf-8", "Not found");
+            return;
+        }
+        String assetName = path.substring("/assets/".length());
+        if (assetName.isBlank() || assetName.contains("..") || assetName.contains("\\")) {
+            send(exchange, 404, "text/plain; charset=utf-8", "Not found");
+            return;
+        }
+        byte[] body;
+        try {
+            body = readWebBytes("/" + assetName);
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 404, "text/plain; charset=utf-8", "Not found");
+            return;
+        }
+        exchange.getResponseHeaders().set("Content-Type", assetContentType(assetName));
+        exchange.getResponseHeaders().set("X-Frame-Options", "DENY");
+        exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+        exchange.sendResponseHeaders(200, body.length);
+        try (OutputStream stream = exchange.getResponseBody()) {
+            stream.write(body);
+        }
     }
 
     private void handleSessions(HttpExchange exchange) throws IOException {
@@ -736,6 +775,35 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
     }
 
+    static String readWebText(String resourcePath) {
+        return new String(readWebBytes(resourcePath), StandardCharsets.UTF_8);
+    }
+
+    static byte[] readWebBytes(String resourcePath) {
+        String normalized = resourcePath.startsWith("/") ? resourcePath : "/" + resourcePath;
+        try (InputStream stream = ControlPlaneServer.class.getResourceAsStream(WEB_ROOT + normalized)) {
+            if (stream == null) {
+                throw new IllegalArgumentException("Web resource not found: " + resourcePath);
+            }
+            return stream.readAllBytes();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Unable to read web resource " + resourcePath, exception);
+        }
+    }
+
+    static String assetContentType(String assetName) {
+        if (assetName.endsWith(".css")) {
+            return "text/css; charset=utf-8";
+        }
+        if (assetName.endsWith(".js")) {
+            return "text/javascript; charset=utf-8";
+        }
+        if (assetName.endsWith(".html")) {
+            return "text/html; charset=utf-8";
+        }
+        return "application/octet-stream";
+    }
+
     private void broadcastSessionChange(SessionChangeEvent event) {
         for (SseClient client : sseClients) {
             client.offer(event.type(), event);
@@ -811,13 +879,18 @@ public final class ControlPlaneServer implements AutoCloseable {
 
         Map<String, Object> latestRequest = requests.isEmpty() ? null : requests.getLast();
         Map<String, Object> latestResponse = responses.isEmpty() ? null : responses.getLast();
+        boolean live = isSessionLive(summary.get("status"), requests, responses);
         enriched.put("requestMethod", extractRequestMethod(latestRequest));
         enriched.put("requestPath", extractRequestPath(latestRequest));
         enriched.put("responseStatusCode", extractResponseStatusCode(latestResponse));
+        enriched.put("live", live);
         Object startedAt = details.get("startedAt");
         Object endedAt = details.get("endedAt");
-        if (startedAt instanceof Instant start && endedAt instanceof Instant end) {
-            enriched.put("durationMs", Duration.between(start, end).toMillis());
+        if (startedAt instanceof Instant start) {
+            Instant effectiveEnd = endedAt instanceof Instant end ? end : responseTimestamp(latestResponse);
+            if (effectiveEnd != null && !effectiveEnd.isBefore(start)) {
+                enriched.put("durationMs", Duration.between(start, effectiveEnd).toMillis());
+            }
         }
         if (latestResponse != null) {
             Object size = latestResponse.get("size");
@@ -826,6 +899,25 @@ public final class ControlPlaneServer implements AutoCloseable {
             }
         }
         return enriched;
+    }
+
+    private static boolean isSessionLive(Object statusValue, List<Map<String, Object>> requests, List<Map<String, Object>> responses) {
+        String status = statusValue == null ? "" : statusValue.toString();
+        if (!"OPEN".equalsIgnoreCase(status)) {
+            return false;
+        }
+        if (requests.isEmpty() && responses.isEmpty()) {
+            return true;
+        }
+        return responses.size() < requests.size();
+    }
+
+    private static Instant responseTimestamp(Map<String, Object> response) {
+        if (response == null) {
+            return null;
+        }
+        Object timestamp = response.get("timestamp");
+        return timestamp instanceof Instant instant ? instant : null;
     }
 
     private static String extractRequestMethod(Map<String, Object> request) {
