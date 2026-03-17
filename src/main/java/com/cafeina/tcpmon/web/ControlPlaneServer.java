@@ -34,7 +34,6 @@ import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.net.InetSocketAddress;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.GeneralSecurityException;
@@ -42,18 +41,28 @@ import java.security.KeyStore;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 public final class ControlPlaneServer implements AutoCloseable {
     private static final Pattern SAFE_HOSTNAME = Pattern.compile("^[a-zA-Z0-9.\\-_:\\[\\]%*]+$");
+    static final String PRESERVE_SECRET = "__PRESERVE_SECRET__";
+    private static final String AUTH_COOKIE_NAME = "tcpmon_auth";
+    private static final int MAX_JSON_BODY_BYTES = 256 * 1024;
+    private static final int MAX_REPLAY_PAYLOAD_BYTES = 1024 * 1024;
+    private static final int MAX_SSE_CLIENTS = 32;
+    private static final int HTTP_EXECUTOR_THREADS = Math.max(4, Math.min(16, Runtime.getRuntime().availableProcessors() * 2));
+    private static final int HTTP_EXECUTOR_QUEUE_CAPACITY = 256;
 
     private final ProxyConfig proxyConfig;
     private final RouteRegistry registry;
@@ -64,6 +73,14 @@ public final class ControlPlaneServer implements AutoCloseable {
     private final ObjectMapper objectMapper = JsonSupport.objectMapper();
     private final CopyOnWriteArrayList<SseClient> sseClients = new CopyOnWriteArrayList<>();
     private final SessionChangeListener changeListener = this::broadcastSessionChange;
+    private final ExecutorService httpExecutor = new ThreadPoolExecutor(
+            HTTP_EXECUTOR_THREADS,
+            HTTP_EXECUTOR_THREADS,
+            30,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(HTTP_EXECUTOR_QUEUE_CAPACITY),
+            new HttpWorkerThreadFactory(),
+            new ThreadPoolExecutor.AbortPolicy());
     private HttpServer server;
 
     public ControlPlaneServer(ProxyConfig proxyConfig, RouteRegistry registry, TcpMonProxy proxy, SessionStore sessionStore, ReplayService replayService) {
@@ -94,8 +111,10 @@ public final class ControlPlaneServer implements AutoCloseable {
         server.createContext("/api/pending/", this::handlePending);
         server.createContext("/api/replay", this::handleReplay);
         server.createContext("/api/config", this::handleConfig);
+        server.createContext("/api/runtime", this::handleRuntime);
         server.createContext("/api/routes", this::handleRoutes);
-        server.setExecutor(Executors.newCachedThreadPool());
+        server.createContext("/api/auth/session", this::handleAuthSession);
+        server.setExecutor(httpExecutor);
         sessionStore.addChangeListener(changeListener);
         server.start();
     }
@@ -136,6 +155,10 @@ public final class ControlPlaneServer implements AutoCloseable {
             sendJson(exchange, 405, Map.of("error", "method not allowed"));
             return;
         }
+        if (sseClients.size() >= MAX_SSE_CLIENTS) {
+            sendJson(exchange, 503, Map.of("error", "too many live update clients"));
+            return;
+        }
 
         exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-cache");
@@ -164,19 +187,26 @@ public final class ControlPlaneServer implements AutoCloseable {
 
         String path = exchange.getRequestURI().getPath();
         String pendingId = path.substring("/api/pending/".length(), path.length() - "/forward".length());
-        JsonNode body = readJsonBody(exchange);
-        byte[] replacement = null;
-        if (body.hasNonNull("http")) {
-            replacement = HttpMessageEditor.buildHttpMessage(body.path("http"));
-        } else if (body.hasNonNull("content")) {
-            replacement = decodePayload(body.path("encoding").asText("utf8"), body.path("content").asText(""));
+        try {
+            JsonNode body = readJsonBody(exchange);
+            byte[] replacement = null;
+            if (body.hasNonNull("http")) {
+                replacement = HttpMessageEditor.buildHttpMessage(body.path("http"));
+            } else if (body.hasNonNull("content")) {
+                replacement = decodePayload(body.path("encoding").asText("utf8"), body.path("content").asText(""));
+            }
+            enforcePayloadLimit(replacement);
+            boolean released = sessionStore.releasePending(pendingId, replacement);
+            if (!released) {
+                sendJson(exchange, 404, Map.of("error", "pending payload not found"));
+                return;
+            }
+            sendJson(exchange, 200, Map.of("status", "released", "pendingId", pendingId));
+        } catch (RequestTooLargeException exception) {
+            sendJson(exchange, 413, Map.of("error", exception.getMessage()));
+        } catch (IllegalArgumentException exception) {
+            sendJson(exchange, 400, Map.of("error", exception.getMessage()));
         }
-        boolean released = sessionStore.releasePending(pendingId, replacement);
-        if (!released) {
-            sendJson(exchange, 404, Map.of("error", "pending payload not found"));
-            return;
-        }
-        sendJson(exchange, 200, Map.of("status", "released", "pendingId", pendingId));
     }
 
     private void handleReplay(HttpExchange exchange) throws IOException {
@@ -186,8 +216,8 @@ public final class ControlPlaneServer implements AutoCloseable {
             return;
         }
 
-        JsonNode body = readJsonBody(exchange);
         try {
+            JsonNode body = readJsonBody(exchange);
             ReplayDestination destination = ReplayDestination.fromString(body.path("destination").asText("listener"));
             String routeId = body.path("routeId").asText();
             if (body.hasNonNull("base64")) {
@@ -195,7 +225,9 @@ public final class ControlPlaneServer implements AutoCloseable {
                     sendJson(exchange, 400, Map.of("error", "routeId is required when replaying raw payloads"));
                     return;
                 }
-                Map<String, Object> result = replayService.replay(java.util.Base64.getDecoder().decode(body.path("base64").asText()), routeId, destination);
+                byte[] payload = Base64.getDecoder().decode(body.path("base64").asText());
+                enforcePayloadLimit(payload);
+                Map<String, Object> result = replayService.replay(payload, routeId, destination);
                 sendJson(exchange, 200, result);
                 return;
             }
@@ -217,10 +249,16 @@ public final class ControlPlaneServer implements AutoCloseable {
                 return;
             }
             String base64 = event.details().get("base64").toString();
-            Map<String, Object> result = replayService.replay(java.util.Base64.getDecoder().decode(base64), routeId, destination);
+            byte[] payload = Base64.getDecoder().decode(base64);
+            enforcePayloadLimit(payload);
+            Map<String, Object> result = replayService.replay(payload, routeId, destination);
             sendJson(exchange, 200, result);
+        } catch (RequestTooLargeException exception) {
+            sendJson(exchange, 413, Map.of("error", exception.getMessage()));
+        } catch (IllegalArgumentException exception) {
+            sendJson(exchange, 400, Map.of("error", exception.getMessage()));
         } catch (Exception exception) {
-            sendJson(exchange, 500, Map.of("error", exception.toString()));
+            sendJson(exchange, 502, Map.of("error", sanitizeExceptionMessage(exception)));
         }
     }
 
@@ -231,6 +269,15 @@ public final class ControlPlaneServer implements AutoCloseable {
             return;
         }
         sendJson(exchange, 200, buildConfigPayload());
+    }
+
+    private void handleRuntime(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+        sendJson(exchange, 200, buildRuntimePayload());
     }
 
     private void handleRoutes(HttpExchange exchange) throws IOException {
@@ -251,10 +298,45 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
     }
 
+    private void handleAuthSession(HttpExchange exchange) throws IOException {
+        if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            try {
+                JsonNode body = readJsonBody(exchange);
+                String submittedToken = body.path("token").asText("").trim();
+                String configuredToken = config.apiToken();
+                if (configuredToken == null || configuredToken.isBlank()) {
+                    sendJson(exchange, 400, Map.of("error", "API token auth is not enabled"));
+                    return;
+                }
+                if (!configuredToken.equals(submittedToken)) {
+                    sendJson(exchange, 401, Map.of("error", "Unauthorized"));
+                    return;
+                }
+                exchange.getResponseHeaders().add("Set-Cookie", buildAuthCookieHeader(configuredToken, config.tlsMaterial() != null));
+                sendJson(exchange, 200, Map.of("status", "authenticated"));
+                return;
+            } catch (RequestTooLargeException exception) {
+                sendJson(exchange, 413, Map.of("error", exception.getMessage()));
+                return;
+            }
+        }
+
+        if ("DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+            exchange.getResponseHeaders().add("Set-Cookie", clearAuthCookieHeader(config.tlsMaterial() != null));
+            sendJson(exchange, 200, Map.of("status", "cleared"));
+            return;
+        }
+
+        sendJson(exchange, 405, Map.of("error", "method not allowed"));
+    }
+
     private void handleCreateRoute(HttpExchange exchange) throws IOException {
         JsonNode body;
         try {
             body = readJsonBody(exchange);
+        } catch (RequestTooLargeException e) {
+            sendJson(exchange, 413, Map.of("error", e.getMessage()));
+            return;
         } catch (Exception e) {
             sendJson(exchange, 400, Map.of("error", "invalid JSON body"));
             return;
@@ -295,6 +377,9 @@ public final class ControlPlaneServer implements AutoCloseable {
         JsonNode body;
         try {
             body = readJsonBody(exchange);
+        } catch (RequestTooLargeException e) {
+            sendJson(exchange, 413, Map.of("error", e.getMessage()));
+            return;
         } catch (Exception e) {
             sendJson(exchange, 400, Map.of("error", "invalid JSON body"));
             return;
@@ -303,6 +388,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         RouteConfig updated;
         try {
             updated = parseRouteFromJson(body, id);
+            updated = mergeTlsSecrets(original, updated);
         } catch (IllegalArgumentException e) {
             sendJson(exchange, 400, Map.of("error", e.getMessage()));
             return;
@@ -467,30 +553,106 @@ public final class ControlPlaneServer implements AutoCloseable {
         return result;
     }
 
+    private Map<String, Object> buildRuntimePayload() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("status", "UP");
+        payload.put("uiEnabled", config.enabled());
+        payload.put("uiTlsEnabled", config.tlsMaterial() != null);
+        payload.put("apiTokenEnabled", config.apiToken() != null && !config.apiToken().isBlank());
+        payload.put("interceptMode", proxyConfig.interceptMode().name());
+        payload.put("routeCount", registry.routes().size());
+        payload.put("sessionCount", sessionStore.listSessions().size());
+        payload.put("liveUpdateClients", sseClients.size());
+        payload.put("liveUpdateClientLimit", MAX_SSE_CLIENTS);
+        payload.put("sessionsDir", proxyConfig.sessionsDir().toAbsolutePath().toString());
+        return payload;
+    }
+
     private static void putTlsMaterial(Map<String, Object> map, TlsMaterial tls) {
         if (tls == null) return;
         if (tls.certificateFile() != null) map.put("tlsCert", tls.certificateFile().toString());
         if (tls.privateKeyFile() != null) map.put("tlsKey", tls.privateKeyFile().toString());
         if (tls.keyStoreFile() != null) map.put("tlsKeystore", tls.keyStoreFile().toString());
-        // Passwords are intentionally omitted from API responses
+        map.put("tlsKeystorePasswordConfigured", tls.keyStorePassword() != null && !tls.keyStorePassword().isBlank());
         if (tls.keyStoreType() != null) map.put("tlsKeystoreType", tls.keyStoreType());
         if (tls.trustStoreFile() != null) map.put("tlsTruststore", tls.trustStoreFile().toString());
-        // Passwords are intentionally omitted from API responses
+        map.put("tlsTruststorePasswordConfigured", tls.trustStorePassword() != null && !tls.trustStorePassword().isBlank());
         if (tls.trustStoreType() != null) map.put("tlsTruststoreType", tls.trustStoreType());
     }
 
+    static RouteConfig mergeTlsSecrets(RouteConfig original, RouteConfig updated) {
+        return new RouteConfig(
+                updated.id(),
+                new ListenerConfig(
+                        updated.listener().host(),
+                        updated.listener().port(),
+                        updated.listener().transportMode(),
+                        updated.listener().clientAuthMode(),
+                        mergeTlsMaterial(original.listener().tlsMaterial(), updated.listener().tlsMaterial())),
+                new TargetConfig(
+                        updated.target().host(),
+                        updated.target().port(),
+                        updated.target().transportMode(),
+                        updated.target().sniHost(),
+                        updated.target().insecureTrustAll(),
+                        updated.target().verifyHostname(),
+                        updated.target().rewriteHostHeader(),
+                        mergeTlsMaterial(original.target().tlsMaterial(), updated.target().tlsMaterial())));
+    }
+
+    static TlsMaterial mergeTlsMaterial(TlsMaterial original, TlsMaterial updated) {
+        if (updated == null) {
+            return null;
+        }
+        String keyStorePassword = updated.keyStorePassword();
+        if (PRESERVE_SECRET.equals(keyStorePassword)) {
+            keyStorePassword = original == null ? null : original.keyStorePassword();
+        }
+        String trustStorePassword = updated.trustStorePassword();
+        if (PRESERVE_SECRET.equals(trustStorePassword)) {
+            trustStorePassword = original == null ? null : original.trustStorePassword();
+        }
+        return new TlsMaterial(
+                updated.certificateFile(),
+                updated.privateKeyFile(),
+                updated.keyStoreFile(),
+                keyStorePassword,
+                updated.trustStoreFile(),
+                trustStorePassword,
+                updated.keyStoreType(),
+                updated.trustStoreType());
+    }
+
     private JsonNode readJsonBody(HttpExchange exchange) throws IOException {
+        byte[] requestBody = readRequestBody(exchange, MAX_JSON_BODY_BYTES);
+        if (requestBody.length == 0) {
+            return objectMapper.createObjectNode();
+        }
+        return objectMapper.readTree(requestBody);
+    }
+
+    private static byte[] readRequestBody(HttpExchange exchange, int maxBytes) throws IOException {
         try (InputStream stream = exchange.getRequestBody()) {
-            return objectMapper.readTree(stream);
+            byte[] buffer = stream.readNBytes(maxBytes + 1);
+            if (buffer.length > maxBytes) {
+                throw new RequestTooLargeException("request body exceeds " + maxBytes + " bytes");
+            }
+            return buffer;
         }
     }
 
     private byte[] decodePayload(String encoding, String content) {
         return switch (encoding.toLowerCase()) {
-            case "base64" -> java.util.Base64.getDecoder().decode(content);
+            case "base64" -> Base64.getDecoder().decode(content);
             case "hex" -> HexFormat.of().parseHex(content.replaceAll("\\s+", ""));
             default -> content.getBytes(StandardCharsets.UTF_8);
         };
+    }
+
+    private static void enforcePayloadLimit(byte[] payload) throws RequestTooLargeException {
+        if (payload != null && payload.length > MAX_REPLAY_PAYLOAD_BYTES) {
+            throw new RequestTooLargeException("payload exceeds " + MAX_REPLAY_PAYLOAD_BYTES + " bytes");
+        }
     }
 
     private boolean requireAuth(HttpExchange exchange) throws IOException {
@@ -502,20 +664,56 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (authHeader != null && authHeader.equals("Bearer " + token)) {
             return true;
         }
-        // Accept token via query param for SSE clients that cannot set custom headers
-        String query = exchange.getRequestURI().getQuery();
-        if (query != null) {
-            for (String param : query.split("&")) {
-                if (param.startsWith("token=")) {
-                    String queryToken = URLDecoder.decode(param.substring(6), StandardCharsets.UTF_8);
-                    if (queryToken.equals(token)) {
-                        return true;
-                    }
-                }
-            }
+        String cookieHeader = exchange.getRequestHeaders().getFirst("Cookie");
+        String cookieToken = readCookie(cookieHeader, AUTH_COOKIE_NAME);
+        if (token.equals(cookieToken)) {
+            return true;
         }
         sendJson(exchange, 401, Map.of("error", "Unauthorized"));
         return false;
+    }
+
+    static String readCookie(String header, String name) {
+        if (header == null || header.isBlank()) {
+            return null;
+        }
+        for (String cookie : header.split(";")) {
+            String[] pair = cookie.trim().split("=", 2);
+            if (pair.length == 2 && pair[0].trim().equals(name)) {
+                return pair[1].trim();
+            }
+        }
+        return null;
+    }
+
+    static String buildAuthCookieHeader(String token, boolean secure) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(AUTH_COOKIE_NAME)
+                .append('=')
+                .append(token)
+                .append("; Path=/; HttpOnly; SameSite=Strict");
+        if (secure) {
+            builder.append("; Secure");
+        }
+        return builder.toString();
+    }
+
+    static String clearAuthCookieHeader(boolean secure) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(AUTH_COOKIE_NAME)
+                .append("=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict");
+        if (secure) {
+            builder.append("; Secure");
+        }
+        return builder.toString();
+    }
+
+    static String sanitizeExceptionMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        if (message == null || message.isBlank()) {
+            return throwable.getClass().getSimpleName();
+        }
+        return message;
     }
 
     private void sendJson(HttpExchange exchange, int status, Object payload) throws IOException {
@@ -527,8 +725,11 @@ public final class ControlPlaneServer implements AutoCloseable {
         exchange.getResponseHeaders().set("Content-Type", contentType);
         exchange.getResponseHeaders().set("X-Frame-Options", "DENY");
         exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
-        exchange.getResponseHeaders().set("X-XSS-Protection", "1; mode=block");
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
+        exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");
+        exchange.getResponseHeaders().set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+        exchange.getResponseHeaders().set("Content-Security-Policy",
+                "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
         exchange.sendResponseHeaders(status, bytes.length);
         try (OutputStream stream = exchange.getResponseBody()) {
             stream.write(bytes);
@@ -708,6 +909,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (server != null) {
             server.stop(0);
         }
+        httpExecutor.shutdownNow();
     }
 
     private final class SseClient implements AutoCloseable {
@@ -763,6 +965,21 @@ public final class ControlPlaneServer implements AutoCloseable {
             } finally {
                 exchange.close();
             }
+        }
+    }
+
+    private static final class RequestTooLargeException extends IOException {
+        private RequestTooLargeException(String message) {
+            super(message);
+        }
+    }
+
+    private static final class HttpWorkerThreadFactory implements ThreadFactory {
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread thread = Thread.ofPlatform().name("control-plane-http-", 0).unstarted(runnable);
+            thread.setDaemon(true);
+            return thread;
         }
     }
 }

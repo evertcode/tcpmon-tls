@@ -33,21 +33,30 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public final class SessionStore implements AutoCloseable {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
+    private static final int SCHEMA_VERSION = 2;
 
     private final Path rootDir;
     private final Path dbPath;
     private final ObjectMapper objectMapper;
     private final PasswordEncryptor passwordEncryptor;
     private final Connection connection;
+    private final ExecutorService writeExecutor = Executors.newSingleThreadExecutor(new SessionWriterThreadFactory());
     private final Map<String, PendingPayload> pendingPayloads = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<SessionChangeListener> changeListeners = new CopyOnWriteArrayList<>();
     private final AtomicLong ids = new AtomicLong();
+    private final AtomicBoolean closing = new AtomicBoolean();
 
     public SessionStore(Path rootDir, ObjectMapper objectMapper) throws IOException {
         this(rootDir, objectMapper, loadEncryptor(rootDir));
@@ -124,6 +133,10 @@ public final class SessionStore implements AutoCloseable {
         }
     }
 
+    public void closeSessionAsync(String sessionId, String status) {
+        submitWrite(() -> closeSession(sessionId, status));
+    }
+
     public synchronized void recordLifecycle(String sessionId, String type, Map<String, Object> details) {
         requireSessionExists(sessionId);
         Instant timestamp = Instant.now();
@@ -134,10 +147,18 @@ public final class SessionStore implements AutoCloseable {
         }
     }
 
+    public void recordLifecycleAsync(String sessionId, String type, Map<String, Object> details) {
+        submitWrite(() -> recordLifecycle(sessionId, type, details));
+    }
+
     public synchronized void recordTls(String sessionId, boolean inbound, Map<String, Object> details) {
         requireSessionExists(sessionId);
         mergeTlsDetails(sessionId, inbound, details);
         recordLifecycle(sessionId, inbound ? "TLS_INBOUND" : "TLS_OUTBOUND", details);
+    }
+
+    public void recordTlsAsync(String sessionId, boolean inbound, Map<String, Object> details) {
+        submitWrite(() -> recordTls(sessionId, inbound, details));
     }
 
     public synchronized SessionEvent recordPayload(String sessionId, Direction direction, byte[] payload, String pendingId, Map<String, Object> extraDetails) {
@@ -161,6 +182,10 @@ public final class SessionStore implements AutoCloseable {
         return event;
     }
 
+    public void recordPayloadAsync(String sessionId, Direction direction, byte[] payload, String pendingId, Map<String, Object> extraDetails) {
+        submitWrite(() -> recordPayload(sessionId, direction, payload, pendingId, extraDetails));
+    }
+
     public PendingPayload addPending(String sessionId, Direction direction, byte[] payload, Consumer<byte[]> forwarder) {
         requireSessionExists(sessionId);
         String pendingId = "p-" + ids.incrementAndGet() + "-" + UUID.randomUUID().toString().substring(0, 8);
@@ -176,16 +201,18 @@ public final class SessionStore implements AutoCloseable {
         }
         byte[] finalPayload = replacementPayload == null ? pendingPayload.originalBytes() : replacementPayload;
         pendingPayload.forwarder().accept(finalPayload);
-        recordLifecycle(pendingPayload.sessionId(), "PENDING_RELEASED", Map.of(
-                "pendingId", pendingId,
-                "edited", replacementPayload != null,
-                "finalSize", finalPayload.length));
-        publishChange(new SessionChangeEvent(
-                "pending-released",
-                pendingPayload.sessionId(),
-                routeIdForSession(pendingPayload.sessionId()),
-                Instant.now(),
-                pendingId));
+        submitWrite(() -> {
+            recordLifecycle(pendingPayload.sessionId(), "PENDING_RELEASED", Map.of(
+                    "pendingId", pendingId,
+                    "edited", replacementPayload != null,
+                    "finalSize", finalPayload.length));
+            publishChange(new SessionChangeEvent(
+                    "pending-released",
+                    pendingPayload.sessionId(),
+                    routeIdForSession(pendingPayload.sessionId()),
+                    Instant.now(),
+                    pendingId));
+        });
         return true;
     }
 
@@ -326,6 +353,30 @@ public final class SessionStore implements AutoCloseable {
     private void initializeSchema() throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute("pragma foreign_keys = on");
+        }
+        int currentVersion = readSchemaVersion();
+        if (currentVersion == 0) {
+            currentVersion = detectLegacySchemaVersion();
+        }
+        applyMigrations(currentVersion);
+    }
+
+    private void applyMigrations(int currentVersion) throws SQLException {
+        if (currentVersion < 1) {
+            migrateToVersion1();
+            currentVersion = 1;
+        }
+        if (currentVersion < 2) {
+            migrateToVersion2();
+            currentVersion = 2;
+        }
+        if (currentVersion != SCHEMA_VERSION) {
+            throw new IllegalStateException("Unsupported schema version: " + currentVersion);
+        }
+    }
+
+    private void migrateToVersion1() throws SQLException {
+        try (Statement statement = connection.createStatement()) {
             statement.execute("""
                     create table if not exists sessions (
                         session_id text primary key,
@@ -376,10 +427,10 @@ public final class SessionStore implements AutoCloseable {
                     )
                     """);
         }
-        addRouteTlsColumnsIfNeeded();
+        writeSchemaVersion(1);
     }
 
-    private void addRouteTlsColumnsIfNeeded() {
+    private void migrateToVersion2() throws SQLException {
         String[][] cols = {
             {"listener_tls_cert", "TEXT"}, {"listener_tls_key", "TEXT"},
             {"listener_tls_keystore", "TEXT"}, {"listener_tls_keystore_password", "TEXT"},
@@ -396,6 +447,57 @@ public final class SessionStore implements AutoCloseable {
             } catch (SQLException ignored) {
                 // column already exists
             }
+        }
+        writeSchemaVersion(2);
+    }
+
+    private int detectLegacySchemaVersion() throws SQLException {
+        if (!tableExists("sessions") && !tableExists("routes") && !tableExists("session_events")) {
+            return 0;
+        }
+        if (tableExists("routes") && columnExists("routes", "listener_tls_cert")) {
+            writeSchemaVersion(2);
+            return 2;
+        }
+        writeSchemaVersion(1);
+        return 1;
+    }
+
+    private int readSchemaVersion() throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("pragma user_version")) {
+            return resultSet.next() ? resultSet.getInt(1) : 0;
+        }
+    }
+
+    private void writeSchemaVersion(int version) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("pragma user_version = " + version);
+        }
+    }
+
+    private boolean tableExists(String tableName) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                select 1
+                from sqlite_master
+                where type = 'table' and name = ?
+                """)) {
+            statement.setString(1, tableName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
+    }
+
+    private boolean columnExists(String tableName, String columnName) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("pragma table_info(" + tableName + ")")) {
+            while (resultSet.next()) {
+                if (columnName.equalsIgnoreCase(resultSet.getString("name"))) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -529,6 +631,30 @@ public final class SessionStore implements AutoCloseable {
     private void publishChange(SessionChangeEvent event) {
         for (SessionChangeListener listener : changeListeners) {
             listener.onSessionChange(event);
+        }
+    }
+
+    private void submitWrite(Runnable action) {
+        if (closing.get()) {
+            return;
+        }
+        try {
+            writeExecutor.execute(() -> {
+                if (closing.get()) {
+                    return;
+                }
+                try {
+                    action.run();
+                } catch (IllegalStateException exception) {
+                    if (!closing.get()) {
+                        throw exception;
+                    }
+                }
+            });
+        } catch (RejectedExecutionException exception) {
+            if (!closing.get()) {
+                throw new IllegalStateException("Session store is shutting down", exception);
+            }
         }
     }
 
@@ -779,11 +905,34 @@ public final class SessionStore implements AutoCloseable {
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
+        if (!closing.compareAndSet(false, true)) {
+            return;
+        }
+        writeExecutor.shutdown();
         try {
-            connection.close();
-        } catch (SQLException exception) {
-            throw new UncheckedIOException(new IOException("Unable to close SQLite session store", exception));
+            if (!writeExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                writeExecutor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            writeExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        synchronized (this) {
+            try {
+                connection.close();
+            } catch (SQLException exception) {
+                throw new UncheckedIOException(new IOException("Unable to close SQLite session store", exception));
+            }
+        }
+    }
+
+    private static final class SessionWriterThreadFactory implements ThreadFactory {
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread thread = Thread.ofPlatform().name("session-store-writer", 0).unstarted(runnable);
+            thread.setDaemon(true);
+            return thread;
         }
     }
 }

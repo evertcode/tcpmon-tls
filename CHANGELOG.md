@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- **UI auth session for browser clients** — the control plane now supports `POST /api/auth/session` and stores UI authentication in an `HttpOnly` cookie; browser SSE no longer relies on `?token=` in the URL
+- **Stronger control plane headers** — responses now include `Content-Security-Policy`, `Referrer-Policy`, and `Permissions-Policy`; the older `X-XSS-Protection` header was removed
+- **Request and replay limits** — JSON request bodies and replay payloads are capped to reduce accidental or abusive oversized submissions
+- **TLS secret preservation on route update** — editing a TLS route from the UI no longer clears stored keystore/truststore passwords when the password fields are left blank
+
+### Reliability
+
+- **Async session persistence off the Netty event loop** — payload and lifecycle writes are serialized through a dedicated writer so proxy traffic is less exposed to SQLite latency
+- **Safer session store shutdown** — async writes are drained cleanly before SQLite closes, avoiding connection-closed races during tests and application shutdown
+- **Bounded control plane executor** — the embedded HTTP server now uses a fixed-size executor with a bounded queue instead of an unbounded cached thread pool
+- **Replay resource reuse** — replay requests now reuse a shared Netty event loop group instead of creating one per replay
+- **Explicit SQLite schema versioning** — the database now uses `PRAGMA user_version` with deterministic migrations and legacy schema detection
+
+### Operations
+
+- **Runtime status endpoint** — `GET /api/runtime` exposes local operational state such as route count, session count, SSE clients, intercept mode, UI TLS status, and token configuration
+- **Separated unit and integration test phases** — `mvn test` runs only unit tests while `mvn verify` runs `*IntegrationTest` via Failsafe
+- **Coverage gate in verify** — JaCoCo now generates reports during `verify` and enforces an initial minimum coverage threshold for the bundle
+
 ## [0.4.0] - 2026-03-17
 
 ### Security

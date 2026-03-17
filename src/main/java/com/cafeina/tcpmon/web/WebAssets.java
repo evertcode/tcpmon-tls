@@ -1143,20 +1143,51 @@ public final class WebAssets {
                     let pendingListRefresh = false;
                     let detailRefreshInFlight = false;
                     let listRefreshInFlight = false;
+                    let authPromptInFlight = null;
                     const payloadHeadersExpanded = {
                       Request: true,
                       Response: true
                     };
 
-                    async function fetchJson(url, options) {
+                    async function fetchJson(url, options, allowAuthRetry = true) {
                       const response = await fetch(url, options);
-                      const data = await response.json();
+                      const data = await response.json().catch(() => ({}));
+                      if (response.status === 401 && allowAuthRetry) {
+                        await ensureAuthSession();
+                        return fetchJson(url, options, false);
+                      }
                       if (!response.ok) {
                         const error = new Error(data.error || 'Request failed');
                         error.payload = data;
                         throw error;
                       }
                       return data;
+                    }
+
+                    async function ensureAuthSession() {
+                      if (authPromptInFlight) {
+                        return authPromptInFlight;
+                      }
+                      authPromptInFlight = (async () => {
+                        const token = window.prompt('Enter the control plane API token');
+                        if (!token) {
+                          throw new Error('Authentication required');
+                        }
+                        const response = await fetch('/api/auth/session', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ token })
+                        });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                          throw new Error(data.error || 'Authentication failed');
+                        }
+                      })();
+                      try {
+                        await authPromptInFlight;
+                      } finally {
+                        authPromptInFlight = null;
+                      }
                     }
 
                     async function refreshSessions(preserveSelection = true) {
@@ -2349,9 +2380,16 @@ public final class WebAssets {
                       }
                     }
 
-                    function connectEventStream() {
+                    async function connectEventStream() {
                       if (eventSource) {
                         eventSource.close();
+                      }
+                      try {
+                        await fetchJson('/api/config');
+                      } catch (error) {
+                        streamMessage = { type: 'error', text: error.message };
+                        renderBanner();
+                        return;
                       }
                       eventSource = new EventSource('/api/events');
                       eventSource.addEventListener('open', () => {
@@ -2361,6 +2399,7 @@ public final class WebAssets {
                       eventSource.addEventListener('error', () => {
                         streamMessage = { type: 'info', text: 'Live updates disconnected. Trying to reconnect...' };
                         renderBanner();
+                        setTimeout(() => connectEventStream(), 1500);
                       });
                       eventSource.addEventListener('session-created', handleSessionChange);
                       eventSource.addEventListener('session-updated', handleSessionChange);
@@ -2625,9 +2664,17 @@ public final class WebAssets {
                       `;
                     }
 
-                    refreshSessions(false);
-                    connectEventStream();
-                    loadConfig();
+                    async function initApp() {
+                      try {
+                        await refreshSessions(false);
+                        await loadConfig();
+                      } catch (error) {
+                        setStatus('error', error.message);
+                      }
+                      await connectEventStream();
+                    }
+
+                    initApp();
                   </script>
                 """;
     }
@@ -2703,10 +2750,12 @@ public final class WebAssets {
                       document.getElementById('rm-listener-tls-cert').value = route.listener.tlsCert || '';
                       document.getElementById('rm-listener-tls-key').value = route.listener.tlsKey || '';
                       document.getElementById('rm-listener-tls-keystore').value = route.listener.tlsKeystore || '';
-                      document.getElementById('rm-listener-tls-keystore-pwd').value = route.listener.tlsKeystorePassword || '';
+                      document.getElementById('rm-listener-tls-keystore-pwd').value = '';
+                      document.getElementById('rm-listener-tls-keystore-pwd').placeholder = route.listener.tlsKeystorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
                       document.getElementById('rm-listener-tls-keystore-type').value = route.listener.tlsKeystoreType || 'PKCS12';
                       document.getElementById('rm-listener-tls-truststore').value = route.listener.tlsTruststore || '';
-                      document.getElementById('rm-listener-tls-truststore-pwd').value = route.listener.tlsTruststorePassword || '';
+                      document.getElementById('rm-listener-tls-truststore-pwd').value = '';
+                      document.getElementById('rm-listener-tls-truststore-pwd').placeholder = route.listener.tlsTruststorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
                       document.getElementById('rm-listener-tls-truststore-type').value = route.listener.tlsTruststoreType || 'PKCS12';
                       document.getElementById('rm-listener-client-auth').value = route.listener.clientAuth || 'NONE';
                       document.getElementById('rm-target-host').value = route.target.host || '';
@@ -2717,10 +2766,12 @@ public final class WebAssets {
                       document.getElementById('rm-target-tls-cert').value = route.target.tlsCert || '';
                       document.getElementById('rm-target-tls-key').value = route.target.tlsKey || '';
                       document.getElementById('rm-target-tls-keystore').value = route.target.tlsKeystore || '';
-                      document.getElementById('rm-target-tls-keystore-pwd').value = route.target.tlsKeystorePassword || '';
+                      document.getElementById('rm-target-tls-keystore-pwd').value = '';
+                      document.getElementById('rm-target-tls-keystore-pwd').placeholder = route.target.tlsKeystorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
                       document.getElementById('rm-target-tls-keystore-type').value = route.target.tlsKeystoreType || 'PKCS12';
                       document.getElementById('rm-target-tls-truststore').value = route.target.tlsTruststore || '';
-                      document.getElementById('rm-target-tls-truststore-pwd').value = route.target.tlsTruststorePassword || '';
+                      document.getElementById('rm-target-tls-truststore-pwd').value = '';
+                      document.getElementById('rm-target-tls-truststore-pwd').placeholder = route.target.tlsTruststorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
                       document.getElementById('rm-target-tls-truststore-type').value = route.target.tlsTruststoreType || 'PKCS12';
                       document.getElementById('rm-target-sni').value = route.target.sniHost || '';
                       document.getElementById('rm-target-insecure').checked = !!route.target.insecureTrustAll;
@@ -2737,6 +2788,18 @@ public final class WebAssets {
                     function tlsFieldVal(id) {
                       const v = document.getElementById(id).value.trim();
                       return v || undefined;
+                    }
+
+                    function secretFieldVal(id, preserveExisting) {
+                      const field = document.getElementById(id);
+                      const value = field.value.trim();
+                      if (value) {
+                        return value;
+                      }
+                      if (routeModalMode === 'edit' && preserveExisting) {
+                        return '__PRESERVE_SECRET__';
+                      }
+                      return undefined;
                     }
 
                     function buildRoutePayload() {
@@ -2763,10 +2826,10 @@ public final class WebAssets {
                         const cert = tlsFieldVal('rm-listener-tls-cert');
                         const key = tlsFieldVal('rm-listener-tls-key');
                         const ks = tlsFieldVal('rm-listener-tls-keystore');
-                        const ksPwd = tlsFieldVal('rm-listener-tls-keystore-pwd');
+                        const ksPwd = secretFieldVal('rm-listener-tls-keystore-pwd', !!(proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeModalEditId)?.listener?.tlsKeystorePasswordConfigured));
                         const ksType = tlsFieldVal('rm-listener-tls-keystore-type');
                         const ts = tlsFieldVal('rm-listener-tls-truststore');
-                        const tsPwd = tlsFieldVal('rm-listener-tls-truststore-pwd');
+                        const tsPwd = secretFieldVal('rm-listener-tls-truststore-pwd', !!(proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeModalEditId)?.listener?.tlsTruststorePasswordConfigured));
                         const tsType = tlsFieldVal('rm-listener-tls-truststore-type');
                         if (cert) payload.listener.tlsCert = cert;
                         if (key) payload.listener.tlsKey = key;
@@ -2782,10 +2845,10 @@ public final class WebAssets {
                         const cert = tlsFieldVal('rm-target-tls-cert');
                         const key = tlsFieldVal('rm-target-tls-key');
                         const ks = tlsFieldVal('rm-target-tls-keystore');
-                        const ksPwd = tlsFieldVal('rm-target-tls-keystore-pwd');
+                        const ksPwd = secretFieldVal('rm-target-tls-keystore-pwd', !!(proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeModalEditId)?.target?.tlsKeystorePasswordConfigured));
                         const ksType = tlsFieldVal('rm-target-tls-keystore-type');
                         const ts = tlsFieldVal('rm-target-tls-truststore');
-                        const tsPwd = tlsFieldVal('rm-target-tls-truststore-pwd');
+                        const tsPwd = secretFieldVal('rm-target-tls-truststore-pwd', !!(proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeModalEditId)?.target?.tlsTruststorePasswordConfigured));
                         const tsType = tlsFieldVal('rm-target-tls-truststore-type');
                         if (cert) payload.target.tlsCert = cert;
                         if (key) payload.target.tlsKey = key;

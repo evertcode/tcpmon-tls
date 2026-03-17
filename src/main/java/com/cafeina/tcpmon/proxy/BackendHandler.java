@@ -41,7 +41,7 @@ final class BackendHandler extends ChannelInboundHandlerAdapter {
         buffer.release();
 
         if (!inboundChannel.isActive()) {
-            sessionStore.recordLifecycle(sessionId, "DROP", Map.of("reason", "client channel unavailable"));
+            sessionStore.recordLifecycleAsync(sessionId, "DROP", Map.of("reason", "client channel unavailable"));
             return;
         }
 
@@ -51,9 +51,9 @@ final class BackendHandler extends ChannelInboundHandlerAdapter {
                     Direction.TARGET_TO_CLIENT,
                     payload,
                     bytes -> inboundChannel.writeAndFlush(Unpooled.wrappedBuffer(bytes)));
-            sessionStore.recordPayload(sessionId, Direction.TARGET_TO_CLIENT, payload, pendingPayload.pendingId(), Map.of("intercepted", true));
+            sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, payload, pendingPayload.pendingId(), Map.of("intercepted", true));
         } else {
-            sessionStore.recordPayload(sessionId, Direction.TARGET_TO_CLIENT, payload, null, Map.of("intercepted", false));
+            sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, payload, null, Map.of("intercepted", false));
             inboundChannel.writeAndFlush(Unpooled.wrappedBuffer(payload));
         }
     }
@@ -65,7 +65,7 @@ final class BackendHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
-        sessionStore.recordLifecycle(sessionId, "TARGET_ERROR", Map.of("error", cause.toString()));
+        sessionStore.recordLifecycleAsync(sessionId, "TARGET_ERROR", Map.of("error", cause.toString()));
         FrontendHandler.closeOnFlush(context.channel());
     }
 
@@ -73,9 +73,9 @@ final class BackendHandler extends ChannelInboundHandlerAdapter {
     public void userEventTriggered(ChannelHandlerContext context, Object event) throws Exception {
         if (event instanceof SslHandshakeCompletionEvent handshakeEvent) {
             if (handshakeEvent.isSuccess()) {
-                sessionStore.recordTls(sessionId, false, sslDetails(context.channel(), handshakeEvent));
+                sessionStore.recordTlsAsync(sessionId, false, sslDetails(context.channel(), handshakeEvent));
             } else {
-                sessionStore.recordLifecycle(sessionId, "TLS_OUTBOUND_FAILED", Map.of("error", handshakeEvent.cause().toString()));
+                sessionStore.recordLifecycleAsync(sessionId, "TLS_OUTBOUND_FAILED", Map.of("error", handshakeEvent.cause().toString()));
             }
         }
         super.userEventTriggered(context, event);

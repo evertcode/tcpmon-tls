@@ -50,7 +50,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 client.getHostString() + ":" + client.getPort(),
                 listener.getHostString() + ":" + listener.getPort(),
                 route.target().host() + ":" + route.target().port());
-        sessionStore.recordLifecycle(sessionId, "CLIENT_CONNECTED", Map.of("client", client.toString()));
+        sessionStore.recordLifecycleAsync(sessionId, "CLIENT_CONNECTED", Map.of("client", client.toString()));
 
         Bootstrap bootstrap = new Bootstrap()
                 .group(inboundChannel.eventLoop())
@@ -61,11 +61,11 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         bootstrap.connect(route.target().host(), route.target().port()).addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
                 outboundChannel = future.channel();
-                sessionStore.recordLifecycle(sessionId, "TARGET_CONNECTED", Map.of("target", future.channel().remoteAddress().toString()));
+                sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECTED", Map.of("target", future.channel().remoteAddress().toString()));
                 inboundChannel.config().setAutoRead(true);
                 inboundChannel.read();
             } else {
-                sessionStore.recordLifecycle(sessionId, "TARGET_CONNECT_FAILED", Map.of("error", future.cause().toString()));
+                sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECT_FAILED", Map.of("error", future.cause().toString()));
                 inboundChannel.close();
             }
         });
@@ -87,7 +87,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         byte[] outboundPayload = rewriteResult.payload();
 
         if (outboundChannel == null || !outboundChannel.isActive()) {
-            sessionStore.recordLifecycle(sessionId, "DROP", Map.of("reason", "outbound channel unavailable"));
+            sessionStore.recordLifecycleAsync(sessionId, "DROP", Map.of("reason", "outbound channel unavailable"));
             return;
         }
 
@@ -97,14 +97,14 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                     Direction.CLIENT_TO_TARGET,
                     outboundPayload,
                     bytes -> outboundChannel.writeAndFlush(Unpooled.wrappedBuffer(bytes)));
-            sessionStore.recordPayload(
+            sessionStore.recordPayloadAsync(
                     sessionId,
                     Direction.CLIENT_TO_TARGET,
                     outboundPayload,
                     pendingPayload.pendingId(),
                     Map.of("intercepted", true, "hostRewritten", rewriteResult.rewritten()));
         } else {
-            sessionStore.recordPayload(
+            sessionStore.recordPayloadAsync(
                     sessionId,
                     Direction.CLIENT_TO_TARGET,
                     outboundPayload,
@@ -118,14 +118,14 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
     public void channelInactive(ChannelHandlerContext context) {
         closeOnFlush(outboundChannel);
         if (sessionId != null) {
-            sessionStore.closeSession(sessionId, "CLIENT_CLOSED");
+            sessionStore.closeSessionAsync(sessionId, "CLIENT_CLOSED");
         }
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
         if (sessionId != null) {
-            sessionStore.recordLifecycle(sessionId, "CLIENT_ERROR", Map.of("error", cause.toString()));
+            sessionStore.recordLifecycleAsync(sessionId, "CLIENT_ERROR", Map.of("error", cause.toString()));
         }
         closeOnFlush(context.channel());
     }
@@ -134,9 +134,9 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
     public void userEventTriggered(ChannelHandlerContext context, Object event) throws Exception {
         if (event instanceof SslHandshakeCompletionEvent handshakeEvent && sessionId != null) {
             if (handshakeEvent.isSuccess()) {
-                sessionStore.recordTls(sessionId, true, sslDetails(context.channel(), handshakeEvent));
+                sessionStore.recordTlsAsync(sessionId, true, sslDetails(context.channel(), handshakeEvent));
             } else {
-                sessionStore.recordLifecycle(sessionId, "TLS_INBOUND_FAILED", Map.of("error", handshakeEvent.cause().toString()));
+                sessionStore.recordLifecycleAsync(sessionId, "TLS_INBOUND_FAILED", Map.of("error", handshakeEvent.cause().toString()));
             }
         }
         super.userEventTriggered(context, event);
