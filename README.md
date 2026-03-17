@@ -4,7 +4,7 @@
 
 `tcpmon-tls` is a Java tool for debugging local and remote integrations over TCP, TLS, and HTTP/HTTPS.
 
-Current release: `0.6.1`
+Current release: `0.6.2`
 
 ![tcpmon-tls control plane](docs/images/tcpmon-tls.png) It lets you inspect `request/response` traffic, intercept payloads, edit HTTP requests, resend them to the target, recapture them through the local listener, and run multiple routes in a single process.
 

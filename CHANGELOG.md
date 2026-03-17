@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.2] - 2026-03-17
+
+### Bug fixes
+
+- **Request table updates live** — the request table now refreshes when the active session receives new data, so new HTTP exchanges appear without waiting for the session to close
+- **Topbar request count** — the subtitle now shows the HTTP request count instead of the TCP session count, which previously understated traffic on keep-alive connections
+
+### Performance
+
+- **Halved DB reads on `/api/sessions`** — session details are now loaded once per session and shared between the session summary and request row aggregation, eliminating a full extra pass through the store on every list refresh
+- **Eliminated per-event `routeIdForSession` queries** — the route ID is now cached in memory when a session opens, removing a synchronised `SELECT` from every payload and lifecycle event recorded during the session lifetime
+
 ## [0.6.1] - 2026-03-17
 
 ### Control plane fixes
