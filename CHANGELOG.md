@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0] - 2026-03-17
+
+### Control plane UI
+
+- **Static web assets and modular frontend** — the control plane UI is now served from classpath assets instead of a single embedded Java string, with JavaScript split by domain (`state`, `api`, `routes`, `sessions`, `details`, `actions`, `route-modal`)
+- **Centralized frontend state** — the UI now uses an explicit store (`uiState`, `getState`, `setState`, `patchState`) instead of ad hoc globals, making refresh, SSE updates, and selection flows more predictable
+- **Safer DOM rendering** — major route, session, and detail panels no longer depend on large `innerHTML` blocks or inline event handlers; UI events are delegated through `data-action`
+- **Route header redesign** — the selected route card now emphasizes operational context with route health metrics and active request context instead of a flat metadata row
+- **Favicon and asset cleanup** — the web UI now ships a dedicated `favicon.svg`, and static assets are organized under `/assets/js` and `/assets/styles`
+
+### Reliability and tests
+
+- **Frontend helper test suite** — added `node --test` coverage for core web helpers and route-header derivation logic
+- **Combined project validation** — `npm run test:all` runs frontend helper tests and Maven tests together, and CI workflows use that command before packaging
+- **Live/request context fixes** — the route header now refreshes selected request and client context from the active session instead of staying pinned to the first route summary
+- **Direction parsing fix** — client-to-target and target-to-client detection no longer rely on ambiguous substring matching, fixing TTFB and related UI calculations
+
 ## [0.5.0] - 2026-03-17
 
 ### Security

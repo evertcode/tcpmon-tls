@@ -801,6 +801,9 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (assetName.endsWith(".html")) {
             return "text/html; charset=utf-8";
         }
+        if (assetName.endsWith(".svg")) {
+            return "image/svg+xml";
+        }
         return "application/octet-stream";
     }
 

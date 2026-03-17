@@ -210,6 +210,7 @@ class ControlPlaneServerTest {
     @Test
     void loadsStaticWebAssetsFromClasspath() {
         String index = ControlPlaneServer.readWebText("/index.html");
+        String favicon = ControlPlaneServer.readWebText("/favicon.svg");
         String stateJs = ControlPlaneServer.readWebText("/js/state.js");
         String js = ControlPlaneServer.readWebText("/js/app.js");
         String css = ControlPlaneServer.readWebText("/styles/app.css");
@@ -218,6 +219,8 @@ class ControlPlaneServerTest {
         String detailsJs = ControlPlaneServer.readWebText("/js/details.js");
         String actionsJs = ControlPlaneServer.readWebText("/js/actions.js");
 
+        assertTrue(index.contains("/assets/favicon.svg"));
+        assertTrue(favicon.contains("<svg"));
         assertTrue(index.contains("/assets/styles/app.css"));
         assertTrue(index.contains("/assets/js/state.js"));
         assertTrue(index.contains("/assets/js/utils.js"));
@@ -259,6 +262,7 @@ class ControlPlaneServerTest {
         assertEquals("text/css; charset=utf-8", ControlPlaneServer.assetContentType("app.css"));
         assertEquals("text/javascript; charset=utf-8", ControlPlaneServer.assetContentType("app.js"));
         assertEquals("text/html; charset=utf-8", ControlPlaneServer.assetContentType("index.html"));
+        assertEquals("image/svg+xml", ControlPlaneServer.assetContentType("favicon.svg"));
         assertEquals("application/octet-stream", ControlPlaneServer.assetContentType("binary.bin"));
     }
 }

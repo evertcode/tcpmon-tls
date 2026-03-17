@@ -318,7 +318,7 @@ test('buildRouteHeaderViewModel splits route health from active selection contex
   assert.equal(model.liveCount, 1);
   assert.equal(model.pendingCount, 3);
   assert.equal(model.avgDurationMs, 150);
-  assert.equal(model.activeSelection.label, 'POST /v1/messages');
   assert.equal(model.activeSelection.clientAddress, '127.0.0.1:54000');
   assert.equal(model.activeSelection.statusCode, '');
+  assert.equal(model.activeSelection.durationMs, null);
 });

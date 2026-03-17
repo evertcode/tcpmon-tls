@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="tcpmon-tls favicon">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f6cbd"/>
+      <stop offset="1" stop-color="#106c5a"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="url(#bg)"/>
+  <rect x="18" y="17" width="10" height="10" rx="3" fill="#ffffff" fill-opacity="0.95"/>
+  <rect x="36" y="37" width="10" height="10" rx="3" fill="#ffffff" fill-opacity="0.95"/>
+  <path d="M24 32h7l4-8 5 16 3-8h7" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
+  <circle cx="24" cy="32" r="2.5" fill="#dff4ff"/>
+  <circle cx="50" cy="32" r="2.5" fill="#d8fff5"/>
+</svg>

@@ -5,7 +5,7 @@
 
     <groupId>com.cafeina</groupId>
     <artifactId>tcpmon-tls</artifactId>
-    <version>0.5.0</version>
+    <version>0.6.0</version>
     <name>tcpmon-tls</name>
     <description>TCP/TLS monitor tool</description>
 

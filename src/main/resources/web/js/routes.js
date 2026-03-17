@@ -134,7 +134,6 @@ function buildActiveSelectionViewModel(activeSession, selectedSessionId) {
   if (!activeSession) {
     return {
       empty: true,
-      label: 'No request selected',
       clientAddress: 'Select a captured request to inspect client, status, duration and timing.',
       statusCode: '',
       durationMs: null,
@@ -143,7 +142,6 @@ function buildActiveSelectionViewModel(activeSession, selectedSessionId) {
   }
   return {
     empty: false,
-    label: buildSelectedSessionLabel(activeSession, selectedSessionId),
     clientAddress: activeSession.clientAddress || 'Unknown client',
     statusCode: String(activeSession.responseStatusCode || ''),
     durationMs: activeSession.durationMs == null ? null : Number(activeSession.durationMs),
@@ -580,24 +578,14 @@ function buildActiveSelectionPanel(selection) {
   const panel = document.createElement('section');
   panel.className = `route-selection-panel${selection.empty ? ' empty' : ''}`;
 
-  const header = document.createElement('div');
-  header.className = 'route-selection-header';
-
-  const eyebrow = document.createElement('span');
-  eyebrow.className = 'label';
-  eyebrow.textContent = 'Selected request';
-
-  const title = document.createElement('div');
-  title.className = `route-selection-request mono${selection.empty ? ' muted' : ''}`;
-  title.textContent = selection.label;
-
-  header.append(eyebrow, title);
-
   if (selection.empty) {
+    const eyebrow = document.createElement('span');
+    eyebrow.className = 'label';
+    eyebrow.textContent = 'Request context';
     const emptyCopy = document.createElement('div');
     emptyCopy.className = 'route-selection-empty';
     emptyCopy.textContent = selection.clientAddress;
-    panel.append(header, emptyCopy);
+    panel.append(eyebrow, emptyCopy);
     return panel;
   }
 
@@ -610,7 +598,7 @@ function buildActiveSelectionPanel(selection) {
     buildSelectionMetaItem('Started', formatTime(selection.startedAt) || '—', 'route-selection-value')
   );
 
-  panel.append(header, grid);
+  panel.append(grid);
   return panel;
 }
 
