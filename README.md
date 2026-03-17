@@ -14,6 +14,8 @@
 - interception, structured editing, and forwarding of requests
 - replay to the target and recapture through the local listener
 - `TLS` and `mTLS` support for inbound and outbound connections
+- optional Bearer token authentication for the web UI
+- optional HTTPS for the control plane
 - `JSON` or `YAML` config file for application-level settings only
 
 ## Typical use cases
@@ -80,7 +82,7 @@ mvn -q package -DskipTests
 Resulting jar:
 
 ```text
-target/tcpmon-tls-0.3.0-SNAPSHOT.jar
+target/tcpmon-tls-0.4.0-SNAPSHOT.jar
 ```
 
 ## Quick start
@@ -88,7 +90,7 @@ target/tcpmon-tls-0.3.0-SNAPSHOT.jar
 Start the proxy:
 
 ```bash
-java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar
+java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar
 ```
 
 Open the UI and create routes from there:
@@ -167,15 +169,15 @@ The config file manages **application-level settings only**. Routes are stored i
 Generate an example:
 
 ```bash
-java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --init-config tcpmon.json
+java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar --init-config tcpmon.json
 # or
-java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --init-config tcpmon.yaml
+java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar --init-config tcpmon.yaml
 ```
 
 Start with a config file:
 
 ```bash
-java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar --config tcpmon.json
 ```
 
 ### Config file fields
@@ -185,7 +187,11 @@ java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --config tcpmon.json
   "ui": {
     "host": "127.0.0.1",
     "port": 8080,
-    "enabled": true
+    "enabled": true,
+    "apiToken": "your-secret-token",
+    "tlsKeystore": "./ui-keystore.p12",
+    "tlsKeystorePassword": "changeit",
+    "tlsKeystoreType": "PKCS12"
   },
   "sessionsDir": "./sessions",
   "interceptMode": "NONE",
@@ -194,6 +200,8 @@ java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar --config tcpmon.json
 }
 ```
 
+`apiToken`, `tlsKeystore`, `tlsKeystorePassword`, and `tlsKeystoreType` are optional. Omit them to run without authentication or HTTPS.
+
 The same in `YAML`:
 
 ```yaml
@@ -201,6 +209,7 @@ ui:
   host: 127.0.0.1
   port: 8080
   enabled: true
+  apiToken: your-secret-token
 sessionsDir: ./sessions
 interceptMode: NONE
 tlsProtocols:
@@ -211,10 +220,11 @@ tlsProtocols:
 ### CLI flags
 
 ```bash
-java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar \
+java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar \
   --ui-host 127.0.0.1 \
   --ui-port 8080 \
   --ui-enabled=true \
+  --ui-token your-secret-token \
   --sessions-dir ./sessions \
   --intercept-mode NONE \
   --config tcpmon.json
@@ -227,6 +237,10 @@ java -jar target/tcpmon-tls-0.3.0-SNAPSHOT.jar \
 | `--ui-host` | Bind address for the web UI |
 | `--ui-port` | Port for the web UI |
 | `--ui-enabled` | Enable or disable the web UI |
+| `--ui-token` | Bearer token required on all `/api/*` requests; omit to disable auth |
+| `--ui-tls-keystore` | Keystore path to enable HTTPS for the control plane |
+| `--ui-tls-keystore-password` | Password for the UI TLS keystore |
+| `--ui-tls-keystore-type` | Keystore type (`PKCS12` by default) |
 | `--sessions-dir` | Directory for the SQLite session database |
 | `--intercept-mode` | `NONE`, `REQUEST`, `RESPONSE`, or `BOTH` |
 
@@ -289,13 +303,61 @@ For intercepted payloads:
 
 The topbar exposes a `Config` button that shows the active proxy configuration: routes, listener and target addresses, transport modes, and intercept mode. This reads from `GET /api/config`.
 
+## Security
+
+### Authentication
+
+When `--ui-token` is set, every `/api/*` request must include:
+
+```
+Authorization: Bearer your-secret-token
+```
+
+The SSE endpoint (`/api/events`) also accepts the token as a query parameter for browser `EventSource` clients that cannot set custom headers:
+
+```
+GET /api/events?token=your-secret-token
+```
+
+When the flag is omitted, the API is open (default for local use).
+
+### HTTPS for the control plane
+
+Provide a PKCS12 or JKS keystore to serve the UI over HTTPS:
+
+```bash
+java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar \
+  --ui-tls-keystore ./ui.p12 \
+  --ui-tls-keystore-password changeit
+```
+
+The control plane is then available at `https://127.0.0.1:8080/`.
+
+### Encrypted passwords at rest
+
+Keystore and truststore passwords stored in the SQLite database are encrypted with **AES-256-GCM**. A 256-bit key is generated automatically on first run and written to `sessions/db.key`. On POSIX systems the file is created with `600` permissions. Existing databases with plaintext passwords are migrated transparently on first read.
+
+Do not delete or move `db.key` while routes with TLS passwords exist in the database — it is required to decrypt them.
+
+### HTTP security headers
+
+All responses include:
+
+| Header | Value |
+|---|---|
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-XSS-Protection` | `1; mode=block` |
+| `Cache-Control` | `no-store` |
+
 ## Persistence
 
 Session history and routes are stored under the directory configured in `sessionsDir`.
 
 ```text
 sessions/
-└── sessions.db
+├── sessions.db   # SQLite database (routes, sessions, events)
+└── db.key        # AES-256-GCM encryption key for stored passwords
 ```
 
 ### What is stored
@@ -349,6 +411,7 @@ src/main/java/com/cafeina/tcpmon/
 ├── config/     # JSON/YAML config loading
 ├── proxy/      # listeners, bridges, and HTTP rewriting
 ├── replay/     # resend to listener or target
+├── security/   # AES-256-GCM password encryption (PasswordEncryptor)
 ├── session/    # session model and persistence
 ├── tls/        # TLS context construction
 ├── util/       # helpers

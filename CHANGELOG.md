@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0] - 2026-03-17
+
+### Security
+
+- **Bearer token authentication** — all `/api/*` endpoints reject requests without a valid `Authorization: Bearer <token>` header when `--ui-token` is set; the SSE endpoint also accepts `?token=` as a query parameter for browser `EventSource` clients that cannot set custom headers. When the flag is omitted, authentication is disabled (backward-compatible default)
+- **HTTPS for the control plane** — `--ui-tls-keystore` (plus `--ui-tls-keystore-password` and `--ui-tls-keystore-type`) enables HTTPS on the web UI using the JDK `HttpsServer`; plain HTTP remains the default when the flag is absent
+- **Encrypted passwords at rest** — keystore and truststore passwords stored in the SQLite `routes` table are now encrypted with AES-256-GCM; a 256-bit key is auto-generated on first run and written to `sessions/db.key` (POSIX permissions: `600`); existing plaintext values in older databases are read transparently (no migration needed)
+- **Password masking in API** — `GET /api/config` no longer includes keystore or truststore passwords in its response payload
+- **HTTP security headers** — every HTTP response now includes `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`, and `Cache-Control: no-store`
+- **Route input validation** — listener host, target host, and SNI host are validated against a safe character allowlist; values containing shell injection characters (`; | & \` $ < > " '`) are rejected with `HTTP 400`
+
+---
+
 ## [0.3.0] - 2026-03-16
 
 ### Route management from the UI
