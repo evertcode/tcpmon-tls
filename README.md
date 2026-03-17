@@ -411,6 +411,10 @@ npm run test:web
 
 `npm run test:all` runs both suites. `mvn -q test` covers the Java backend and control plane. `npm run test:web` runs the lightweight frontend helper suite with Node's built-in test runner, without extra dependencies.
 
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
+
 ## Project structure
 
 ```text
