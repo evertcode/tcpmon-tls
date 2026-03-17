@@ -366,7 +366,7 @@ function renderEventsAndEditor(data) {
 
   const body = document.createElement('div');
   body.style.marginTop = '12px';
-  body.appendChild(htmlToFragment(renderExchangeButtons(exchanges)));
+  body.appendChild(buildExchangeButtons(exchanges));
   if (pendingEvents.length) {
     body.appendChild(buildInterceptPanel(pendingEvents));
   }
@@ -534,25 +534,40 @@ function timelineConfig(event) {
   }
 }
 
-function renderExchangeButtons(exchanges) {
+function buildExchangeButtons(exchanges) {
   const diffMode = getState('diffMode');
   const activeExchangeIndex = getState('activeExchangeIndex');
   if (exchanges.length <= 1) {
     setState('diffMode', false);
-    return '';
+    return document.createDocumentFragment();
   }
-  const compareBtn = exchanges.length >= 2
-    ? `<button class="${diffMode ? 'primary' : 'secondary'}" data-action="toggle-diff-mode">Compare</button>`
-    : '';
-  return `
-    <div class="actions" style="margin:0 0 10px;">
-      ${exchanges.map(exchange => `
-        <button class="${!diffMode && exchange.index === activeExchangeIndex ? 'primary' : 'secondary'}" data-action="select-exchange" data-exchange-index="${escapeAttr(exchange.index)}">${escapeHtml(exchange.index + 1)}</button>
-      `).join('')}
-      ${compareBtn}
-    </div>
-    ${diffMode ? renderExchangeDiff(exchanges) : ''}
-  `;
+  const fragment = document.createDocumentFragment();
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  actions.style.margin = '0 0 10px';
+
+  for (const exchange of exchanges) {
+    const button = document.createElement('button');
+    button.className = !diffMode && exchange.index === activeExchangeIndex ? 'primary' : 'secondary';
+    button.dataset.action = 'select-exchange';
+    button.dataset.exchangeIndex = String(exchange.index);
+    button.textContent = String(exchange.index + 1);
+    actions.appendChild(button);
+  }
+
+  if (exchanges.length >= 2) {
+    const compareButton = document.createElement('button');
+    compareButton.className = diffMode ? 'primary' : 'secondary';
+    compareButton.dataset.action = 'toggle-diff-mode';
+    compareButton.textContent = 'Compare';
+    actions.appendChild(compareButton);
+  }
+
+  fragment.appendChild(actions);
+  if (diffMode) {
+    fragment.appendChild(buildExchangeDiff(exchanges));
+  }
+  return fragment;
 }
 
 function toggleDiffMode() {
@@ -569,21 +584,21 @@ function toggleDiffMode() {
   }
 }
 
-function renderExchangeDiff(exchanges) {
-  if (exchanges.length < 2) return '';
+function buildExchangeDiff(exchanges) {
+  if (exchanges.length < 2) return document.createDocumentFragment();
   const rows = [];
   const ex0 = exchanges[0];
   const ex1 = exchanges[1];
   const status0 = extractExchangeStatus(ex0);
   const status1 = extractExchangeStatus(ex1);
-  rows.push(diffRow('Status', status0, status1));
+  rows.push(buildDiffRow('Status', status0, status1));
   const reqH0 = extractHeaders(ex0.request);
   const reqH1 = extractHeaders(ex1.request);
   const allReqKeys = [...new Set([...Object.keys(reqH0), ...Object.keys(reqH1)])].sort();
   for (const key of allReqKeys) {
     const v0 = reqH0[key] ?? '';
     const v1 = reqH1[key] ?? '';
-    if (v0 !== v1) rows.push(diffRow('Req: ' + key, v0, v1));
+    if (v0 !== v1) rows.push(buildDiffRow('Req: ' + key, v0, v1));
   }
   const resH0 = extractHeaders(ex0.response);
   const resH1 = extractHeaders(ex1.response);
@@ -591,41 +606,102 @@ function renderExchangeDiff(exchanges) {
   for (const key of allResKeys) {
     const v0 = resH0[key] ?? '';
     const v1 = resH1[key] ?? '';
-    if (v0 !== v1) rows.push(diffRow('Res: ' + key, v0, v1));
+    if (v0 !== v1) rows.push(buildDiffRow('Res: ' + key, v0, v1));
   }
   if (!rows.length) {
-    return '<div class="muted" style="font-size:12px;margin-bottom:10px;">No differences between Exchange 1 and Exchange 2.</div>';
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.style.fontSize = '12px';
+    empty.style.marginBottom = '10px';
+    empty.textContent = 'No differences between Exchange 1 and Exchange 2.';
+    return empty;
   }
-  return `
-    <div style="margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-      <table style="width:100%;font-size:12px;border-collapse:collapse;">
-        <thead>
-          <tr style="background:var(--surface-2);">
-            <th style="padding:8px 10px;text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;width:28%;">Field</th>
-            <th style="padding:8px 10px;text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;">Exchange 1</th>
-            <th style="padding:8px 10px;text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;">Exchange 2</th>
-          </tr>
-        </thead>
-        <tbody>${rows.join('')}</tbody>
-      </table>
-    </div>
-  `;
+
+  const wrap = document.createElement('div');
+  wrap.style.marginBottom = '12px';
+  wrap.style.border = '1px solid var(--border)';
+  wrap.style.borderRadius = '10px';
+  wrap.style.overflow = 'hidden';
+
+  const table = document.createElement('table');
+  table.style.width = '100%';
+  table.style.fontSize = '12px';
+  table.style.borderCollapse = 'collapse';
+
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  headerRow.style.background = 'var(--surface-2)';
+  headerRow.append(
+    buildDiffHeader('Field', '28%'),
+    buildDiffHeader('Exchange 1'),
+    buildDiffHeader('Exchange 2')
+  );
+  thead.appendChild(headerRow);
+
+  const tbody = document.createElement('tbody');
+  tbody.append(...rows);
+  table.append(thead, tbody);
+  wrap.appendChild(table);
+  return wrap;
 }
 
-function diffRow(label, v0, v1) {
+function buildDiffHeader(label, width = null) {
+  const th = document.createElement('th');
+  th.style.padding = '8px 10px';
+  th.style.textAlign = 'left';
+  th.style.color = 'var(--text-muted)';
+  th.style.fontSize = '11px';
+  th.style.textTransform = 'uppercase';
+  th.style.letterSpacing = '.04em';
+  if (width) {
+    th.style.width = width;
+  }
+  th.textContent = label;
+  return th;
+}
+
+function buildDiffRow(label, v0, v1) {
   const changed = v0 !== v1;
-  const style = changed ? 'background:rgba(161,92,7,0.05);' : '';
-  const cell = (v, other) => {
-    if (!v && other) return '<span style="color:var(--text-muted);">—</span>';
-    if (v && !other) return `<span style="color:var(--ok);">${escapeHtml(v)}</span>`;
-    if (changed) return `<span style="font-family:var(--mono);word-break:break-all;">${escapeHtml(v)}</span>`;
-    return `<span style="font-family:var(--mono);color:var(--text-muted);word-break:break-all;">${escapeHtml(v)}</span>`;
-  };
-  return `<tr style="${style}border-bottom:1px solid var(--border);">
-    <td style="padding:7px 10px;color:var(--text-muted);">${escapeHtml(label)}</td>
-    <td style="padding:7px 10px;">${cell(v0, v1)}</td>
-    <td style="padding:7px 10px;">${cell(v1, v0)}</td>
-  </tr>`;
+  const row = document.createElement('tr');
+  if (changed) {
+    row.style.background = 'rgba(161,92,7,0.05)';
+  }
+  row.style.borderBottom = '1px solid var(--border)';
+  row.append(
+    buildDiffLabelCell(label),
+    buildDiffValueCell(v0, v1, changed),
+    buildDiffValueCell(v1, v0, changed)
+  );
+  return row;
+}
+
+function buildDiffLabelCell(label) {
+  const td = document.createElement('td');
+  td.style.padding = '7px 10px';
+  td.style.color = 'var(--text-muted)';
+  td.textContent = label;
+  return td;
+}
+
+function buildDiffValueCell(value, otherValue, changed) {
+  const td = document.createElement('td');
+  td.style.padding = '7px 10px';
+  const span = document.createElement('span');
+  if (!value && otherValue) {
+    span.style.color = 'var(--text-muted)';
+    span.textContent = '—';
+  } else {
+    span.style.fontFamily = 'var(--mono)';
+    span.style.wordBreak = 'break-all';
+    if (value && !otherValue) {
+      span.style.color = 'var(--ok)';
+    } else if (!changed) {
+      span.style.color = 'var(--text-muted)';
+    }
+    span.textContent = value;
+  }
+  td.appendChild(span);
+  return td;
 }
 
 function extractExchangeStatus(exchange) {

@@ -23,6 +23,11 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Resolve version and validate tag
         id: version
         shell: bash
@@ -39,8 +44,11 @@ jobs:
           echo "clean_version=${clean_version}" >> "$GITHUB_OUTPUT"
           echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
 
+      - name: Run backend and frontend tests
+        run: npm run test:all
+
       - name: Build shaded jar
-        run: mvn -q package
+        run: mvn -q package -DskipTests
 
       - name: Rename jar artifact
         shell: bash

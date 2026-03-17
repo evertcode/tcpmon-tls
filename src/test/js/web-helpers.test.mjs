@@ -8,7 +8,81 @@ const repoRoot = path.resolve(import.meta.dirname, '..', '..', '..');
 const webRoot = path.join(repoRoot, 'src', 'main', 'resources', 'web');
 const jsRoot = path.join(webRoot, 'js');
 
+class FakeNode {
+  constructor(tagName, nodeType = 'element') {
+    this.tagName = tagName;
+    this.nodeType = nodeType;
+    this.children = [];
+    this.dataset = {};
+    this.style = {};
+    this.className = '';
+    this.id = '';
+    this._textContent = '';
+  }
+
+  appendChild(child) {
+    this.children.push(child);
+    return child;
+  }
+
+  append(...items) {
+    for (const item of items) {
+      if (typeof item === 'string') {
+        this.appendChild(new FakeNode('#text', 'text')).textContent = item;
+      } else {
+        this.appendChild(item);
+      }
+    }
+  }
+
+  replaceChildren(...items) {
+    this.children = [];
+    this.append(...items);
+  }
+
+  set textContent(value) {
+    this._textContent = String(value);
+  }
+
+  get textContent() {
+    if (this.nodeType === 'text') {
+      return this._textContent;
+    }
+    if (this.children.length) {
+      return this.children.map(child => child.textContent).join('');
+    }
+    return this._textContent;
+  }
+}
+
+class FakeDocument {
+  createElement(tagName) {
+    return new FakeNode(tagName);
+  }
+
+  createDocumentFragment() {
+    return new FakeNode('#fragment', 'fragment');
+  }
+
+  createTextNode(text) {
+    const node = new FakeNode('#text', 'text');
+    node.textContent = text;
+    return node;
+  }
+
+  createRange() {
+    return {
+      createContextualFragment: html => {
+        const fragment = this.createDocumentFragment();
+        fragment.html = html;
+        return fragment;
+      }
+    };
+  }
+}
+
 function createBrowserLikeContext() {
+  const document = new FakeDocument();
   const context = {
     console,
     Date,
@@ -18,7 +92,7 @@ function createBrowserLikeContext() {
     Blob,
     navigator: {},
     fetch: () => { throw new Error('fetch not implemented in unit test'); },
-    document: {},
+    document,
     window: null,
     globalThis: null
   };
@@ -34,6 +108,7 @@ function loadScript(context, fileName) {
 
 function loadWebHelpers() {
   const context = createBrowserLikeContext();
+  loadScript(context, 'state.js');
   loadScript(context, 'utils.js');
   loadScript(context, 'details.js');
   loadScript(context, 'actions.js');
@@ -124,4 +199,38 @@ test('generateCurl builds a reproducible curl command from decoded request data'
       "  -H 'X-Custom: it\\'s ok' \\\n" +
       "  -d '{\"hello\":\"world\"}'"
   );
+});
+
+test('buildPayloadActionButton creates a button with dataset and label', () => {
+  const ctx = loadWebHelpers();
+
+  const button = ctx.buildPayloadActionButton('primary action-main', 'replay-payload', {
+    routeId: 'route-a',
+    destination: 'listener'
+  }, 'Recapture request');
+
+  assert.equal(button.tagName, 'button');
+  assert.equal(button.className, 'primary action-main');
+  assert.equal(button.dataset.action, 'replay-payload');
+  assert.equal(button.dataset.routeId, 'route-a');
+  assert.equal(button.dataset.destination, 'listener');
+  assert.equal(button.textContent, 'Recapture request');
+});
+
+test('buildExchangeButtons creates exchange selectors and compare action', () => {
+  const ctx = loadWebHelpers();
+  ctx.patchState({
+    diffMode: false,
+    activeExchangeIndex: 1
+  });
+
+  const fragment = ctx.buildExchangeButtons([{ index: 0 }, { index: 1 }, { index: 2 }]);
+  const actions = fragment.children[0];
+
+  assert.equal(actions.className, 'actions');
+  assert.equal(actions.children.length, 4);
+  assert.equal(actions.children[0].dataset.action, 'select-exchange');
+  assert.equal(actions.children[1].className, 'primary');
+  assert.equal(actions.children[3].dataset.action, 'toggle-diff-mode');
+  assert.equal(actions.children[3].textContent, 'Compare');
 });

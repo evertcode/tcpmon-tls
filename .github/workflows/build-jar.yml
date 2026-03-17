@@ -21,8 +21,16 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Run backend and frontend tests
+        run: npm run test:all
+
       - name: Build shaded jar
-        run: mvn -q package
+        run: mvn -q package -DskipTests
 
       - name: Resolve artifact version
         id: version
