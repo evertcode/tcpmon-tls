@@ -37,12 +37,26 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
+          target_jar="target/tcpmon-tls-${{ steps.version.outputs.clean_version }}.jar"
+          raw_jar="target/tcpmon-tls-${{ steps.version.outputs.raw_version }}.jar"
+          if [[ -f "$target_jar" ]]; then
+            echo "Jar already has release name: $target_jar"
+            exit 0
+          fi
+          if [[ -f "$raw_jar" ]]; then
+            cp "$raw_jar" "$target_jar"
+            exit 0
+          fi
           jars=(target/tcpmon-tls-*.jar)
           for jar in "${jars[@]}"; do
-            if [[ "$jar" == *"-sources.jar" || "$jar" == *"-javadoc.jar" ]]; then
+            if [[ "$jar" == *"-sources.jar" || "$jar" == *"-javadoc.jar" || "$jar" == *"/original-"* ]]; then
               continue
             fi
-            cp "$jar" "target/tcpmon-tls-${{ steps.version.outputs.clean_version }}.jar"
+            if [[ "$jar" == "$target_jar" ]]; then
+              echo "Jar already has release name: $target_jar"
+              exit 0
+            fi
+            cp "$jar" "$target_jar"
             exit 0
           done
           echo "No packaged jar found in target/" >&2
