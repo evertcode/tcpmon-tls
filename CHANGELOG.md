@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1] - 2026-03-17
+
+### Control plane fixes
+
+- **Keep-alive request rows restored** — the request table now shows one row per HTTP exchange inside a reused connection instead of appearing to overwrite the previous request with the latest exchange
+- **Request selection tracks exchange index** — selecting a row in the table now opens the correct exchange in the detail view, including keep-alive sessions with multiple requests on the same TCP connection
+- **Route summaries stay route-based** — route health, live state, and pending counts still derive from connection/session summaries while the request table derives from expanded per-exchange rows
+
+### Tests
+
+- **Regression coverage for keep-alive summaries** — backend and frontend tests now cover per-exchange request rows for reused HTTP connections
+
 ## [0.6.0] - 2026-03-17
 
 ### Control plane UI
