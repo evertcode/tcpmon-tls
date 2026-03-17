@@ -82,7 +82,7 @@ mvn -q package -DskipTests
 Resulting jar:
 
 ```text
-target/tcpmon-tls-0.4.0-SNAPSHOT.jar
+target/tcpmon-tls-0.5.0.jar
 ```
 
 ## Quick start
@@ -90,7 +90,7 @@ target/tcpmon-tls-0.4.0-SNAPSHOT.jar
 Start the proxy:
 
 ```bash
-java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar
+java -jar target/tcpmon-tls-0.5.0.jar
 ```
 
 Open the UI and create routes from there:
@@ -169,15 +169,15 @@ The config file manages **application-level settings only**. Routes are stored i
 Generate an example:
 
 ```bash
-java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar --init-config tcpmon.json
+java -jar target/tcpmon-tls-0.5.0.jar --init-config tcpmon.json
 # or
-java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar --init-config tcpmon.yaml
+java -jar target/tcpmon-tls-0.5.0.jar --init-config tcpmon.yaml
 ```
 
 Start with a config file:
 
 ```bash
-java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.5.0.jar --config tcpmon.json
 ```
 
 ### Config file fields
@@ -220,7 +220,7 @@ tlsProtocols:
 ### CLI flags
 
 ```bash
-java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar \
+java -jar target/tcpmon-tls-0.5.0.jar \
   --ui-host 127.0.0.1 \
   --ui-port 8080 \
   --ui-enabled=true \
@@ -326,7 +326,7 @@ When the flag is omitted, the API is open (default for local use).
 Provide a PKCS12 or JKS keystore to serve the UI over HTTPS:
 
 ```bash
-java -jar target/tcpmon-tls-0.4.0-SNAPSHOT.jar \
+java -jar target/tcpmon-tls-0.5.0.jar \
   --ui-tls-keystore ./ui.p12 \
   --ui-tls-keystore-password changeit
 ```
