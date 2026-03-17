@@ -22,17 +22,25 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsServer;
 
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.Duration;
-import java.time.Instant;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -42,8 +50,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 public final class ControlPlaneServer implements AutoCloseable {
+    private static final Pattern SAFE_HOSTNAME = Pattern.compile("^[a-zA-Z0-9.\\-_:\\[\\]%*]+$");
+
     private final ProxyConfig proxyConfig;
     private final RouteRegistry registry;
     private final TcpMonProxy proxy;
@@ -65,7 +76,18 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     public void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(config.host(), config.port()), 0);
+        InetSocketAddress address = new InetSocketAddress(config.host(), config.port());
+        if (config.tlsMaterial() != null) {
+            try {
+                HttpsServer httpsServer = HttpsServer.create(address, 0);
+                httpsServer.setHttpsConfigurator(new HttpsConfigurator(buildSslContext(config.tlsMaterial())));
+                server = httpsServer;
+            } catch (GeneralSecurityException e) {
+                throw new IOException("Failed to configure HTTPS for control plane", e);
+            }
+        } else {
+            server = HttpServer.create(address, 0);
+        }
         server.createContext("/", this::handleRoot);
         server.createContext("/api/events", this::handleEvents);
         server.createContext("/api/sessions", this::handleSessions);
@@ -87,6 +109,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private void handleSessions(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
         String path = exchange.getRequestURI().getPath();
         if ("GET".equalsIgnoreCase(exchange.getRequestMethod()) && "/api/sessions".equals(path)) {
             sendJson(exchange, 200, Map.of("sessions", summarizeSessions()));
@@ -108,6 +131,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private void handleEvents(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, Map.of("error", "method not allowed"));
             return;
@@ -116,6 +140,8 @@ public final class ControlPlaneServer implements AutoCloseable {
         exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-cache");
         exchange.getResponseHeaders().set("Connection", "keep-alive");
+        exchange.getResponseHeaders().set("X-Frame-Options", "DENY");
+        exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
         exchange.sendResponseHeaders(200, 0);
 
         SseClient client = new SseClient(exchange);
@@ -130,6 +156,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private void handlePending(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod()) || !exchange.getRequestURI().getPath().endsWith("/forward")) {
             sendJson(exchange, 405, Map.of("error", "method not allowed"));
             return;
@@ -153,6 +180,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private void handleReplay(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, Map.of("error", "method not allowed"));
             return;
@@ -197,6 +225,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private void handleConfig(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             sendJson(exchange, 405, Map.of("error", "method not allowed"));
             return;
@@ -205,6 +234,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     }
 
     private void handleRoutes(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
         String method = exchange.getRequestMethod().toUpperCase();
         String path = exchange.getRequestURI().getPath();
 
@@ -319,6 +349,7 @@ public final class ControlPlaneServer implements AutoCloseable {
 
         JsonNode listenerNode = body.path("listener");
         String listenerHost = listenerNode.path("host").asText("0.0.0.0");
+        validateHostname(listenerHost, "Listener host");
         int listenerPort = listenerNode.path("port").asInt(0);
         if (listenerPort < 1 || listenerPort > 65535) {
             throw new IllegalArgumentException("Listener port must be between 1 and 65535");
@@ -331,12 +362,16 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (targetHost.isBlank()) {
             throw new IllegalArgumentException("Target host is required");
         }
+        validateHostname(targetHost, "Target host");
         int targetPort = targetNode.path("port").asInt(0);
         if (targetPort < 1 || targetPort > 65535) {
             throw new IllegalArgumentException("Target port must be between 1 and 65535");
         }
         TransportMode targetTransport = parseTransport(targetNode.path("transport").asText("PLAIN"));
         String sniHost = targetNode.path("sniHost").isNull() ? null : targetNode.path("sniHost").asText(null);
+        if (sniHost != null && !sniHost.isBlank()) {
+            validateHostname(sniHost, "SNI host");
+        }
         boolean insecureTrustAll = targetNode.path("insecureTrustAll").asBoolean(false);
         boolean verifyHostname = targetNode.path("verifyHostname").asBoolean(true);
         boolean rewriteHostHeader = targetNode.path("rewriteHostHeader").asBoolean(false);
@@ -347,6 +382,15 @@ public final class ControlPlaneServer implements AutoCloseable {
         ListenerConfig listener = new ListenerConfig(listenerHost, listenerPort, listenerTransport, clientAuth, listenerTls);
         TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, targetTls);
         return new RouteConfig(id, listener, target);
+    }
+
+    private static void validateHostname(String hostname, String fieldName) {
+        if (hostname.length() > 253) {
+            throw new IllegalArgumentException(fieldName + " exceeds maximum length of 253 characters");
+        }
+        if (!SAFE_HOSTNAME.matcher(hostname).matches()) {
+            throw new IllegalArgumentException(fieldName + " contains invalid characters: " + hostname);
+        }
     }
 
     private static TlsMaterial parseTlsMaterial(JsonNode node) {
@@ -428,10 +472,10 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (tls.certificateFile() != null) map.put("tlsCert", tls.certificateFile().toString());
         if (tls.privateKeyFile() != null) map.put("tlsKey", tls.privateKeyFile().toString());
         if (tls.keyStoreFile() != null) map.put("tlsKeystore", tls.keyStoreFile().toString());
-        if (tls.keyStorePassword() != null) map.put("tlsKeystorePassword", tls.keyStorePassword());
+        // Passwords are intentionally omitted from API responses
         if (tls.keyStoreType() != null) map.put("tlsKeystoreType", tls.keyStoreType());
         if (tls.trustStoreFile() != null) map.put("tlsTruststore", tls.trustStoreFile().toString());
-        if (tls.trustStorePassword() != null) map.put("tlsTruststorePassword", tls.trustStorePassword());
+        // Passwords are intentionally omitted from API responses
         if (tls.trustStoreType() != null) map.put("tlsTruststoreType", tls.trustStoreType());
     }
 
@@ -449,6 +493,31 @@ public final class ControlPlaneServer implements AutoCloseable {
         };
     }
 
+    private boolean requireAuth(HttpExchange exchange) throws IOException {
+        String token = config.apiToken();
+        if (token == null || token.isBlank()) {
+            return true;
+        }
+        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.equals("Bearer " + token)) {
+            return true;
+        }
+        // Accept token via query param for SSE clients that cannot set custom headers
+        String query = exchange.getRequestURI().getQuery();
+        if (query != null) {
+            for (String param : query.split("&")) {
+                if (param.startsWith("token=")) {
+                    String queryToken = URLDecoder.decode(param.substring(6), StandardCharsets.UTF_8);
+                    if (queryToken.equals(token)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        sendJson(exchange, 401, Map.of("error", "Unauthorized"));
+        return false;
+    }
+
     private void sendJson(HttpExchange exchange, int status, Object payload) throws IOException {
         send(exchange, status, "application/json; charset=utf-8", objectMapper.writeValueAsString(payload));
     }
@@ -456,6 +525,9 @@ public final class ControlPlaneServer implements AutoCloseable {
     private void send(HttpExchange exchange, int status, String contentType, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", contentType);
+        exchange.getResponseHeaders().set("X-Frame-Options", "DENY");
+        exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        exchange.getResponseHeaders().set("X-XSS-Protection", "1; mode=block");
         exchange.sendResponseHeaders(status, bytes.length);
         try (OutputStream stream = exchange.getResponseBody()) {
             stream.write(bytes);
@@ -604,6 +676,25 @@ public final class ControlPlaneServer implements AutoCloseable {
 
     static boolean isReplayable(SessionEvent event) {
         return "PAYLOAD".equals(event.type()) && event.direction() == Direction.CLIENT_TO_TARGET;
+    }
+
+    private static SSLContext buildSslContext(TlsMaterial material) throws GeneralSecurityException, IOException {
+        if (material.keyStoreFile() == null) {
+            throw new IllegalArgumentException("UI HTTPS requires a keystore (--ui-tls-keystore)");
+        }
+        String type = material.keyStoreType() != null ? material.keyStoreType() : "PKCS12";
+        char[] password = material.keyStorePassword() != null
+                ? material.keyStorePassword().toCharArray()
+                : new char[0];
+        KeyStore keyStore = KeyStore.getInstance(type);
+        try (var stream = Files.newInputStream(material.keyStoreFile())) {
+            keyStore.load(stream, password);
+        }
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, password);
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(kmf.getKeyManagers(), null, null);
+        return sslContext;
     }
 
     @Override

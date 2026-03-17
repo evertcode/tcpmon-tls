@@ -9,6 +9,8 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TcpMonTlsCommandTest {
@@ -124,5 +126,76 @@ class TcpMonTlsCommandTest {
         String content = Files.readString(out);
         assertTrue(content.contains("ui"));
         assertTrue(content.contains("sessionsDir"));
+    }
+
+    @Test
+    void apiTokenIsNullByDefault() {
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+        new CommandLine(command).parseArgs();
+
+        ProxyConfig config = command.toConfig();
+        assertNull(config.ui().apiToken());
+        assertNull(config.ui().tlsMaterial());
+    }
+
+    @Test
+    void uiTokenCliFlagIsWiredToApiToken() {
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+        new CommandLine(command).parseArgs("--ui-token", "secret-token");
+
+        ProxyConfig config = command.toConfig();
+        assertEquals("secret-token", config.ui().apiToken());
+    }
+
+    @Test
+    void uiTokenFromConfigFileIsLoaded() throws Exception {
+        Path configPath = tempDir.resolve("tcpmon.json");
+        Files.writeString(configPath, """
+                {
+                  "ui": {
+                    "host": "127.0.0.1",
+                    "port": 8080,
+                    "apiToken": "file-token"
+                  }
+                }
+                """);
+
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+        new CommandLine(command).parseArgs("--config", configPath.toString());
+
+        ProxyConfig config = command.toConfig();
+        assertEquals("file-token", config.ui().apiToken());
+    }
+
+    @Test
+    void cliTokenOverridesFileToken() throws Exception {
+        Path configPath = tempDir.resolve("tcpmon.json");
+        Files.writeString(configPath, """
+                {
+                  "ui": { "apiToken": "file-token" }
+                }
+                """);
+
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+        new CommandLine(command).parseArgs("--config", configPath.toString(), "--ui-token", "cli-token");
+
+        ProxyConfig config = command.toConfig();
+        assertEquals("cli-token", config.ui().apiToken());
+    }
+
+    @Test
+    void uiTlsKeystoreCliFlagBuildsUiTlsMaterial(@TempDir Path dir) {
+        Path fakeKeystore = dir.resolve("ui.p12");
+        TcpMonTlsCommand command = new TcpMonTlsCommand();
+        new CommandLine(command).parseArgs(
+                "--ui-tls-keystore", fakeKeystore.toString(),
+                "--ui-tls-keystore-password", "changeit",
+                "--ui-tls-keystore-type", "PKCS12");
+
+        ProxyConfig config = command.toConfig();
+        assertNotNull(config.ui().tlsMaterial());
+        assertEquals(fakeKeystore, config.ui().tlsMaterial().keyStoreFile());
+        assertEquals("changeit", config.ui().tlsMaterial().keyStorePassword());
+        assertEquals("PKCS12", config.ui().tlsMaterial().keyStoreType());
     }
 }

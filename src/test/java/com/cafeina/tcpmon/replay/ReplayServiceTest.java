@@ -75,7 +75,7 @@ class ReplayServiceTest {
 
     private static ProxyConfig replayServiceConfig() {
         return new ProxyConfig(
-                new UiConfig("127.0.0.1", 8080, true),
+                new UiConfig("127.0.0.1", 8080, true, null, null),
                 Path.of("./sessions"),
                 InterceptMode.NONE,
                 List.of("TLSv1.3", "TLSv1.2"),

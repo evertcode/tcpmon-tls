@@ -11,6 +11,10 @@ public record ConfigFile(
     public record UiSection(
             String host,
             Integer port,
-            Boolean enabled) {
+            Boolean enabled,
+            String apiToken,
+            String tlsKeystore,
+            String tlsKeystorePassword,
+            String tlsKeystoreType) {
     }
 }

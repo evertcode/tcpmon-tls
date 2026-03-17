@@ -57,7 +57,7 @@ class TcpMonProxyIntegrationTest {
                     new ListenerConfig("127.0.0.1", proxyPort, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
                     new TargetConfig("127.0.0.1", echoServer.port(), TransportMode.PLAIN, null, false, false, false, emptyTls()));
             ProxyConfig config = new ProxyConfig(
-                    new UiConfig("127.0.0.1", 0, false),
+                    new UiConfig("127.0.0.1", 0, false, null, null),
                     tempDir.resolve("plain-sessions"),
                     InterceptMode.NONE,
                     List.of("TLSv1.3", "TLSv1.2"),
@@ -119,7 +119,7 @@ class TcpMonProxyIntegrationTest {
                                     "PKCS12",
                                     "PKCS12")));
             ProxyConfig config = new ProxyConfig(
-                    new UiConfig("127.0.0.1", 0, false),
+                    new UiConfig("127.0.0.1", 0, false, null, null),
                     tempDir.resolve("tls-sessions"),
                     InterceptMode.NONE,
                     List.of("TLSv1.3", "TLSv1.2"),

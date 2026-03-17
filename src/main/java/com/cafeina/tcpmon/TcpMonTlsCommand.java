@@ -33,6 +33,18 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
     @Option(names = "--ui-port")
     private Integer uiPort;
 
+    @Option(names = "--ui-token", description = "Bearer token required on all /api/* requests. If omitted, auth is disabled.")
+    private String uiToken;
+
+    @Option(names = "--ui-tls-keystore", description = "Path to keystore file to enable HTTPS for the control plane UI.")
+    private Path uiTlsKeystore;
+
+    @Option(names = "--ui-tls-keystore-password", description = "Password for the UI TLS keystore.")
+    private String uiTlsKeystorePassword;
+
+    @Option(names = "--ui-tls-keystore-type", description = "Keystore type for the UI TLS keystore (default: PKCS12).")
+    private String uiTlsKeystoreType;
+
     @Option(names = "--intercept-mode")
     private InterceptMode interceptMode;
 
@@ -81,6 +93,8 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
                 fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().port(), 8080);
         boolean effectiveUiEnabled = selectBoolean(uiEnabled,
                 fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().enabled(), true);
+        String effectiveUiToken = select(uiToken,
+                fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().apiToken(), null);
         Path effectiveSessionsDir = pathValue(sessionsDir, fileConfig == null ? null : fileConfig.sessionsDir(),
                 Path.of("./sessions"));
         InterceptMode effectiveInterceptMode = enumValue(interceptMode,
@@ -96,12 +110,31 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
                         ? fileConfig.tlsCiphers()
                         : List.of();
 
+        TlsMaterial effectiveUiTls = resolveUiTlsMaterial(fileConfig);
+
         return new ProxyConfig(
-                new UiConfig(effectiveUiHost, effectiveUiPort, effectiveUiEnabled),
+                new UiConfig(effectiveUiHost, effectiveUiPort, effectiveUiEnabled, effectiveUiToken, effectiveUiTls),
                 effectiveSessionsDir,
                 effectiveInterceptMode,
                 effectiveProtocols,
                 effectiveCiphers);
+    }
+
+    private TlsMaterial resolveUiTlsMaterial(ConfigFile fileConfig) {
+        Path keystorePath = uiTlsKeystore != null ? uiTlsKeystore
+                : fileConfig != null && fileConfig.ui() != null && fileConfig.ui().tlsKeystore() != null
+                        ? Path.of(fileConfig.ui().tlsKeystore())
+                        : null;
+        if (keystorePath == null) {
+            return null;
+        }
+        String password = select(uiTlsKeystorePassword,
+                fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().tlsKeystorePassword(),
+                null);
+        String type = select(uiTlsKeystoreType,
+                fileConfig == null ? null : fileConfig.ui() == null ? null : fileConfig.ui().tlsKeystoreType(),
+                "PKCS12");
+        return new TlsMaterial(null, null, keystorePath, password, null, null, type, null);
     }
 
     private ConfigFile loadConfigFile() {
@@ -147,7 +180,11 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
                 new ConfigFile.UiSection(
                         "127.0.0.1",
                         8080,
-                        true),
+                        true,
+                        null,
+                        null,
+                        null,
+                        null),
                 "./sessions",
                 "NONE",
                 List.of("TLSv1.3", "TLSv1.2"),
