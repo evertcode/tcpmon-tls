@@ -9,7 +9,9 @@ async function loadSessionDetails(sessionId) {
   if (payloadsEl) payloadsEl.classList.remove('loading-overlay');
   const exchanges = data.exchanges || [];
   const activeExchangeIndex = getState('activeExchangeIndex');
-  if (activeExchangeIndex >= exchanges.length) setState('activeExchangeIndex', 0);
+  if (activeExchangeIndex >= exchanges.length) {
+    setState('activeExchangeIndex', 0);
+  }
   const selectedExchangeIndex = getState('activeExchangeIndex');
   const activeExchange = exchanges[selectedExchangeIndex] || {};
   renderPayloads(activeExchange, data);

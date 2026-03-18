@@ -30,22 +30,25 @@ async function refreshSessionsView(preserveSelection = true, refreshDetail = tru
   const hasSelectedRequest = preserveSelection
     && selectedSessionId
     && routeRequests.some(request => request.sessionId === selectedSessionId && Number(request.exchangeIndex || 0) === selectedExchangeIndex);
+  let autoSelected = false;
   if (routeRequests.length) {
     if (!hasSelectedRequest) {
       patchState({
         activeSession: routeRequests[0].sessionId,
         activeExchangeIndex: Number(routeRequests[0].exchangeIndex || 0)
       });
+      autoSelected = true;
     }
   } else if (!preserveSelection || !selectedSessionId || !routeSessions.some(session => session.sessionId === selectedSessionId)) {
     patchState({
       activeSession: routeSessions[0] ? routeSessions[0].sessionId : null,
       activeExchangeIndex: 0
     });
+    autoSelected = true;
   }
 
   await renderApp({
-    detail: refreshDetail || !getState('activeSession')
+    detail: refreshDetail || autoSelected || !getState('activeSession')
   });
 }
 
