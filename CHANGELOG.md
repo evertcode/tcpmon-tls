@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3] - 2026-03-17
+
+### Bug fixes
+
+- **Detail panel loads after auto-selection** — when the active session was null and the list refresh auto-selected the first request row, the detail panel now loads immediately instead of remaining empty until the next manual interaction
+- **Per-exchange timestamps on keep-alive connections** — each HTTP exchange in a reused TCP connection is now stamped with the timestamp of the payload event that delivered it, so Exchange 0 and Exchange 1 carry distinct `startedAt` values rather than both sharing the timestamp of the last received chunk
+
 ## [0.6.2] - 2026-03-17
 
 ### Bug fixes
