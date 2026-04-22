@@ -275,10 +275,10 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
   const hasBody = Boolean(bodyText);
   const bodyTruncated = Boolean(decoded.bodyTruncated);
   const chunkText = payload.chunkCount ? ` / ${payload.chunkCount} chunks` : '';
-  const actions = title === 'Request' ? renderRequestActions(data, exchangeIndex) : null;
   const isRequest = title === 'Request';
   const sessionId = data?.sessionId || '';
   const exchangeIndex = getState('activeExchangeIndex') || 0;
+  const actions = isRequest ? renderRequestActions(data, exchangeIndex) : null;
   let ttfb = null;
   if (title === 'Response' && data && Array.isArray(data.events)) {
     ttfb = calcTtfb(data.events);
