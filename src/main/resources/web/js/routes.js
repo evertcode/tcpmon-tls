@@ -1,6 +1,6 @@
 function groupedRoutes() {
   const sessions = getState('allSessions');
-  const requestRows = getState('allRequests');
+  const routeStats = getState('routeStats') || {};
   const map = new Map();
   for (const session of sessions) {
     const routeId = session.routeId || 'default';
@@ -19,10 +19,10 @@ function groupedRoutes() {
     map.set(routeId, current);
   }
   for (const route of map.values()) {
-    const routeRequests = requestRows.filter(request => request.routeId === route.routeId);
-    route.requestCount = routeRequests.length;
-    route.avgDurationMs = calculateAverageDuration(routeRequests);
-    route.errorCount = routeRequests.filter(request => String(request.responseStatusCode || '').startsWith('5') || String(request.status || '') === 'ERROR').length;
+    const stats = routeStats[route.routeId] || {};
+    route.requestCount = Number(stats.requestCount || 0);
+    route.avgDurationMs = stats.avgDurationMs != null ? Number(stats.avgDurationMs) : null;
+    route.errorCount = Number(stats.errorCount || 0);
   }
   return [...map.values()].sort((a, b) => a.routeId.localeCompare(b.routeId));
 }
@@ -67,18 +67,22 @@ function renderRouteList() {
   container.replaceChildren(...items);
 }
 
-function selectRoute(routeId) {
+async function selectRoute(routeId) {
   patchState({
     activeRoute: routeId,
     activeSession: null,
     activeExchangeIndex: 0,
-    requestPage: 1,
     requestSearchValue: '',
     requestMethodFilterValue: '',
-    requestStatusCodeFilterValue: ''
+    requestStatusCodeFilterValue: '',
+    requestCurrentCursor: null,
+    requestNextCursor: null,
+    requestHasMore: false,
+    requestCursorStack: []
   });
+  await loadRequestsForRoute(routeId);
   const sessions = sessionsForActiveRoute();
-  const requestRows = requestRowsForActiveRoute();
+  const requestRows = getState('requestRows');
   if (requestRows.length) {
     patchState({
       activeSession: requestRows[0].sessionId,
@@ -87,7 +91,7 @@ function selectRoute(routeId) {
   } else {
     setState('activeSession', sessions[0] ? sessions[0].sessionId : null);
   }
-  renderRouteSelectionState();
+  await renderRouteSelectionState();
 }
 
 function renderRouteHeader() {
@@ -124,15 +128,17 @@ function renderRouteHeader() {
 
 function buildRouteHeaderViewModel(routeId, sessions, requestRows, selectedSessionId, selectedExchangeIndex, lastLoadedSession) {
   const first = sessions[0] || {};
+  const facets = getState('requestFacets') || {};
   const liveCount = sessions.filter(session => isSessionLive(session)).length;
   const pendingCount = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
   const activeSession = resolveActiveSessionSummary(sessions, requestRows, selectedSessionId, selectedExchangeIndex, lastLoadedSession);
-  const avgDurationMs = calculateAverageDuration(requestRows);
+  const total = Number(facets.totalRequests || 0);
+  const avgDurationMs = facets.avgDurationMs != null ? Number(facets.avgDurationMs) : null;
   return {
     routeId,
     listenerAddress: first.listenerAddress || '',
     targetAddress: first.targetAddress || '',
-    total: requestRows.length,
+    total,
     liveCount,
     pendingCount,
     avgDurationMs,
@@ -179,33 +185,22 @@ function resolveActiveSessionSummary(sessions, requestRows, selectedSessionId, s
   ) || null;
   const sessionSummary = sessions.find(session => session.sessionId === selectedSessionId) || null;
   if (requestSummary) {
-    return {
-      ...sessionSummary,
-      ...requestSummary
-    };
+    return { ...sessionSummary, ...requestSummary };
+  }
+  // Session now includes latest exchange info from backend — use it as first fallback
+  if (sessionSummary && (sessionSummary.requestMethod || sessionSummary.requestPath)) {
+    return sessionSummary;
   }
   if (lastLoadedSession && lastLoadedSession.sessionId === selectedSessionId) {
     return {
       ...sessionSummary,
       sessionId: selectedSessionId,
-      clientAddress: sessionSummary && sessionSummary.clientAddress
-        ? sessionSummary.clientAddress
-        : (lastLoadedSession.clientAddress || ''),
-      responseStatusCode: sessionSummary && sessionSummary.responseStatusCode
-        ? sessionSummary.responseStatusCode
-        : extractSelectedResponseStatusCode(lastLoadedSession),
-      durationMs: sessionSummary && sessionSummary.durationMs != null
-        ? sessionSummary.durationMs
-        : (lastLoadedSession.durationMs != null ? lastLoadedSession.durationMs : null),
-      startedAt: sessionSummary && sessionSummary.startedAt
-        ? sessionSummary.startedAt
-        : (lastLoadedSession.startedAt || ''),
-      requestMethod: sessionSummary && sessionSummary.requestMethod
-        ? sessionSummary.requestMethod
-        : ((lastLoadedSession.latestRequest || {}).request || {}).method,
-      requestPath: sessionSummary && sessionSummary.requestPath
-        ? sessionSummary.requestPath
-        : buildSelectedSessionPath(lastLoadedSession)
+      clientAddress: sessionSummary?.clientAddress || lastLoadedSession.clientAddress || '',
+      responseStatusCode: sessionSummary?.responseStatusCode || extractSelectedResponseStatusCode(lastLoadedSession),
+      durationMs: sessionSummary?.durationMs ?? lastLoadedSession.durationMs ?? null,
+      startedAt: sessionSummary?.startedAt || lastLoadedSession.startedAt || '',
+      requestMethod: sessionSummary?.requestMethod || ((lastLoadedSession.latestRequest || {}).request || {}).method,
+      requestPath: sessionSummary?.requestPath || buildSelectedSessionPath(lastLoadedSession)
     };
   }
   return sessionSummary;
@@ -246,7 +241,7 @@ async function loadConfig() {
     renderApp({ detail: false });
     if (!getState('activeRoute')) {
       const routes = filteredRoutes();
-      if (routes.length) selectRoute(routes[0].routeId);
+      if (routes.length) await selectRoute(routes[0].routeId);
     }
   } catch (e) {
     // Config panel unavailable.

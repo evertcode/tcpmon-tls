@@ -200,7 +200,7 @@ function buildPayloadHeadersDetails(title, headers, decoded, isRequest, payloadH
   return details;
 }
 
-function buildPayloadBodySection(bodyText, hasBody, isRequest) {
+function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex) {
   const body = document.createElement('div');
   body.className = 'payload-body';
 
@@ -211,19 +211,50 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest) {
   label.textContent = 'Body';
   head.appendChild(label);
 
-  if (hasBody) {
-    const button = document.createElement('button');
-    button.className = 'utility';
-    button.dataset.action = 'copy-current-body';
-    button.dataset.isRequest = String(isRequest);
-    button.textContent = 'Copy body';
-    head.appendChild(button);
+  if (hasBody && !bodyTruncated) {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'utility';
+    copyBtn.dataset.action = 'copy-current-body';
+    copyBtn.dataset.isRequest = String(isRequest);
+    copyBtn.textContent = 'Copy body';
+    head.appendChild(copyBtn);
   }
 
   const pre = document.createElement('pre');
   pre.className = 'scroll';
   pre.textContent = bodyText;
-  body.append(head, pre);
+
+  if (bodyTruncated) {
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'utility';
+    expandBtn.style.marginTop = '6px';
+    expandBtn.textContent = 'Load full body';
+    expandBtn.addEventListener('click', async () => {
+      expandBtn.disabled = true;
+      expandBtn.textContent = 'Loading…';
+      try {
+        const direction = isRequest ? 'request' : 'response';
+        const data = await fetchJson(
+          `/api/sessions/${sessionId}/exchanges/${exchangeIndex}/body?direction=${direction}`
+        );
+        pre.textContent = data.bodyText || '';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'utility';
+        copyBtn.dataset.action = 'copy-current-body';
+        copyBtn.dataset.isRequest = String(isRequest);
+        copyBtn.textContent = 'Copy body';
+        head.appendChild(copyBtn);
+        expandBtn.remove();
+      } catch {
+        expandBtn.textContent = 'Load failed — retry?';
+        expandBtn.disabled = false;
+      }
+    });
+    body.append(head, pre, expandBtn);
+  } else {
+    body.append(head, pre);
+  }
+
   return body;
 }
 
@@ -242,9 +273,12 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
   const headers = Array.isArray(decoded.headers) ? decoded.headers : [];
   const bodyText = formatBody(decoded);
   const hasBody = Boolean(bodyText);
+  const bodyTruncated = Boolean(decoded.bodyTruncated);
   const chunkText = payload.chunkCount ? ` / ${payload.chunkCount} chunks` : '';
-  const actions = title === 'Request' ? renderRequestActions(data, payload) : null;
+  const actions = title === 'Request' ? renderRequestActions(data, exchangeIndex) : null;
   const isRequest = title === 'Request';
+  const sessionId = data?.sessionId || '';
+  const exchangeIndex = getState('activeExchangeIndex') || 0;
   let ttfb = null;
   if (title === 'Response' && data && Array.isArray(data.events)) {
     ttfb = calcTtfb(data.events);
@@ -253,7 +287,7 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
     buildPayloadHeader(title, payload.timestamp || '', payload.size || 0, chunkText, payload.direction || expectedDirection, ttfb),
     buildStartLineSection(decoded.startLine || 'No HTTP start line'),
     buildPayloadHeadersDetails(title, headers, decoded, isRequest, payloadHeadersExpanded),
-    buildPayloadBodySection(bodyText || 'No body captured', hasBody, isRequest)
+    buildPayloadBodySection(bodyText || 'No body captured', hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex)
   );
   if (actions) {
     article.appendChild(actions);

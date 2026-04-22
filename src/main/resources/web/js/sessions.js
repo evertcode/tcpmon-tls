@@ -5,9 +5,8 @@ async function refreshSessions(preserveSelection = true) {
 async function refreshSessionsView(preserveSelection = true, refreshDetail = true) {
   const data = await fetchJson('/api/sessions');
   setState('allSessions', Array.isArray(data.sessions) ? data.sessions : []);
-  setState('allRequests', Array.isArray(data.requests) ? data.requests : []);
+  setState('routeStats', data.routeStats || {});
   const sessions = getState('allSessions');
-  const requestRows = getState('allRequests');
   const selectedRouteId = getState('activeRoute');
   const selectedSessionId = getState('activeSession');
   const selectedExchangeIndex = getState('activeExchangeIndex');
@@ -21,15 +20,25 @@ async function refreshSessionsView(preserveSelection = true, refreshDetail = tru
   }
 
   const routes = groupedRoutes();
-  if (!preserveSelection || !selectedRouteId || !routes.some(route => route.routeId === selectedRouteId)) {
-    setState('activeRoute', routes[0].routeId);
+  const needsRouteChange = !preserveSelection || !selectedRouteId || !routes.some(r => r.routeId === selectedRouteId);
+  const targetRouteId = needsRouteChange ? routes[0].routeId : selectedRouteId;
+
+  if (needsRouteChange) {
+    setState('activeRoute', targetRouteId);
+    patchState({
+      requestSearchValue: '',
+      requestMethodFilterValue: '',
+      requestStatusCodeFilterValue: ''
+    });
   }
 
+  await loadRequestsForRoute(targetRouteId);
+
+  const routeRequests = getState('requestRows');
   const routeSessions = sessionsForActiveRoute();
-  const routeRequests = requestRowsForActiveRoute();
   const hasSelectedRequest = preserveSelection
     && selectedSessionId
-    && routeRequests.some(request => request.sessionId === selectedSessionId && Number(request.exchangeIndex || 0) === selectedExchangeIndex);
+    && routeRequests.some(r => r.sessionId === selectedSessionId && Number(r.exchangeIndex || 0) === selectedExchangeIndex);
   let autoSelected = false;
   if (routeRequests.length) {
     if (!hasSelectedRequest) {
@@ -39,7 +48,7 @@ async function refreshSessionsView(preserveSelection = true, refreshDetail = tru
       });
       autoSelected = true;
     }
-  } else if (!preserveSelection || !selectedSessionId || !routeSessions.some(session => session.sessionId === selectedSessionId)) {
+  } else if (!preserveSelection || !selectedSessionId || !routeSessions.some(s => s.sessionId === selectedSessionId)) {
     patchState({
       activeSession: routeSessions[0] ? routeSessions[0].sessionId : null,
       activeExchangeIndex: 0
@@ -52,6 +61,53 @@ async function refreshSessionsView(preserveSelection = true, refreshDetail = tru
   });
 }
 
+async function loadRequestsForRoute(routeId) {
+  const method = getState('requestMethodFilterValue');
+  const statusCode = getState('requestStatusCodeFilterValue');
+  const q = getState('requestSearchValue').trim();
+  const params = new URLSearchParams({ routeId, limit: '50' });
+  if (method) params.set('method', method);
+  if (statusCode) params.set('statusCode', statusCode);
+  if (q) params.set('q', q);
+
+  const [requestsData, facetsData] = await Promise.all([
+    fetchJson('/api/requests?' + params),
+    fetchJson('/api/request-facets?routeId=' + encodeURIComponent(routeId))
+  ]);
+
+  patchState({
+    requestCurrentCursor: null,
+    requestNextCursor: requestsData.nextCursor || null,
+    requestHasMore: Boolean(requestsData.hasMore),
+    requestCursorStack: [],
+    requestRows: Array.isArray(requestsData.requests) ? requestsData.requests : [],
+    requestFacets: facetsData || null
+  });
+}
+
+async function loadRequestsPage(routeId, cursor, resetStack) {
+  const method = getState('requestMethodFilterValue');
+  const statusCode = getState('requestStatusCodeFilterValue');
+  const q = getState('requestSearchValue').trim();
+  const params = new URLSearchParams({ routeId, limit: '50' });
+  if (cursor) params.set('cursor', cursor);
+  if (method) params.set('method', method);
+  if (statusCode) params.set('statusCode', statusCode);
+  if (q) params.set('q', q);
+
+  const requestsData = await fetchJson('/api/requests?' + params);
+
+  if (resetStack) {
+    patchState({ requestCursorStack: [] });
+  }
+  patchState({
+    requestCurrentCursor: cursor || null,
+    requestNextCursor: requestsData.nextCursor || null,
+    requestHasMore: Boolean(requestsData.hasMore),
+    requestRows: Array.isArray(requestsData.requests) ? requestsData.requests : []
+  });
+}
+
 function sessionsForActiveRoute() {
   const sessions = getState('allSessions');
   const selectedRouteId = getState('activeRoute');
@@ -61,21 +117,20 @@ function sessionsForActiveRoute() {
 }
 
 function requestRowsForActiveRoute() {
-  const requestRows = getState('allRequests');
-  const selectedRouteId = getState('activeRoute');
-  return requestRows
-    .filter(request => (request.routeId || 'default') === selectedRouteId)
-    .sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
+  return getState('requestRows');
 }
 
 function renderRequestTable() {
   const requestRows = requestRowsForActiveRoute();
-  const requestSearchValue = getState('requestSearchValue');
   const container = document.getElementById('request-table');
   if (!requestRows.length) {
+    const facets = getState('requestFacets');
+    const total = facets ? Number(facets.totalRequests || 0) : 0;
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'No HTTP requests captured for this route yet.';
+    empty.textContent = total > 0
+      ? 'No requests match the current filter.'
+      : 'No HTTP requests captured for this route yet.';
     container.replaceChildren(empty);
     return;
   }
@@ -88,12 +143,12 @@ function renderRequestTable() {
   const searchInput = document.createElement('input');
   searchInput.id = 'request-search';
   searchInput.type = 'search';
-  searchInput.value = requestSearchValue;
+  searchInput.value = getState('requestSearchValue');
   searchInput.placeholder = 'Filter requests in this route';
   toolbar.appendChild(searchInput);
 
-  const methodFilter = buildSelectElement('request-method-filter', renderMethodOptions(requestRows));
-  const statusCodeFilter = buildSelectElement('request-status-code-filter', renderStatusCodeOptions(requestRows));
+  const methodFilter = buildSelectElement('request-method-filter', renderMethodOptions());
+  const statusCodeFilter = buildSelectElement('request-status-code-filter', renderStatusCodeOptions());
   toolbar.append(methodFilter, statusCodeFilter);
 
   card.appendChild(toolbar);
@@ -115,51 +170,22 @@ function buildSelectElement(id, options) {
 }
 
 function renderRequestTableContent(requestRows) {
-  const requestSearchValue = getState('requestSearchValue');
-  const requestMethodFilterValue = getState('requestMethodFilterValue');
-  const requestStatusCodeFilterValue = getState('requestStatusCodeFilterValue');
-  const requestPageSize = getState('requestPageSize');
-  const query = requestSearchValue.trim().toLowerCase();
-  const methodFilter = requestMethodFilterValue;
-  const statusCodeFilter = requestStatusCodeFilterValue;
-  const filtered = requestRows.filter(request => {
-    if (methodFilter && String(request.requestMethod || '') !== methodFilter) return false;
-    if (statusCodeFilter && String(request.responseStatusCode || '') !== statusCodeFilter) return false;
-    if (!query) return true;
-    return [
-      request.sessionId,
-      request.requestMethod,
-      request.requestPath,
-      request.responseStatusCode,
-      request.clientAddress,
-      request.targetAddress,
-      request.startedAt,
-      request.status
-    ].join(' ').toLowerCase().includes(query);
-  });
-  if (!filtered.length) {
-    setState('requestPage', 1);
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'No requests match the current filter.';
-    return empty;
-  }
-  const totalPages = Math.max(1, Math.ceil(filtered.length / requestPageSize));
-  setState('requestPage', Math.min(getState('requestPage'), totalPages));
-  const requestPage = getState('requestPage');
+  const hasMore = getState('requestHasMore');
+  const hasPrev = getState('requestCursorStack').length > 0;
+  const facets = getState('requestFacets') || {};
+  const totalRequests = facets.totalRequests != null ? Number(facets.totalRequests) : null;
   const activeSession = getState('activeSession');
   const activeExchangeIndex = getState('activeExchangeIndex');
-  const pageStart = (requestPage - 1) * requestPageSize;
-  const pageItems = filtered.slice(pageStart, pageStart + requestPageSize);
   const fragment = document.createDocumentFragment();
-  fragment.appendChild(buildRequestTableElement(pageItems, activeSession, activeExchangeIndex));
-  fragment.appendChild(buildRequestTableFooter(pageStart, pageItems.length, filtered.length, requestPage, totalPages));
+  fragment.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex));
+  fragment.appendChild(buildRequestTableFooter(requestRows.length, totalRequests, hasPrev, hasMore));
   return fragment;
 }
 
-function renderMethodOptions(requestRows) {
+function renderMethodOptions() {
   const requestMethodFilterValue = getState('requestMethodFilterValue');
-  const methods = [...new Set(requestRows.map(request => String(request.requestMethod || '')).filter(Boolean))].sort();
+  const facets = getState('requestFacets') || {};
+  const methods = facets.methods || [];
   return [{ value: '', label: 'All methods', selected: requestMethodFilterValue === '' }]
     .concat(methods.map(method => ({
       value: method,
@@ -168,48 +194,61 @@ function renderMethodOptions(requestRows) {
     })));
 }
 
-function renderStatusCodeOptions(requestRows) {
+function renderStatusCodeOptions() {
   const requestStatusCodeFilterValue = getState('requestStatusCodeFilterValue');
-  const statusCodes = [...new Set(requestRows.map(request => String(request.responseStatusCode || '')).filter(Boolean))].sort();
+  const facets = getState('requestFacets') || {};
+  const codes = facets.statusCodes || [];
   return [{ value: '', label: 'All responses', selected: requestStatusCodeFilterValue === '' }]
-    .concat(statusCodes.map(code => ({
+    .concat(codes.map(code => ({
       value: code,
       label: code,
       selected: code === requestStatusCodeFilterValue
     })));
 }
 
-function resetRequestPageAndRender() {
-  const currentSearchValue = getState('requestSearchValue');
-  const currentMethodFilterValue = getState('requestMethodFilterValue');
-  const currentStatusCodeFilterValue = getState('requestStatusCodeFilterValue');
+async function resetRequestPageAndRender() {
   patchState({
-    requestSearchValue: document.getElementById('request-search') ? document.getElementById('request-search').value : currentSearchValue,
-    requestMethodFilterValue: document.getElementById('request-method-filter') ? document.getElementById('request-method-filter').value : currentMethodFilterValue,
-    requestStatusCodeFilterValue: document.getElementById('request-status-code-filter') ? document.getElementById('request-status-code-filter').value : currentStatusCodeFilterValue,
-    requestPage: 1
+    requestSearchValue: document.getElementById('request-search')?.value ?? getState('requestSearchValue'),
+    requestMethodFilterValue: document.getElementById('request-method-filter')?.value ?? getState('requestMethodFilterValue'),
+    requestStatusCodeFilterValue: document.getElementById('request-status-code-filter')?.value ?? getState('requestStatusCodeFilterValue')
   });
+  const activeRoute = getState('activeRoute');
+  if (!activeRoute) return;
+  await loadRequestsForRoute(activeRoute);
   renderRequestTable();
 }
 
 function debounceRequestSearch() {
-  const currentSearchValue = getState('requestSearchValue');
-  const requestSearchDebounceTimer = getState('requestSearchDebounceTimer');
   patchState({
-    requestSearchValue: document.getElementById('request-search') ? document.getElementById('request-search').value : currentSearchValue,
-    requestPage: 1
+    requestSearchValue: document.getElementById('request-search')?.value ?? getState('requestSearchValue')
   });
-  if (requestSearchDebounceTimer) {
-    clearTimeout(requestSearchDebounceTimer);
-  }
-  setState('requestSearchDebounceTimer', setTimeout(() => {
+  const timer = getState('requestSearchDebounceTimer');
+  if (timer) clearTimeout(timer);
+  setState('requestSearchDebounceTimer', setTimeout(async () => {
     setState('requestSearchDebounceTimer', null);
+    const activeRoute = getState('activeRoute');
+    if (!activeRoute) return;
+    await loadRequestsForRoute(activeRoute);
     renderRequestTable();
-  }, 250));
+  }, 300));
 }
 
-function changeRequestPage(delta) {
-  setState('requestPage', Math.max(1, getState('requestPage') + delta));
+async function changeRequestPage(delta) {
+  const activeRouteId = getState('activeRoute');
+  if (!activeRouteId) return;
+  if (delta > 0) {
+    const nextCursor = getState('requestNextCursor');
+    if (!nextCursor) return;
+    const currentCursor = getState('requestCurrentCursor');
+    setState('requestCursorStack', [...getState('requestCursorStack'), currentCursor]);
+    await loadRequestsPage(activeRouteId, nextCursor, false);
+  } else {
+    const stack = [...getState('requestCursorStack')];
+    if (!stack.length) return;
+    const prevCursor = stack.pop();
+    setState('requestCursorStack', stack);
+    await loadRequestsPage(activeRouteId, prevCursor, false);
+  }
   renderRequestTable();
 }
 
@@ -247,20 +286,21 @@ function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex)
   return table;
 }
 
-function buildRequestTableFooter(pageStart, pageItemCount, filteredCount, requestPage, totalPages) {
+function buildRequestTableFooter(rowCount, totalRequests, hasPrev, hasMore) {
   const footer = document.createElement('div');
   footer.className = 'table-footer';
 
   const summary = document.createElement('div');
   summary.className = 'muted';
-  summary.textContent = `Showing ${pageStart + 1}-${pageStart + pageItemCount} of ${filteredCount} requests`;
+  summary.textContent = totalRequests != null
+    ? `Showing ${rowCount} of ${totalRequests} requests`
+    : `Showing ${rowCount} requests`;
 
   const pager = document.createElement('div');
   pager.className = 'pager';
   pager.append(
-    buildPagerButton('Previous', -1, requestPage === 1),
-    buildMutedSpan(`Page ${requestPage} / ${totalPages}`),
-    buildPagerButton('Next', 1, requestPage >= totalPages)
+    buildPagerButton('Previous', -1, !hasPrev),
+    buildPagerButton('Next', 1, !hasMore)
   );
 
   footer.append(summary, pager);
