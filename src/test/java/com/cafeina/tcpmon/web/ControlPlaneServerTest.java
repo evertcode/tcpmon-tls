@@ -254,6 +254,49 @@ class ControlPlaneServerTest {
     }
 
     @Test
+    void requestSummariesDoNotSerializeLargePayloadBodies(@TempDir Path tempDir) throws Exception {
+        ProxyConfig config = new ProxyConfig(
+                new UiConfig("127.0.0.1", 8080, true, "token", null),
+                tempDir,
+                com.cafeina.tcpmon.InterceptMode.NONE,
+                List.of("TLSv1.3"),
+                List.of());
+        RouteConfig route = new RouteConfig(
+                "route-a",
+                new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null),
+                new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null));
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            String sessionId = store.openSession("route-a", "client", "listener", "target");
+            String largeBody = "large-response-marker-" + "x".repeat(1024 * 1024);
+            byte[] response = ("HTTP/1.1 200 OK\r\nContent-Length: " + largeBody.length() + "\r\n\r\n" + largeBody).getBytes();
+            store.recordPayload(sessionId, Direction.CLIENT_TO_TARGET, "GET /large HTTP/1.1\r\nHost: example.com\r\n\r\n".getBytes(), null, Map.of());
+            store.recordPayload(sessionId, Direction.TARGET_TO_CLIENT, response, null, Map.of());
+
+            ControlPlaneServer server = new ControlPlaneServer(
+                    config,
+                    new RouteRegistry(List.of(route), store),
+                    (TcpMonProxy) null,
+                    store,
+                    new ReplayService(config, new RouteRegistry(List.of(route), null)));
+
+            var method = ControlPlaneServer.class.getDeclaredMethod("summarizeRequests");
+            method.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rows = (List<Map<String, Object>>) method.invoke(server);
+            String json = JsonSupport.objectMapper().writeValueAsString(rows);
+
+            assertEquals(1, rows.size());
+            assertEquals("/large", rows.getFirst().get("requestPath"));
+            assertEquals("200", rows.getFirst().get("responseStatusCode"));
+            assertEquals((long) response.length, rows.getFirst().get("responseSizeBytes"));
+            assertFalse(json.contains("large-response-marker"));
+            assertFalse(json.contains("base64"));
+            assertTrue(json.length() < 4096);
+        }
+    }
+
+    @Test
     void loadsStaticWebAssetsFromClasspath() {
         String index = ControlPlaneServer.readWebText("/index.html");
         String favicon = ControlPlaneServer.readWebText("/favicon.svg");
@@ -301,6 +344,91 @@ class ControlPlaneServerTest {
         assertTrue(actionsJs.contains("async function exportHar()"));
         assertTrue(actionsJs.contains("getState('lastLoadedSession')"));
         assertTrue(actionsJs.contains("function buildPayloadActionButton("));
+    }
+
+    @Test
+    void sessionDetailResponseStripsBase64FromExchangePayloads(@TempDir Path tempDir) throws Exception {
+        ProxyConfig config = new ProxyConfig(
+                new UiConfig("127.0.0.1", 8080, true, "token", null),
+                tempDir,
+                com.cafeina.tcpmon.InterceptMode.NONE,
+                List.of("TLSv1.3"),
+                List.of());
+        RouteConfig route = new RouteConfig(
+                "route-a",
+                new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null),
+                new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null));
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            String sessionId = store.openSession("route-a", "client", "listener", "target");
+            store.recordPayload(sessionId, Direction.CLIENT_TO_TARGET,
+                    "GET /check HTTP/1.1\r\nHost: example.com\r\n\r\n".getBytes(), null, Map.of());
+            store.recordPayload(sessionId, Direction.TARGET_TO_CLIENT,
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK".getBytes(), null, Map.of());
+
+            ControlPlaneServer server = new ControlPlaneServer(
+                    config,
+                    new RouteRegistry(List.of(route), store),
+                    (TcpMonProxy) null,
+                    store,
+                    new ReplayService(config, new RouteRegistry(List.of(route), null)));
+
+            var method = ControlPlaneServer.class.getDeclaredMethod("enrichSession", Map.class);
+            method.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> enriched = (Map<String, Object>) method.invoke(server, store.sessionDetails(sessionId));
+            String json = JsonSupport.objectMapper().writeValueAsString(enriched);
+
+            assertTrue(enriched.containsKey("sessionId"), "sessionId must be present for frontend replay");
+            assertFalse(json.contains("\"base64\""), "base64 must not appear in enriched session response");
+        }
+    }
+
+    @Test
+    void sessionDetailTruncatesLargeBodyAndSetsTruncatedFlag(@TempDir Path tempDir) throws Exception {
+        ProxyConfig config = new ProxyConfig(
+                new UiConfig("127.0.0.1", 8080, true, "token", null),
+                tempDir,
+                com.cafeina.tcpmon.InterceptMode.NONE,
+                List.of("TLSv1.3"),
+                List.of());
+        RouteConfig route = new RouteConfig(
+                "route-a",
+                new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null),
+                new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null));
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            String sessionId = store.openSession("route-a", "client", "listener", "target");
+            String largeBody = "B".repeat(PayloadInspector.BODY_PREVIEW_LIMIT + 1000);
+            store.recordPayload(sessionId, Direction.CLIENT_TO_TARGET,
+                    "GET /big HTTP/1.1\r\nHost: example.com\r\n\r\n".getBytes(), null, Map.of());
+            store.recordPayload(sessionId, Direction.TARGET_TO_CLIENT,
+                    ("HTTP/1.1 200 OK\r\nContent-Length: " + largeBody.length() + "\r\n\r\n" + largeBody).getBytes(),
+                    null, Map.of());
+
+            ControlPlaneServer server = new ControlPlaneServer(
+                    config,
+                    new RouteRegistry(List.of(route), store),
+                    (TcpMonProxy) null,
+                    store,
+                    new ReplayService(config, new RouteRegistry(List.of(route), null)));
+
+            var method = ControlPlaneServer.class.getDeclaredMethod("enrichSession", Map.class);
+            method.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> enriched = (Map<String, Object>) method.invoke(server, store.sessionDetails(sessionId));
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> exchanges = (List<Map<String, Object>>) enriched.get("exchanges");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = (Map<String, Object>) exchanges.getFirst().get("response");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> decoded = (Map<String, Object>) response.get("decoded");
+
+            assertEquals(Boolean.TRUE, decoded.get("bodyTruncated"));
+            String bodyText = (String) decoded.get("bodyText");
+            assertEquals(PayloadInspector.BODY_PREVIEW_LIMIT, bodyText.length());
+        }
     }
 
     @Test

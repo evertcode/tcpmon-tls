@@ -27,12 +27,14 @@ import com.sun.net.httpserver.HttpsServer;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
+import java.util.zip.GZIPOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -64,6 +66,8 @@ public final class ControlPlaneServer implements AutoCloseable {
     private static final int HTTP_EXECUTOR_THREADS = Math.max(4, Math.min(16, Runtime.getRuntime().availableProcessors() * 2));
     private static final int HTTP_EXECUTOR_QUEUE_CAPACITY = 256;
     private static final String WEB_ROOT = "/web";
+    private static final boolean METRICS_ENABLED = Boolean.getBoolean("tcpmon.metrics");
+    private static final int MAX_REQUEST_LIMIT = 200;
 
     private final ProxyConfig proxyConfig;
     private final RouteRegistry registry;
@@ -110,6 +114,8 @@ public final class ControlPlaneServer implements AutoCloseable {
         server.createContext("/", this::handleRoot);
         server.createContext("/api/events", this::handleEvents);
         server.createContext("/api/sessions", this::handleSessions);
+        server.createContext("/api/requests", this::handleRequests);
+        server.createContext("/api/request-facets", this::handleRequestFacets);
         server.createContext("/api/pending/", this::handlePending);
         server.createContext("/api/replay", this::handleReplay);
         server.createContext("/api/config", this::handleConfig);
@@ -170,25 +176,59 @@ public final class ControlPlaneServer implements AutoCloseable {
         if (!requireAuth(exchange)) return;
         String path = exchange.getRequestURI().getPath();
         if ("GET".equalsIgnoreCase(exchange.getRequestMethod()) && "/api/sessions".equals(path)) {
-            List<Map<String, Object>> rawSummaries = sessionStore.listSessions();
-            List<Map<String, Object>> sessions = new ArrayList<>();
-            List<Map<String, Object>> requests = new ArrayList<>();
-            for (Map<String, Object> summary : rawSummaries) {
-                Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
-                sessions.add(summarizeSession(summary, details));
-                requests.addAll(summarizeRequestRows(summary, details));
+            long t0 = System.currentTimeMillis();
+            List<Map<String, Object>> sessions = sessionStore.listSessions();
+            long t1 = System.currentTimeMillis();
+            Map<String, Map<String, Object>> routeStats = sessionStore.listRouteStats();
+            long t2 = System.currentTimeMillis();
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("sessions", sessions);
+            payload.put("routeStats", routeStats);
+            if (METRICS_ENABLED) {
+                long t3 = System.currentTimeMillis();
+                System.err.printf("/api/sessions sessions=%d dbMs=%d statsMs=%d jsonMs=%d%n",
+                        sessions.size(), t1 - t0, t2 - t1, t3 - t2);
             }
-            requests.sort((left, right) -> {
-                Instant l = left.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
-                Instant r = right.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
-                return r.compareTo(l);
-            });
-            sendJson(exchange, 200, Map.of("sessions", sessions, "requests", requests));
+            sendJson(exchange, 200, payload);
             return;
         }
 
         if ("GET".equalsIgnoreCase(exchange.getRequestMethod()) && path.startsWith("/api/sessions/")) {
-            String sessionId = path.substring("/api/sessions/".length());
+            String remainder = path.substring("/api/sessions/".length());
+            int exchangesMarker = remainder.indexOf("/exchanges/");
+            if (exchangesMarker >= 0 && remainder.endsWith("/body")) {
+                String sessionId = remainder.substring(0, exchangesMarker);
+                String indexPart = remainder.substring(exchangesMarker + "/exchanges/".length(),
+                        remainder.length() - "/body".length());
+                int exchangeIndex;
+                try {
+                    exchangeIndex = Integer.parseInt(indexPart);
+                } catch (NumberFormatException ignored) {
+                    sendJson(exchange, 400, Map.of("error", "invalid exchange index"));
+                    return;
+                }
+                Map<String, String> params = parseQueryParams(exchange.getRequestURI().getQuery());
+                String directionParam = params.getOrDefault("direction", "request");
+                com.cafeina.tcpmon.Direction direction = "response".equalsIgnoreCase(directionParam)
+                        ? com.cafeina.tcpmon.Direction.TARGET_TO_CLIENT
+                        : com.cafeina.tcpmon.Direction.CLIENT_TO_TARGET;
+                List<com.cafeina.tcpmon.session.SessionEvent> typedEvents =
+                        sessionStore.listPayloadEventsForDirection(sessionId, direction);
+                List<Map<String, Object>> messages = SessionPayloadAggregator.aggregateMessages(
+                        typedEvents, direction, true);
+                if (exchangeIndex >= messages.size()) {
+                    sendJson(exchange, 404, Map.of("error", "exchange not found"));
+                    return;
+                }
+                Map<String, Object> msg = messages.get(exchangeIndex);
+                Map<String, Object> decoded = msg.get("decoded") instanceof Map<?, ?> d
+                        ? (Map<String, Object>) d : Map.of();
+                sendJson(exchange, 200, Map.of(
+                        "bodyText", decoded.getOrDefault("bodyText", ""),
+                        "bodyTruncated", false));
+                return;
+            }
+            String sessionId = remainder;
             Map<String, Object> session = sessionStore.sessionDetails(sessionId);
             if (session == null) {
                 sendJson(exchange, 404, Map.of("error", "session not found"));
@@ -199,6 +239,50 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
 
         sendJson(exchange, 405, Map.of("error", "method not allowed"));
+    }
+
+    private void handleRequests(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+        Map<String, String> params = parseQueryParams(exchange.getRequestURI().getQuery());
+        String routeId = params.getOrDefault("routeId", "").trim();
+        if (routeId.isBlank()) {
+            sendJson(exchange, 400, Map.of("error", "routeId is required"));
+            return;
+        }
+        int limit = parseIntParam(params.getOrDefault("limit", "50"), 50, 1, MAX_REQUEST_LIMIT);
+        String cursor = params.getOrDefault("cursor", null);
+        String method = params.getOrDefault("method", null);
+        String statusCode = params.getOrDefault("statusCode", null);
+        String q = params.getOrDefault("q", null);
+        long t0 = System.currentTimeMillis();
+        Map<String, Object> result = sessionStore.listRequestRowsPaginated(routeId, limit, cursor, method, statusCode, q);
+        long t1 = System.currentTimeMillis();
+        if (METRICS_ENABLED) {
+            Object rows = result.get("requests");
+            int rowCount = rows instanceof List<?> list ? list.size() : 0;
+            System.err.printf("/api/requests routeId=%s limit=%d dbMs=%d rows=%d hasMore=%s%n",
+                    routeId, limit, t1 - t0, rowCount, result.get("hasMore"));
+        }
+        sendJson(exchange, 200, result);
+    }
+
+    private void handleRequestFacets(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+        Map<String, String> params = parseQueryParams(exchange.getRequestURI().getQuery());
+        String routeId = params.getOrDefault("routeId", "").trim();
+        if (routeId.isBlank()) {
+            sendJson(exchange, 400, Map.of("error", "routeId is required"));
+            return;
+        }
+        sendJson(exchange, 200, sessionStore.requestFacets(routeId));
     }
 
     private void handleEvents(HttpExchange exchange) throws IOException {
@@ -280,6 +364,48 @@ public final class ControlPlaneServer implements AutoCloseable {
                 byte[] payload = Base64.getDecoder().decode(body.path("base64").asText());
                 enforcePayloadLimit(payload);
                 Map<String, Object> result = replayService.replay(payload, routeId, destination);
+                sendJson(exchange, 200, result);
+                return;
+            }
+
+            if (body.hasNonNull("sessionId") && body.hasNonNull("exchangeIndex")) {
+                String sessionId = body.path("sessionId").asText();
+                int exchangeIndex = body.path("exchangeIndex").asInt(0);
+                com.cafeina.tcpmon.Direction direction = com.cafeina.tcpmon.Direction.CLIENT_TO_TARGET;
+                Map<String, Object> session = sessionStore.sessionDetails(sessionId);
+                if (session == null) {
+                    sendJson(exchange, 404, Map.of("error", "session not found"));
+                    return;
+                }
+                String resolvedRouteId = routeId != null && !routeId.isBlank()
+                        ? routeId : sessionStore.routeIdForSession(sessionId);
+                if (resolvedRouteId == null) {
+                    sendJson(exchange, 404, Map.of("error", "session route not found"));
+                    return;
+                }
+                Object eventsValue = session.get("events");
+                if (!(eventsValue instanceof List<?> rawEvents)) {
+                    sendJson(exchange, 404, Map.of("error", "no events"));
+                    return;
+                }
+                List<com.cafeina.tcpmon.session.SessionEvent> typedEvents = rawEvents.stream()
+                        .filter(e -> e instanceof com.cafeina.tcpmon.session.SessionEvent)
+                        .map(e -> (com.cafeina.tcpmon.session.SessionEvent) e)
+                        .toList();
+                List<Map<String, Object>> messages = SessionPayloadAggregator.aggregateMessages(
+                        typedEvents, direction, true);
+                if (exchangeIndex >= messages.size()) {
+                    sendJson(exchange, 404, Map.of("error", "exchange not found"));
+                    return;
+                }
+                Object base64Obj = messages.get(exchangeIndex).get("base64");
+                if (!(base64Obj instanceof String base64Str)) {
+                    sendJson(exchange, 404, Map.of("error", "exchange payload not available"));
+                    return;
+                }
+                byte[] payload = Base64.getDecoder().decode(base64Str);
+                enforcePayloadLimit(payload);
+                Map<String, Object> result = replayService.replay(payload, resolvedRouteId, destination);
                 sendJson(exchange, 200, result);
                 return;
             }
@@ -707,6 +833,30 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
     }
 
+    private static Map<String, String> parseQueryParams(String query) {
+        if (query == null || query.isBlank()) {
+            return Map.of();
+        }
+        Map<String, String> params = new java.util.LinkedHashMap<>();
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                String key = java.net.URLDecoder.decode(pair.substring(0, eq), java.nio.charset.StandardCharsets.UTF_8);
+                String value = java.net.URLDecoder.decode(pair.substring(eq + 1), java.nio.charset.StandardCharsets.UTF_8);
+                params.put(key, value);
+            }
+        }
+        return params;
+    }
+
+    private static int parseIntParam(String value, int defaultValue, int min, int max) {
+        try {
+            return Math.max(min, Math.min(max, Integer.parseInt(value)));
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
+    }
+
     private boolean requireAuth(HttpExchange exchange) throws IOException {
         String token = config.apiToken();
         if (token == null || token.isBlank()) {
@@ -774,6 +924,15 @@ public final class ControlPlaneServer implements AutoCloseable {
 
     private void send(HttpExchange exchange, int status, String contentType, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        String acceptEncoding = exchange.getRequestHeaders().getFirst("Accept-Encoding");
+        boolean useGzip = acceptEncoding != null && acceptEncoding.contains("gzip") && bytes.length > 512;
+        if (useGzip) {
+            ByteArrayOutputStream buf = new ByteArrayOutputStream(bytes.length / 2);
+            try (GZIPOutputStream gz = new GZIPOutputStream(buf)) {
+                gz.write(bytes);
+            }
+            bytes = buf.toByteArray();
+        }
         exchange.getResponseHeaders().set("Content-Type", contentType);
         exchange.getResponseHeaders().set("X-Frame-Options", "DENY");
         exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
@@ -782,6 +941,10 @@ public final class ControlPlaneServer implements AutoCloseable {
         exchange.getResponseHeaders().set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
         exchange.getResponseHeaders().set("Content-Security-Policy",
                 "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+        if (useGzip) {
+            exchange.getResponseHeaders().set("Content-Encoding", "gzip");
+            exchange.getResponseHeaders().set("Vary", "Accept-Encoding");
+        }
         exchange.sendResponseHeaders(status, bytes.length);
         try (OutputStream stream = exchange.getResponseBody()) {
             stream.write(bytes);
@@ -851,213 +1014,100 @@ public final class ControlPlaneServer implements AutoCloseable {
         for (int index = 0; index < max; index++) {
             Map<String, Object> exchange = new LinkedHashMap<>();
             exchange.put("index", index);
-            exchange.put("request", index < requests.size() ? requests.get(index) : null);
-            exchange.put("response", index < responses.size() ? responses.get(index) : null);
+            exchange.put("request", index < requests.size() ? stripPayloadBase64(requests.get(index)) : null);
+            exchange.put("response", index < responses.size() ? stripPayloadBase64(responses.get(index)) : null);
             exchanges.add(exchange);
         }
         enriched.put("events", events);
-        enriched.put("requests", requests);
-        enriched.put("responses", responses);
+        enriched.put("requests", requests.stream().map(ControlPlaneServer::stripPayloadBase64).toList());
+        enriched.put("responses", responses.stream().map(ControlPlaneServer::stripPayloadBase64).toList());
         enriched.put("exchanges", exchanges);
-        enriched.put("latestRequest", requests.isEmpty() ? null : requests.getLast());
-        enriched.put("latestResponse", responses.isEmpty() ? null : responses.getLast());
+        enriched.put("latestRequest", requests.isEmpty() ? null : stripPayloadBase64(requests.getLast()));
+        enriched.put("latestResponse", responses.isEmpty() ? null : stripPayloadBase64(responses.getLast()));
         return enriched;
     }
 
+    private static Map<String, Object> stripPayloadBase64(Map<String, Object> payload) {
+        if (payload == null || !payload.containsKey("base64")) {
+            return payload;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>(payload);
+        copy.remove("base64");
+        return copy;
+    }
+
     private List<Map<String, Object>> summarizeRequests() {
-        return sessionStore.listSessions().stream()
-                .flatMap(summary -> {
-                    Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
-                    return summarizeRequestRows(summary, details).stream();
-                })
-                .sorted((left, right) -> {
-                    Instant l = left.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
-                    Instant r = right.get("startedAt") instanceof Instant instant ? instant : Instant.EPOCH;
-                    return r.compareTo(l);
-                })
-                .toList();
+        return sessionStore.listRequestRows();
     }
 
     private Map<String, Object> summarizeSession(Map<String, Object> summary) {
-        Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
-        return summarizeSession(summary, details);
+        String sessionId = String.valueOf(summary.get("sessionId"));
+        List<Map<String, Object>> rows = sessionStore.listRequestRows().stream()
+                .filter(row -> sessionId.equals(String.valueOf(row.get("sessionId"))))
+                .toList();
+        return summarizeSession(summary, rows);
     }
 
-    private Map<String, Object> summarizeSession(Map<String, Object> summary, Map<String, Object> details) {
+    private Map<String, Object> summarizeSession(Map<String, Object> summary, List<Map<String, Object>> requestRows) {
         Map<String, Object> enriched = new LinkedHashMap<>(summary);
-        if (details == null) {
-            return enriched;
-        }
-
-        Object eventsValue = details.get("events");
-        if (!(eventsValue instanceof List<?> rawEvents)) {
-            return enriched;
-        }
-
-        List<SessionEvent> typedEvents = new ArrayList<>();
-        for (Object rawEvent : rawEvents) {
-            if (rawEvent instanceof SessionEvent event) {
-                typedEvents.add(event);
-            }
-        }
-
-        List<Map<String, Object>> requests = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.CLIENT_TO_TARGET);
-        List<Map<String, Object>> responses = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.TARGET_TO_CLIENT);
-
-        Map<String, Object> latestRequest = requests.isEmpty() ? null : requests.getLast();
-        Map<String, Object> latestResponse = responses.isEmpty() ? null : responses.getLast();
-        boolean live = isSessionLive(summary.get("status"), requests, responses);
-        enriched.put("requestMethod", extractRequestMethod(latestRequest));
-        enriched.put("requestPath", extractRequestPath(latestRequest));
-        enriched.put("responseStatusCode", extractResponseStatusCode(latestResponse));
+        Map<String, Object> latestRequest = latestRequestRow(requestRows);
+        boolean live = isSessionLive(summary.get("status"), requestRows);
+        enriched.put("requestMethod", latestRequest == null ? "" : latestRequest.getOrDefault("requestMethod", ""));
+        enriched.put("requestPath", latestRequest == null ? "" : latestRequest.getOrDefault("requestPath", ""));
+        enriched.put("responseStatusCode", latestRequest == null ? "" : latestRequest.getOrDefault("responseStatusCode", ""));
         enriched.put("live", live);
-        Object startedAt = details.get("startedAt");
-        Object endedAt = details.get("endedAt");
+        Object startedAt = summary.get("startedAt");
+        Object endedAt = summary.get("endedAt");
         if (startedAt instanceof Instant start) {
-            Instant effectiveEnd = endedAt instanceof Instant end ? end : responseTimestamp(latestResponse);
+            Instant effectiveEnd = endedAt instanceof Instant end ? end : responseTimestamp(latestRequest);
             if (effectiveEnd != null && !effectiveEnd.isBefore(start)) {
                 enriched.put("durationMs", Duration.between(start, effectiveEnd).toMillis());
             }
         }
-        if (latestResponse != null) {
-            Object size = latestResponse.get("size");
-            if (size instanceof Number n) {
-                enriched.put("responseSizeBytes", n.longValue());
-            }
+        if (latestRequest != null && latestRequest.get("responseSizeBytes") instanceof Number number) {
+            enriched.put("responseSizeBytes", number.longValue());
         }
         return enriched;
     }
 
-    private List<Map<String, Object>> summarizeRequestRows(Map<String, Object> summary) {
-        Map<String, Object> details = sessionStore.sessionDetails(String.valueOf(summary.get("sessionId")));
-        return summarizeRequestRows(summary, details);
-    }
-
-    private List<Map<String, Object>> summarizeRequestRows(Map<String, Object> summary, Map<String, Object> details) {
-        if (details == null) {
-            return List.of();
-        }
-        Object eventsValue = details.get("events");
-        if (!(eventsValue instanceof List<?> rawEvents)) {
-            return List.of();
-        }
-
-        List<SessionEvent> typedEvents = new ArrayList<>();
-        for (Object rawEvent : rawEvents) {
-            if (rawEvent instanceof SessionEvent event) {
-                typedEvents.add(event);
+    private static Map<String, Object> latestRequestRow(List<Map<String, Object>> requestRows) {
+        Map<String, Object> latest = null;
+        int latestExchangeIndex = -1;
+        for (Map<String, Object> requestRow : requestRows) {
+            int exchangeIndex = requestRow.get("exchangeIndex") instanceof Number number ? number.intValue() : 0;
+            if (latest == null || exchangeIndex > latestExchangeIndex) {
+                latest = requestRow;
+                latestExchangeIndex = exchangeIndex;
             }
         }
-
-        List<Map<String, Object>> requests = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.CLIENT_TO_TARGET);
-        List<Map<String, Object>> responses = SessionPayloadAggregator.aggregateMessages(typedEvents, Direction.TARGET_TO_CLIENT);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (int index = 0; index < requests.size(); index++) {
-            Map<String, Object> request = requests.get(index);
-            Map<String, Object> response = index < responses.size() ? responses.get(index) : null;
-            Map<String, Object> row = new LinkedHashMap<>(summary);
-            row.put("exchangeIndex", index);
-            row.put("requestMethod", extractRequestMethod(request));
-            row.put("requestPath", extractRequestPath(request));
-            row.put("responseStatusCode", extractResponseStatusCode(response));
-            row.put("startedAt", requestTimestamp(request, summary.get("startedAt")));
-            row.put("durationMs", requestDuration(request, response));
-            if (response != null) {
-                Object size = response.get("size");
-                if (size instanceof Number number) {
-                    row.put("responseSizeBytes", number.longValue());
-                }
-            }
-            row.put("live", isSessionLive(summary.get("status"), requests, responses) && index == requests.size() - 1 && response == null);
-            rows.add(row);
-        }
-        return rows;
+        return latest;
     }
 
-    private static boolean isSessionLive(Object statusValue, List<Map<String, Object>> requests, List<Map<String, Object>> responses) {
+    private static Map<String, List<Map<String, Object>>> groupRequestsBySession(List<Map<String, Object>> requests) {
+        Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> request : requests) {
+            grouped.computeIfAbsent(String.valueOf(request.get("sessionId")), ignored -> new ArrayList<>()).add(request);
+        }
+        return grouped;
+    }
+
+    private static boolean isSessionLive(Object statusValue, List<Map<String, Object>> requestRows) {
         String status = statusValue == null ? "" : statusValue.toString();
         if (!"OPEN".equalsIgnoreCase(status)) {
             return false;
         }
-        if (requests.isEmpty() && responses.isEmpty()) {
+        if (requestRows.isEmpty()) {
             return true;
         }
-        return responses.size() < requests.size();
+        return requestRows.stream().anyMatch(row -> Boolean.TRUE.equals(row.get("live")));
     }
 
-    private static Instant responseTimestamp(Map<String, Object> response) {
-        if (response == null) {
+    private static Instant responseTimestamp(Map<String, Object> requestRow) {
+        if (requestRow == null) {
             return null;
         }
-        Object timestamp = response.get("timestamp");
-        return timestamp instanceof Instant instant ? instant : null;
-    }
-
-    private static Instant requestTimestamp(Map<String, Object> request, Object fallback) {
-        if (request != null) {
-            Object timestamp = request.get("timestamp");
-            if (timestamp instanceof Instant instant) {
-                return instant;
-            }
-        }
-        return fallback instanceof Instant instant ? instant : null;
-    }
-
-    private static Long requestDuration(Map<String, Object> request, Map<String, Object> response) {
-        Instant start = requestTimestamp(request, null);
-        Instant end = responseTimestamp(response);
-        if (start == null || end == null || end.isBefore(start)) {
-            return null;
-        }
-        return Duration.between(start, end).toMillis();
-    }
-
-    private static String extractRequestMethod(Map<String, Object> request) {
-        if (request == null) {
-            return "";
-        }
-        Object decodedValue = request.get("decoded");
-        if (!(decodedValue instanceof Map<?, ?> decoded)) {
-            return "";
-        }
-        Object requestValue = decoded.get("request");
-        if (!(requestValue instanceof Map<?, ?> requestMeta)) {
-            return "";
-        }
-        Object method = requestMeta.get("method");
-        return method == null ? "" : method.toString();
-    }
-
-    private static String extractRequestPath(Map<String, Object> request) {
-        if (request == null) {
-            return "";
-        }
-        Object decodedValue = request.get("decoded");
-        if (!(decodedValue instanceof Map<?, ?> decoded)) {
-            return "";
-        }
-        Object requestValue = decoded.get("request");
-        if (!(requestValue instanceof Map<?, ?> requestMeta)) {
-            return "";
-        }
-        Object path = requestMeta.get("path");
-        return path == null ? "" : path.toString();
-    }
-
-    private static String extractResponseStatusCode(Map<String, Object> response) {
-        if (response == null) {
-            return "";
-        }
-        Object decodedValue = response.get("decoded");
-        if (!(decodedValue instanceof Map<?, ?> decoded)) {
-            return "";
-        }
-        Object startLine = decoded.get("startLine");
-        if (!(startLine instanceof String line) || !line.startsWith("HTTP/")) {
-            return "";
-        }
-        String[] parts = line.split(" ", 3);
-        return parts.length >= 2 ? parts[1] : "";
+        Object endedAt = requestRow.get("endedAt");
+        return endedAt instanceof Instant instant ? instant : null;
     }
 
     static boolean isReplayable(SessionEvent event) {
