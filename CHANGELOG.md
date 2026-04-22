@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.4] - 2026-04-21
+
+### Performance
+
+- **Server-driven paginated request table** — the request list is now fetched from `/api/requests` using keyset cursor pagination instead of being derived client-side from all loaded sessions. Requests are filtered by method, status code, and full-text search on the server, and route-level aggregate stats (request count, average duration, error rate) are served from `/api/route-stats` without loading raw events
+- **`session_exchanges` summary table** — a new SQLite table tracks per-exchange method, path, status code, size, and timing in real time as payload events arrive. `listSessions()` now returns this data directly without loading or decoding raw events. A one-time backfill rebuilds summaries from existing events on first use, and the backfill guard runs at most once per store lifetime
+- **Lazy full-body loading** — response and request bodies are truncated to 16 KB in all API responses. The full content is fetched on demand from `/api/sessions/{id}/exchanges/{index}/body`, which queries only PAYLOAD events for the requested direction instead of loading the full session graph
+- **Raw payload bytes stripped from API responses** — `exchange.base64` is no longer included in `/api/sessions/{id}` responses. Non-pending PAYLOAD events also have their `details.base64` field removed before serialisation, since the decoded body is available through exchange aggregation
+- **Gzip compression for API responses** — JSON responses larger than 512 bytes are gzip-compressed when the client sends `Accept-Encoding: gzip`
+- **HTTP message split check optimized** — `HttpMessageParser` now uses a lightweight start-line check to detect HTTP messages instead of invoking the full `PayloadInspector.inspectBytes()` pipeline per chunk
+
+### Features
+
+- **Server-side replay by session and exchange index** — `POST /api/replay` now accepts `{routeId, sessionId, exchangeIndex, destination}` and fetches the payload from the database, removing the need to pass raw base64 through the UI
+- **Full-body copy and HAR export** — copying request/response bodies and exporting HAR files now transparently fetches the complete body from the server when `bodyTruncated` is set, so exports are never cut off at the preview limit
+
+### Bug fixes
+
+- **PAYLOAD SSE events no longer trigger a full session list refresh** — a new `scheduleRequestTableRefresh` path reloads only the active route's request rows when a PAYLOAD event arrives, avoiding unnecessary list redraws for unrelated routes
+- **Copy-to-clipboard and copy-as-cURL respect body truncation** — both actions now call `resolveFullBody` before writing to the clipboard, fetching the complete body when the cached preview is truncated
+- **`exchangeIndex` used before declaration in `buildPayloadCard`** — fixed a `ReferenceError` caused by referencing a `const` binding before its declaration in the same block
+
 ## [0.6.3] - 2026-03-17
 
 ### Bug fixes
