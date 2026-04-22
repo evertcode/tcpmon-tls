@@ -174,14 +174,18 @@ function buildSelectElement(id, options) {
 
 function renderRequestTableContent(requestRows) {
   const hasMore = getState('requestHasMore');
-  const hasPrev = getState('requestCursorStack').length > 0;
+  const cursorStack = getState('requestCursorStack');
+  const hasPrev = cursorStack.length > 0;
   const facets = getState('requestFacets') || {};
   const totalRequests = facets.totalRequests != null ? Number(facets.totalRequests) : null;
+  const pageSize = getState('requestPageSize') || 10;
+  const rangeStart = cursorStack.length * pageSize + 1;
+  const rangeEnd = rangeStart + requestRows.length - 1;
   const activeSession = getState('activeSession');
   const activeExchangeIndex = getState('activeExchangeIndex');
   const fragment = document.createDocumentFragment();
   fragment.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex));
-  fragment.appendChild(buildRequestTableFooter(requestRows.length, totalRequests, hasPrev, hasMore));
+  fragment.appendChild(buildRequestTableFooter(rangeStart, rangeEnd, totalRequests, hasPrev, hasMore));
   return fragment;
 }
 
@@ -296,15 +300,15 @@ function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex)
   return table;
 }
 
-function buildRequestTableFooter(rowCount, totalRequests, hasPrev, hasMore) {
+function buildRequestTableFooter(rangeStart, rangeEnd, totalRequests, hasPrev, hasMore) {
   const footer = document.createElement('div');
   footer.className = 'table-footer';
 
   const summary = document.createElement('div');
   summary.className = 'muted';
   summary.textContent = totalRequests != null
-    ? `Showing ${rowCount} of ${totalRequests} requests`
-    : `Showing ${rowCount} requests`;
+    ? `Showing ${rangeStart}–${rangeEnd} of ${totalRequests} requests`
+    : `Showing ${rangeStart}–${rangeEnd} requests`;
 
   const pager = document.createElement('div');
   pager.className = 'pager';
