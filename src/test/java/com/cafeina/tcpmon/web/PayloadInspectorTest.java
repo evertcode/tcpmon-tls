@@ -55,13 +55,14 @@ class PayloadInspectorTest {
     }
 
     @Test
-    void leavesNonHttpPayloadAsRawText() {
+    void leavesNonHttpPayloadAsBodyText() {
         byte[] payload = new byte[]{0x01, 0x02, 0x03};
 
         Map<String, Object> decoded = PayloadInspector.inspectBytes(payload);
 
         assertFalse((Boolean) decoded.get("isHttp"));
-        assertTrue(decoded.containsKey("rawText"));
+        assertTrue(decoded.containsKey("bodyText"));
+        assertFalse(decoded.containsKey("rawText"));
     }
 
     @Test

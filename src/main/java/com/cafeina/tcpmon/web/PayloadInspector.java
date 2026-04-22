@@ -19,6 +19,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
 final class PayloadInspector {
+    static final int BODY_PREVIEW_LIMIT = 16 * 1024;
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
     private static volatile boolean brotliLoaded;
@@ -37,15 +38,27 @@ final class PayloadInspector {
         payload.put("previewText", event.previewText());
         payload.put("previewHex", event.previewHex());
         payload.put("pendingId", event.pendingId());
-        payload.put("details", event.details());
 
         if (!"PAYLOAD".equals(event.type())) {
+            payload.put("details", event.details());
             return payload;
         }
 
         Object encoded = event.details().get("base64");
         if (!(encoded instanceof String base64)) {
+            payload.put("details", event.details());
             return payload;
+        }
+
+        // Strip base64 from details for completed payload events — the decoded body is
+        // already available via exchange aggregation; keeping it here doubles the transfer.
+        // Pending events retain the full details so the intercept editor can populate.
+        if (event.pendingId() == null) {
+            Map<String, Object> strippedDetails = new LinkedHashMap<>(event.details());
+            strippedDetails.remove("base64");
+            payload.put("details", strippedDetails);
+        } else {
+            payload.put("details", event.details());
         }
 
         byte[] bytes = Base64.getDecoder().decode(base64);
@@ -54,10 +67,12 @@ final class PayloadInspector {
     }
 
     static Map<String, Object> inspectBytes(byte[] bytes) {
+        return inspectBytes(bytes, false);
+    }
+
+    static Map<String, Object> inspectBytes(byte[] bytes, boolean fullBody) {
         Map<String, Object> decoded = new LinkedHashMap<>();
-        String rawText = new String(bytes, StandardCharsets.UTF_8);
-        decoded.put("rawText", sanitize(rawText));
-        decoded.put("bodyText", sanitize(rawText));
+        decoded.put("bodyText", sanitize(new String(bytes, StandardCharsets.UTF_8)));
         decoded.put("isHttp", false);
 
         String latin1 = new String(bytes, StandardCharsets.ISO_8859_1);
@@ -87,14 +102,19 @@ final class PayloadInspector {
 
         byte[] wireBodyBytes = latin1.substring(headerEnd + 4).getBytes(StandardCharsets.ISO_8859_1);
         byte[] decodedBodyBytes = decodeBody(wireBodyBytes, headerMap);
+        boolean truncated = !fullBody && decodedBodyBytes.length > BODY_PREVIEW_LIMIT;
+        String bodyText = truncated
+                ? new String(decodedBodyBytes, 0, BODY_PREVIEW_LIMIT, StandardCharsets.UTF_8)
+                : new String(decodedBodyBytes, StandardCharsets.UTF_8);
         decoded.put("isHttp", true);
         decoded.put("startLine", lines[0]);
         decoded.put("request", parseRequestLine(lines[0]));
         decoded.put("headers", headers);
         decoded.put("headersText", headersBlock);
-        decoded.put("bodyText", sanitize(new String(decodedBodyBytes, StandardCharsets.UTF_8)));
-        decoded.put("bodyBase64", Base64.getEncoder().encodeToString(decodedBodyBytes));
-        decoded.put("wireBodyBase64", Base64.getEncoder().encodeToString(wireBodyBytes));
+        decoded.put("bodyText", sanitize(bodyText));
+        if (truncated) {
+            decoded.put("bodyTruncated", true);
+        }
         return decoded;
     }
 

@@ -49,6 +49,10 @@ final class SessionPayloadAggregator {
     }
 
     static List<Map<String, Object>> aggregateMessages(List<SessionEvent> events, Direction direction) {
+        return aggregateMessages(events, direction, false);
+    }
+
+    static List<Map<String, Object>> aggregateMessages(List<SessionEvent> events, Direction direction, boolean fullBody) {
         java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
         java.util.List<Integer> chunkOffsets = new java.util.ArrayList<>();
         java.util.List<Instant> chunkTimestamps = new java.util.ArrayList<>();
@@ -83,7 +87,7 @@ final class SessionPayloadAggregator {
         aggregated.put("size", payload.length);
         aggregated.put("chunkCount", chunkCount);
         aggregated.put("base64", Base64.getEncoder().encodeToString(payload));
-        aggregated.put("decoded", PayloadInspector.inspectBytes(payload));
+        aggregated.put("decoded", PayloadInspector.inspectBytes(payload, fullBody));
 
         List<byte[]> messages = HttpMessageParser.splitMessages(payload);
         if (messages.size() <= 1) {
@@ -103,7 +107,7 @@ final class SessionPayloadAggregator {
             entry.put("size", message.length);
             entry.put("chunkCount", aggregated.get("chunkCount"));
             entry.put("base64", Base64.getEncoder().encodeToString(message));
-            entry.put("decoded", PayloadInspector.inspectBytes(message));
+            entry.put("decoded", PayloadInspector.inspectBytes(message, fullBody));
             output.add(entry);
             msgOffset += message.length;
         }
