@@ -1,23 +1,36 @@
-function renderRequestActions(data, payload) {
-  if (!payload?.base64 || !data?.routeId) {
+function renderRequestActions(data, exchangeIndex) {
+  if (!data?.sessionId || !data?.routeId) {
     return null;
   }
   const actions = document.createElement('div');
   actions.className = 'payload-actions';
+  const replayDataset = {
+    routeId: data.routeId,
+    sessionId: data.sessionId,
+    exchangeIndex: String(exchangeIndex),
+  };
   actions.append(
     buildPayloadActionButton('primary action-main', 'replay-payload', {
-      routeId: data.routeId,
-      base64: payload.base64,
-      destination: 'listener'
+      ...replayDataset, destination: 'listener'
     }, 'Recapture request'),
     buildPayloadActionButton('secondary action-alt', 'replay-payload', {
-      routeId: data.routeId,
-      base64: payload.base64,
-      destination: 'target'
+      ...replayDataset, destination: 'target'
     }, 'Send direct'),
     buildPayloadActionButton('utility', 'copy-curl-from-session', {}, 'Copy as cURL')
   );
   return actions;
+}
+
+async function fetchFullBodyText(sessionId, exchangeIndex, direction, decoded) {
+  if (!decoded.bodyTruncated) return decoded.bodyText || '';
+  try {
+    const data = await fetchJson(
+      `/api/sessions/${sessionId}/exchanges/${exchangeIndex}/body?direction=${direction}`
+    );
+    return data.bodyText || '';
+  } catch {
+    return decoded.bodyText || '';
+  }
 }
 
 async function exportHar() {
@@ -36,6 +49,11 @@ async function exportHar() {
         if (!req) continue;
         const reqDecoded = req.decoded || {};
         const resDecoded = res ? (res.decoded || {}) : {};
+        const exchangeIndex = exchange.index ?? 0;
+        const [reqBodyText, resBodyText] = await Promise.all([
+          fetchFullBodyText(session.sessionId, exchangeIndex, 'request', reqDecoded),
+          res ? fetchFullBodyText(session.sessionId, exchangeIndex, 'response', resDecoded) : Promise.resolve('')
+        ]);
         const reqHeaders = Array.isArray(reqDecoded.headers) ? reqDecoded.headers : [];
         const resHeaders = Array.isArray(resDecoded.headers) ? resDecoded.headers : [];
         const reqMeta = reqDecoded.request || {};
@@ -57,7 +75,7 @@ async function exportHar() {
             cookies: [],
             headersSize: -1,
             bodySize: req.size || 0,
-            postData: reqDecoded.bodyText ? { mimeType: '', text: reqDecoded.bodyText } : undefined
+            postData: reqBodyText ? { mimeType: '', text: reqBodyText } : undefined
           },
           response: res ? {
             status: statusCode,
@@ -68,7 +86,7 @@ async function exportHar() {
             content: {
               size: res.size || 0,
               mimeType: (resHeaders.find(h => String(h.name || '').toLowerCase() === 'content-type') || {}).value || '',
-              text: resDecoded.bodyText || ''
+              text: resBodyText
             },
             redirectURL: '',
             headersSize: -1,
@@ -110,10 +128,19 @@ function resolvePayload(isRequest) {
     : (exchange.response || data.latestResponse);
 }
 
-function copyCurrentBody(isRequest) {
+async function resolveFullBody(payload, isRequest) {
+  const decoded = payload.decoded || {};
+  if (!decoded.bodyTruncated) return decoded.bodyText || '';
+  const sessionId = getState('activeSession') || '';
+  const exchangeIndex = getState('activeExchangeIndex') || 0;
+  return fetchFullBodyText(sessionId, exchangeIndex, isRequest ? 'request' : 'response', decoded);
+}
+
+async function copyCurrentBody(isRequest) {
   const payload = resolvePayload(isRequest);
   if (!payload) return;
-  const bodyText = formatBody(payload.decoded || {});
+  const fullBodyText = await resolveFullBody(payload, isRequest);
+  const bodyText = formatBody({ ...(payload.decoded || {}), bodyText: fullBodyText });
   if (!bodyText) return;
   copyText(bodyText);
 }
@@ -127,11 +154,13 @@ function copyCurrentHeaders(isRequest) {
   copyText(text);
 }
 
-function copyCurlFromSession() {
+async function copyCurlFromSession() {
   const lastLoadedSession = getState('lastLoadedSession');
   const payload = resolvePayload(true);
   if (!payload) return;
-  const curl = generateCurl((lastLoadedSession || {}).targetAddress || '', payload.decoded || {});
+  const decoded = payload.decoded || {};
+  const fullBodyText = await resolveFullBody(payload, true);
+  const curl = generateCurl((lastLoadedSession || {}).targetAddress || '', { ...decoded, bodyText: fullBodyText });
   copyText(curl);
 }
 
@@ -265,12 +294,12 @@ async function replayEvent(sessionId, eventId, destination) {
   }
 }
 
-async function replayPayload(routeId, base64, destination) {
+async function replayPayload(routeId, sessionId, exchangeIndex, destination) {
   try {
     const result = await fetchJson('/api/replay', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ routeId, base64, destination })
+      body: JSON.stringify({ routeId, sessionId, exchangeIndex, destination })
     });
     setStatus('success', `Replay ${destination} completed: sent ${result.bytesSent} bytes, received ${result.bytesReceived ?? 0} bytes from ${result.target}`);
   } catch (error) {

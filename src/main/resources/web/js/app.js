@@ -136,10 +136,10 @@ function bindUiEvents() {
         await selectSession(actionEl.dataset.sessionId, Number(actionEl.dataset.exchangeIndex || 0));
         break;
       case 'change-request-page':
-        changeRequestPage(Number(actionEl.dataset.delta || 0));
+        await changeRequestPage(Number(actionEl.dataset.delta || 0));
         break;
       case 'copy-current-body':
-        copyCurrentBody(parseBooleanAttr(actionEl.dataset.isRequest));
+        await copyCurrentBody(parseBooleanAttr(actionEl.dataset.isRequest));
         break;
       case 'release-pending':
         await releasePending(actionEl.dataset.pendingId);
@@ -158,10 +158,15 @@ function bindUiEvents() {
         await selectExchange(Number(actionEl.dataset.exchangeIndex || 0));
         break;
       case 'replay-payload':
-        await replayPayload(actionEl.dataset.routeId, actionEl.dataset.base64 || '', actionEl.dataset.destination || 'listener');
+        await replayPayload(
+          actionEl.dataset.routeId,
+          actionEl.dataset.sessionId || '',
+          Number(actionEl.dataset.exchangeIndex || 0),
+          actionEl.dataset.destination || 'listener'
+        );
         break;
       case 'copy-curl-from-session':
-        copyCurlFromSession();
+        await copyCurlFromSession();
         break;
       case 'copy-current-headers':
         copyCurrentHeaders(parseBooleanAttr(actionEl.dataset.isRequest));
@@ -264,6 +269,17 @@ async function handleSessionChange(event) {
     }
     return;
   }
+  if (payload.reason === 'PAYLOAD') {
+    if (affectsActiveSession) {
+      scheduleDetailRefresh();
+      scheduleRequestTableRefresh();
+      return;
+    }
+    if (affectsActiveRoute) {
+      scheduleRequestTableRefresh();
+    }
+    return;
+  }
   if (affectsActiveSession) {
     scheduleDetailRefresh();
     scheduleListRefresh();
@@ -346,6 +362,45 @@ function scheduleListRefresh() {
   }, 800));
 }
 
+function scheduleRequestTableRefresh() {
+  setState('pendingRequestTableRefresh', true);
+  if (getState('scheduledRequestTableRefreshTimer')) {
+    return;
+  }
+  setState('scheduledRequestTableRefreshTimer', setTimeout(async () => {
+    setState('scheduledRequestTableRefreshTimer', null);
+    if (getState('requestTableRefreshInFlight')) {
+      scheduleRequestTableRefresh();
+      return;
+    }
+    if (!getState('pendingRequestTableRefresh')) {
+      return;
+    }
+    patchState({
+      pendingRequestTableRefresh: false,
+      requestTableRefreshInFlight: true
+    });
+    try {
+      const activeRoute = getState('activeRoute');
+      if (activeRoute) {
+        await loadRequestsForRoute(activeRoute);
+        renderRequestTable();
+      }
+    } catch (error) {
+      setState('streamMessage', { type: 'info', text: 'Live update received, but refresh failed. Use Refresh to resync.' });
+      renderApp({ list: false, subtitle: false, detail: false });
+    } finally {
+      setState('requestTableRefreshInFlight', false);
+    }
+    if (!getState('streamMessage')) {
+      renderApp({ list: false, subtitle: true, detail: false });
+    }
+    if (getState('pendingRequestTableRefresh')) {
+      scheduleRequestTableRefresh();
+    }
+  }, 800));
+}
+
 function updateTopbarSubtitle() {
   const el = document.getElementById('topbar-subtitle');
   if (!el) return;
@@ -355,12 +410,12 @@ function updateTopbarSubtitle() {
     return;
   }
   const sessions = sessionsForActiveRoute();
-  const requestRows = requestRowsForActiveRoute();
+  const facets = getState('requestFacets') || {};
   const pending = sessions.reduce((sum, s) => sum + Number(s.pendingCount || 0), 0);
   if (pending > 0) {
     el.textContent = activeRoute + ' — ' + pending + ' pending';
   } else {
-    const count = requestRows.length;
+    const count = Number(facets.totalRequests || 0);
     el.textContent = activeRoute + ' — ' + count + ' request' + (count !== 1 ? 's' : '');
   }
 }
