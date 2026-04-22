@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.5] - 2026-04-22
+
+### Features
+
+- **Page size selector in request table** — a dropdown in the request toolbar lets users choose between 10, 25, 50, and 100 rows per page. Defaults to 10. Changing the value resets to the first page and reloads, consistent with the method and status code filters
+
+### Bug fixes
+
+- **Request table total and average duration fall back to request rows** — `buildRouteHeaderViewModel` now uses `requestRows.length` and `calculateAverageDuration(requestRows)` when server facets have not loaded yet, preventing the total from showing 0 on first render
+- **GitHub Actions opt into Node.js 24** — added `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` to both workflows ahead of the mandatory Node.js 24 migration on June 2nd 2026
+
 ## [0.6.4] - 2026-04-21
 
 ### Performance
