@@ -4,9 +4,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Set;
 
 final class HttpMessageParser {
+    private static final Set<String> HTTP_METHODS = Set.of(
+            "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
+
     private HttpMessageParser() {
     }
 
@@ -19,9 +22,7 @@ final class HttpMessageParser {
                 break;
             }
             byte[] message = java.util.Arrays.copyOfRange(payload, offset, next);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> inspected = (Map<String, Object>) PayloadInspector.inspectBytes(message);
-            if (!Boolean.TRUE.equals(inspected.get("isHttp"))) {
+            if (!looksLikeHttpStartLine(message)) {
                 break;
             }
             messages.add(message);
@@ -31,6 +32,25 @@ final class HttpMessageParser {
             messages.add(payload);
         }
         return messages;
+    }
+
+    private static boolean looksLikeHttpStartLine(byte[] message) {
+        int lineEnd = indexOf(message, 0, "\r\n".getBytes(StandardCharsets.ISO_8859_1));
+        if (lineEnd < 0) {
+            lineEnd = indexOf(message, 0, "\n".getBytes(StandardCharsets.ISO_8859_1));
+        }
+        if (lineEnd <= 0) {
+            return false;
+        }
+        String startLine = new String(message, 0, lineEnd, StandardCharsets.ISO_8859_1);
+        if (startLine.startsWith("HTTP/")) {
+            return true;
+        }
+        int separator = startLine.indexOf(' ');
+        if (separator <= 0) {
+            return false;
+        }
+        return HTTP_METHODS.contains(startLine.substring(0, separator));
     }
 
     private static int nextMessageEnd(byte[] payload, int start) {
