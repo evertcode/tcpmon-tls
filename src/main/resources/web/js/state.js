@@ -7,6 +7,7 @@ window.uiState = {
   requestHasMore: false,
   requestCursorStack: [],
   requestFacets: null,
+  requestPageSize: 10,
   activeRoute: null,
   lastLoadedSession: null,
   proxyConfig: null,

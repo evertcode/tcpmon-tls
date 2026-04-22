@@ -65,7 +65,8 @@ async function loadRequestsForRoute(routeId) {
   const method = getState('requestMethodFilterValue');
   const statusCode = getState('requestStatusCodeFilterValue');
   const q = getState('requestSearchValue').trim();
-  const params = new URLSearchParams({ routeId, limit: '50' });
+  const limit = String(getState('requestPageSize') || 10);
+  const params = new URLSearchParams({ routeId, limit });
   if (method) params.set('method', method);
   if (statusCode) params.set('statusCode', statusCode);
   if (q) params.set('q', q);
@@ -89,7 +90,8 @@ async function loadRequestsPage(routeId, cursor, resetStack) {
   const method = getState('requestMethodFilterValue');
   const statusCode = getState('requestStatusCodeFilterValue');
   const q = getState('requestSearchValue').trim();
-  const params = new URLSearchParams({ routeId, limit: '50' });
+  const limit = String(getState('requestPageSize') || 10);
+  const params = new URLSearchParams({ routeId, limit });
   if (cursor) params.set('cursor', cursor);
   if (method) params.set('method', method);
   if (statusCode) params.set('statusCode', statusCode);
@@ -149,7 +151,8 @@ function renderRequestTable() {
 
   const methodFilter = buildSelectElement('request-method-filter', renderMethodOptions());
   const statusCodeFilter = buildSelectElement('request-status-code-filter', renderStatusCodeOptions());
-  toolbar.append(methodFilter, statusCodeFilter);
+  const pageSizeFilter = buildSelectElement('request-page-size', renderPageSizeOptions());
+  toolbar.append(methodFilter, statusCodeFilter, pageSizeFilter);
 
   card.appendChild(toolbar);
   card.appendChild(renderRequestTableContent(requestRows));
@@ -194,6 +197,11 @@ function renderMethodOptions() {
     })));
 }
 
+function renderPageSizeOptions() {
+  const current = getState('requestPageSize') || 10;
+  return [10, 25, 50, 100].map(n => ({ value: String(n), label: `${n} / page`, selected: n === current }));
+}
+
 function renderStatusCodeOptions() {
   const requestStatusCodeFilterValue = getState('requestStatusCodeFilterValue');
   const facets = getState('requestFacets') || {};
@@ -207,10 +215,12 @@ function renderStatusCodeOptions() {
 }
 
 async function resetRequestPageAndRender() {
+  const pageSizeEl = document.getElementById('request-page-size');
   patchState({
     requestSearchValue: document.getElementById('request-search')?.value ?? getState('requestSearchValue'),
     requestMethodFilterValue: document.getElementById('request-method-filter')?.value ?? getState('requestMethodFilterValue'),
-    requestStatusCodeFilterValue: document.getElementById('request-status-code-filter')?.value ?? getState('requestStatusCodeFilterValue')
+    requestStatusCodeFilterValue: document.getElementById('request-status-code-filter')?.value ?? getState('requestStatusCodeFilterValue'),
+    requestPageSize: pageSizeEl ? Number(pageSizeEl.value) : getState('requestPageSize')
   });
   const activeRoute = getState('activeRoute');
   if (!activeRoute) return;

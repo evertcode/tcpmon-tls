@@ -189,7 +189,7 @@ function bindUiEvents() {
   });
 
   document.addEventListener('change', event => {
-    if (event.target.id === 'request-method-filter' || event.target.id === 'request-status-code-filter') {
+    if (event.target.id === 'request-method-filter' || event.target.id === 'request-status-code-filter' || event.target.id === 'request-page-size') {
       resetRequestPageAndRender();
     }
   });
