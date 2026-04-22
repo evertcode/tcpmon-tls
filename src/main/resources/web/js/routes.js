@@ -132,8 +132,8 @@ function buildRouteHeaderViewModel(routeId, sessions, requestRows, selectedSessi
   const liveCount = sessions.filter(session => isSessionLive(session)).length;
   const pendingCount = sessions.reduce((sum, session) => sum + Number(session.pendingCount || 0), 0);
   const activeSession = resolveActiveSessionSummary(sessions, requestRows, selectedSessionId, selectedExchangeIndex, lastLoadedSession);
-  const total = Number(facets.totalRequests || 0);
-  const avgDurationMs = facets.avgDurationMs != null ? Number(facets.avgDurationMs) : null;
+  const total = facets.totalRequests != null ? Number(facets.totalRequests) : requestRows.length;
+  const avgDurationMs = facets.avgDurationMs != null ? Number(facets.avgDurationMs) : calculateAverageDuration(requestRows);
   return {
     routeId,
     listenerAddress: first.listenerAddress || '',
