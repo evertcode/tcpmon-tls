@@ -192,13 +192,9 @@ async function downloadExchange(format) {
     method: reqMeta.method || '',
     path: reqMeta.path || '',
     query: reqMeta.query || '',
-    version: reqMeta.version || '',
     body: reqBody
   };
   const response = {
-    status: resStart[1] || '',
-    statusText: resStart.slice(2).join(' ') || '',
-    version: resStart[0] || '',
     body: resBody
   };
   const sessionId = lastLoadedSession.sessionId || 'exchange';
@@ -230,13 +226,9 @@ function buildExchangeXml(meta, request, response) {
     ${tag('method', request.method)}
     ${tag('path', request.path)}
     ${tag('query', request.query)}
-    ${tag('version', request.version)}
     <body>${escapeXml(request.body)}</body>
   </request>
   <response>
-    ${tag('status', response.status)}
-    ${tag('statusText', response.statusText)}
-    ${tag('version', response.version)}
     <body>${escapeXml(response.body)}</body>
   </response>
 </exchange>`;
