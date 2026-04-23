@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.7] - 2026-04-23
+
+### Features
+
+- **Request and response body viewer** — the payload detail panel now renders captured bodies in a dedicated code-style viewer instead of a plain `<pre>`, with line numbers, basic JSON/XML highlighting, and in-place expansion when a body is truncated and the full content is loaded on demand
+
 ## [0.6.6] - 2026-04-22
 
 ### Features
