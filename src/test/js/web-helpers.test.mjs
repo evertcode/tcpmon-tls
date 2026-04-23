@@ -163,6 +163,48 @@ test('prettyPrintXml indents nested elements', () => {
   );
 });
 
+test('formatExportBody pretty prints downloaded payload bodies', () => {
+  const ctx = loadWebHelpers();
+
+  assert.equal(
+    ctx.formatExportBody(
+      {
+        isHttp: true,
+        headers: [{ name: 'Content-Type', value: 'application/json' }]
+      },
+      '{"id":5,"products":[{"productId":7,"quantity":1}]}'
+    ),
+    '{\n  "id": 5,\n  "products": [\n    {\n      "productId": 7,\n      "quantity": 1\n    }\n  ]\n}'
+  );
+});
+
+test('buildExchangeXml preserves readable body content inside CDATA', () => {
+  const ctx = loadWebHelpers();
+
+  const xml = ctx.buildExchangeXml(
+    {
+      exportedAt: '2026-04-23T12:00:00.000Z',
+      sessionId: 'session-1',
+      targetAddress: 'api.example.com:443',
+      startedAt: '2026-04-23T11:59:59.000Z',
+      durationMs: 123
+    },
+    {
+      method: 'POST',
+      path: '/orders',
+      query: '',
+      body: '{\n  "id": 5,\n  "userId": 3\n}'
+    },
+    {
+      body: '<root>\n  <ok>true</ok>\n</root>'
+    }
+  );
+
+  assert.match(xml, /<body>\n\s+<!\[CDATA\[\{\n  "id": 5,\n  "userId": 3\n\}\]\]>\n\s+<\/body>/);
+  assert.match(xml, /<body>\n\s+<!\[CDATA\[<root>\n  <ok>true<\/ok>\n<\/root>\]\]>\n\s+<\/body>/);
+  assert.equal(xml.includes('&quot;id&quot;'), false);
+});
+
 test('calcTtfb returns milliseconds between first request and response payload', () => {
   const ctx = loadWebHelpers();
 

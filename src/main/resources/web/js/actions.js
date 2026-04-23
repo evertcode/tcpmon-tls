@@ -192,10 +192,10 @@ async function downloadExchange(format) {
     method: reqMeta.method || '',
     path: reqMeta.path || '',
     query: reqMeta.query || '',
-    body: reqBody
+    body: formatExportBody(reqDecoded, reqBody)
   };
   const response = {
-    body: resBody
+    body: formatExportBody(resDecoded, resBody)
   };
   const sessionId = lastLoadedSession.sessionId || 'exchange';
   const dateStr = new Date().toISOString().slice(0, 10);
@@ -207,6 +207,10 @@ async function downloadExchange(format) {
     const json = JSON.stringify({ meta, request, response }, null, 2);
     triggerDownload(json, `${filename}.json`, 'application/json');
   }
+}
+
+function formatExportBody(decoded, bodyText) {
+  return formatBody({ ...(decoded || {}), bodyText: bodyText || '' });
 }
 
 function buildExchangeXml(meta, request, response) {
@@ -226,12 +230,25 @@ function buildExchangeXml(meta, request, response) {
     ${tag('method', request.method)}
     ${tag('path', request.path)}
     ${tag('query', request.query)}
-    <body>${escapeXml(request.body)}</body>
+${buildXmlBodyTag(request.body, '    ')}
   </request>
   <response>
-    <body>${escapeXml(response.body)}</body>
+${buildXmlBodyTag(response.body, '    ')}
   </response>
 </exchange>`;
+}
+
+function buildXmlBodyTag(body, indent = '') {
+  const text = String(body ?? '');
+  if (!text) {
+    return `${indent}<body/>`;
+  }
+  const cdata = wrapCdata(text);
+  return `${indent}<body>\n${indent}  ${cdata}\n${indent}</body>`;
+}
+
+function wrapCdata(value) {
+  return `<![CDATA[${String(value ?? '').replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
 }
 
 function escapeXml(str) {
