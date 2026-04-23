@@ -193,14 +193,12 @@ async function downloadExchange(format) {
     path: reqMeta.path || '',
     query: reqMeta.query || '',
     version: reqMeta.version || '',
-    headers: Array.isArray(reqDecoded.headers) ? reqDecoded.headers : [],
     body: reqBody
   };
   const response = {
     status: resStart[1] || '',
     statusText: resStart.slice(2).join(' ') || '',
     version: resStart[0] || '',
-    headers: Array.isArray(resDecoded.headers) ? resDecoded.headers : [],
     body: resBody
   };
   const sessionId = lastLoadedSession.sessionId || 'exchange';
@@ -219,9 +217,6 @@ function buildExchangeXml(meta, request, response) {
   function tag(name, value) {
     return `<${name}>${escapeXml(String(value ?? ''))}</${name}>`;
   }
-  function headersXml(headers) {
-    return headers.map(h => `    <header name="${escapeXml(h.name || '')}">${escapeXml(h.value || '')}</header>`).join('\n');
-  }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <exchange>
   <meta>
@@ -236,18 +231,12 @@ function buildExchangeXml(meta, request, response) {
     ${tag('path', request.path)}
     ${tag('query', request.query)}
     ${tag('version', request.version)}
-    <headers>
-${headersXml(request.headers)}
-    </headers>
     <body>${escapeXml(request.body)}</body>
   </request>
   <response>
     ${tag('status', response.status)}
     ${tag('statusText', response.statusText)}
     ${tag('version', response.version)}
-    <headers>
-${headersXml(response.headers)}
-    </headers>
     <body>${escapeXml(response.body)}</body>
   </response>
 </exchange>`;
