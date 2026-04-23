@@ -11,6 +11,7 @@ window.uiState = {
   activeRoute: null,
   lastLoadedSession: null,
   proxyConfig: null,
+  themePreference: 'system',
   diffMode: false,
   activeSession: null,
   activeExchangeIndex: 0,

@@ -93,6 +93,61 @@ function parseBooleanAttr(value) {
   return String(value) === 'true';
 }
 
+const THEME_STORAGE_KEY = 'tcpmon-theme-preference';
+
+function getStoredThemePreference() {
+  try {
+    const value = localStorage.getItem(THEME_STORAGE_KEY);
+    return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
+  } catch (error) {
+    return 'system';
+  }
+}
+
+function getSystemTheme() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function getEffectiveTheme(preference) {
+  return preference === 'system' ? getSystemTheme() : preference;
+}
+
+function applyThemePreference(preference) {
+  const safePreference = preference === 'light' || preference === 'dark' ? preference : 'system';
+  document.documentElement.dataset.theme = getEffectiveTheme(safePreference);
+  document.documentElement.dataset.themePreference = safePreference;
+  setState('themePreference', safePreference);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, safePreference);
+  } catch (error) {
+    // Ignore storage failures and keep using the in-memory value.
+  }
+}
+
+function toggleThemePreference() {
+  const currentPreference = getState('themePreference');
+  const effectiveTheme = getEffectiveTheme(currentPreference);
+  applyThemePreference(effectiveTheme === 'dark' ? 'light' : 'dark');
+}
+
+function initializeTheme() {
+  applyThemePreference(getStoredThemePreference());
+  renderConfigButton();
+  if (!window.matchMedia) return;
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  const handleChange = () => {
+    if (getState('themePreference') === 'system') {
+      applyThemePreference('system');
+      renderConfigButton();
+    }
+  };
+  if (typeof mediaQuery.addEventListener === 'function') {
+    mediaQuery.addEventListener('change', handleChange);
+  } else if (typeof mediaQuery.addListener === 'function') {
+    mediaQuery.addListener(handleChange);
+  }
+}
+
 function bindUiEvents() {
   const addRouteBtn = document.getElementById('add-route-btn');
   if (addRouteBtn) addRouteBtn.addEventListener('click', () => openAddRouteModal());
@@ -150,6 +205,14 @@ function bindUiEvents() {
         break;
       case 'toggle-config-panel':
         toggleConfigPanel();
+        break;
+      case 'toggle-theme':
+        toggleThemePreference();
+        renderConfigButton();
+        break;
+      case 'set-theme-system':
+        applyThemePreference('system');
+        renderConfigButton();
         break;
       case 'select-session':
         await selectSession(actionEl.dataset.sessionId, Number(actionEl.dataset.exchangeIndex || 0));
@@ -507,4 +570,5 @@ async function clearRequestFilters() {
 }
 
 bindUiEvents();
+initializeTheme();
 initApp();

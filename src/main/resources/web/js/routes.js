@@ -269,11 +269,38 @@ async function loadConfig() {
 function renderConfigButton() {
   const el = document.getElementById('topbar-config');
   if (!el) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'topbar-tools';
+
+  const themeCluster = document.createElement('div');
+  themeCluster.className = 'theme-cluster';
+
+  const currentPreference = getState('themePreference');
+  const effectiveTheme = document.documentElement.dataset.theme || 'light';
+
+  const themeToggle = document.createElement('button');
+  themeToggle.className = `utility theme-toggle${effectiveTheme === 'dark' ? ' dark' : ' light'}`;
+  themeToggle.dataset.action = 'toggle-theme';
+  themeToggle.setAttribute('aria-label', effectiveTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+  themeToggle.title = currentPreference === 'system'
+    ? `Theme: System (${effectiveTheme === 'dark' ? 'Dark' : 'Light'})`
+    : `Theme: ${effectiveTheme === 'dark' ? 'Dark' : 'Light'}`;
+  themeToggle.textContent = effectiveTheme === 'dark' ? '☀' : '☾';
+
+  const themeAuto = document.createElement('button');
+  themeAuto.className = `utility theme-auto${currentPreference === 'system' ? ' active' : ''}`;
+  themeAuto.dataset.action = 'set-theme-system';
+  themeAuto.textContent = 'Auto';
+  themeAuto.setAttribute('aria-pressed', String(currentPreference === 'system'));
+  themeAuto.title = 'Use system theme';
+
   const button = document.createElement('button');
   button.className = 'utility';
   button.dataset.action = 'toggle-config-panel';
   button.textContent = 'Config';
-  el.replaceChildren(button);
+  themeCluster.append(themeToggle, themeAuto);
+  wrap.append(themeCluster, button);
+  el.replaceChildren(wrap);
 }
 
 function buildRouteListItem(route, selectedRouteId) {
