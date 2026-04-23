@@ -1,5 +1,6 @@
 let routeModalMode = 'add';
 let routeModalEditId = null;
+let routeModalOpenerEl = null;
 
 function toggleListenerTls(val) {
   document.getElementById('listener-tls-fields').style.display = val === 'TLS' ? '' : 'none';
@@ -45,7 +46,9 @@ function openAddRouteModal() {
   document.getElementById('rm-target-verify').checked = true;
   document.getElementById('rm-target-rewrite').checked = false;
   document.getElementById('route-modal-error').style.display = 'none';
+  routeModalOpenerEl = document.activeElement;
   document.getElementById('route-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('rm-id').focus(), 50);
 }
 
 function openEditRouteModal(routeId) {
@@ -96,11 +99,17 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-target-verify').checked = route.target.verifyHostname !== false;
   document.getElementById('rm-target-rewrite').checked = !!route.target.rewriteHostHeader;
   document.getElementById('route-modal-error').style.display = 'none';
+  routeModalOpenerEl = document.activeElement;
   document.getElementById('route-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('rm-id').focus(), 50);
 }
 
 function closeRouteModal() {
   document.getElementById('route-modal').style.display = 'none';
+  if (routeModalOpenerEl && typeof routeModalOpenerEl.focus === 'function') {
+    routeModalOpenerEl.focus();
+    routeModalOpenerEl = null;
+  }
 }
 
 function tlsFieldVal(id) {

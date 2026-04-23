@@ -47,15 +47,10 @@ function buildTlsPanel(data) {
   details.style.marginBottom = '12px';
 
   const summary = document.createElement('summary');
-  summary.style.cursor = 'pointer';
-  summary.style.listStyle = 'none';
-  summary.style.display = 'flex';
-  summary.style.justifyContent = 'space-between';
-  summary.style.alignItems = 'center';
-  summary.style.padding = '2px 0';
+  summary.className = 'tls-panel-summary';
 
   const title = document.createElement('strong');
-  title.style.fontSize = '13px';
+  title.className = 'tls-panel-title';
   title.textContent = 'TLS';
 
   const subtitle = document.createElement('span');
@@ -65,8 +60,7 @@ function buildTlsPanel(data) {
   summary.append(title, subtitle);
 
   const section = document.createElement('div');
-  section.className = 'tls-section';
-  section.style.paddingBottom = '12px';
+  section.className = 'tls-section tls-section-padded';
   section.append(
     buildTlsColumn('Inbound (client → proxy)', inbound),
     buildTlsColumn('Outbound (proxy → target)', outbound)
@@ -800,12 +794,16 @@ function renderEmptyState(message) {
 
   const headerEmpty = document.createElement('div');
   headerEmpty.className = 'empty';
-  headerEmpty.style.flexDirection = 'column';
-  headerEmpty.style.gap = '6px';
-  headerEmpty.append(
+  const inner = document.createElement('div');
+  inner.style.display = 'flex';
+  inner.style.flexDirection = 'column';
+  inner.style.alignItems = 'center';
+  inner.style.gap = '6px';
+  inner.append(
     document.createTextNode(message),
     buildEmptyStateHint('Proxy traffic through the configured listener to begin capturing.')
   );
+  headerEmpty.appendChild(inner);
   document.getElementById('route-header').replaceChildren(headerEmpty);
 
   document.getElementById('request-table').replaceChildren();

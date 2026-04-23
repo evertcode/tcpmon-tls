@@ -57,9 +57,27 @@ function renderRouteList() {
   const selectedRouteId = getState('activeRoute');
   const container = document.getElementById('routes');
   if (!routes.length) {
+    const query = document.getElementById('route-search').value.trim();
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'No matching routes.';
+    if (query) {
+      empty.textContent = 'No routes match your search.';
+    } else {
+      const inner = document.createElement('div');
+      inner.style.display = 'flex';
+      inner.style.flexDirection = 'column';
+      inner.style.alignItems = 'center';
+      inner.style.gap = '10px';
+      const msg = document.createElement('span');
+      msg.textContent = 'No routes configured yet.';
+      const addBtn = document.createElement('button');
+      addBtn.className = 'primary';
+      addBtn.style.fontSize = '13px';
+      addBtn.textContent = '+ Add route';
+      addBtn.addEventListener('click', () => openAddRouteModal());
+      inner.append(msg, addBtn);
+      empty.appendChild(inner);
+    }
     container.replaceChildren(empty);
     return;
   }
@@ -271,6 +289,12 @@ function buildRouteListItem(route, selectedRouteId) {
   row.className = `route-row${route.routeId === selectedRouteId ? ' active' : ''}${isOpen ? ' status-open' : isError ? ' status-error' : ''}`;
   row.dataset.action = 'select-route';
   row.dataset.routeId = route.routeId;
+  row.setAttribute('role', 'button');
+  row.setAttribute('tabindex', '0');
+  row.setAttribute('aria-pressed', String(route.routeId === selectedRouteId));
+  if (route.routeId === selectedRouteId) {
+    row.setAttribute('aria-current', 'true');
+  }
 
   const top = document.createElement('div');
   top.className = 'row-top';
@@ -339,10 +363,11 @@ function buildRouteActions(routeId) {
 
 function buildRouteActionButton(action, routeId, title, label) {
   const button = document.createElement('button');
-  button.className = 'route-action-btn';
+  button.className = 'utility route-action-btn';
   button.dataset.action = action;
   button.dataset.routeId = routeId;
   button.title = title;
+  button.setAttribute('aria-label', `${title} route "${routeId}"`);
   button.textContent = label;
   return button;
 }

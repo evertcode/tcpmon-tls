@@ -125,14 +125,33 @@ function requestRowsForActiveRoute() {
 function renderRequestTable() {
   const requestRows = requestRowsForActiveRoute();
   const container = document.getElementById('request-table');
+  const searchVal = getState('requestSearchValue');
+  const methodVal = getState('requestMethodFilterValue');
+  const statusVal = getState('requestStatusCodeFilterValue');
+  const hasActiveFilters = Boolean(searchVal || methodVal || statusVal);
+
   if (!requestRows.length) {
     const facets = getState('requestFacets');
     const total = facets ? Number(facets.totalRequests || 0) : 0;
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = total > 0
-      ? 'No requests match the current filter.'
-      : 'No HTTP requests captured for this route yet.';
+    if (total > 0) {
+      const inner = document.createElement('div');
+      inner.style.display = 'flex';
+      inner.style.flexDirection = 'column';
+      inner.style.alignItems = 'center';
+      inner.style.gap = '10px';
+      const msg = document.createElement('span');
+      msg.textContent = 'No requests match the current filters.';
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'utility';
+      clearBtn.textContent = 'Clear filters';
+      clearBtn.dataset.action = 'clear-request-filters';
+      inner.append(msg, clearBtn);
+      empty.appendChild(inner);
+    } else {
+      empty.textContent = 'No HTTP requests captured for this route yet.';
+    }
     container.replaceChildren(empty);
     return;
   }
@@ -145,7 +164,7 @@ function renderRequestTable() {
   const searchInput = document.createElement('input');
   searchInput.id = 'request-search';
   searchInput.type = 'search';
-  searchInput.value = getState('requestSearchValue');
+  searchInput.value = searchVal;
   searchInput.placeholder = 'Filter requests in this route';
   toolbar.appendChild(searchInput);
 
@@ -153,6 +172,14 @@ function renderRequestTable() {
   const statusCodeFilter = buildSelectElement('request-status-code-filter', renderStatusCodeOptions());
   const pageSizeFilter = buildSelectElement('request-page-size', renderPageSizeOptions());
   toolbar.append(methodFilter, statusCodeFilter, pageSizeFilter);
+
+  if (hasActiveFilters) {
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'utility danger';
+    clearBtn.textContent = 'Clear filters';
+    clearBtn.dataset.action = 'clear-request-filters';
+    toolbar.appendChild(clearBtn);
+  }
 
   card.appendChild(toolbar);
   card.appendChild(renderRequestTableContent(requestRows));

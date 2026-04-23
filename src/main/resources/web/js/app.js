@@ -1,24 +1,43 @@
+function clearBannerTimer() {
+  const timer = getState('statusMessageDismissTimer');
+  if (timer) {
+    clearTimeout(timer);
+    setState('statusMessageDismissTimer', null);
+  }
+}
+
 function renderBanner() {
   const el = document.getElementById('status-banner');
   const streamMessage = getState('streamMessage');
   const statusMessage = getState('statusMessage');
-  const messages = [];
+  const fragments = [];
   if (streamMessage) {
-    messages.push(streamMessage);
+    const banner = document.createElement('div');
+    banner.className = `banner ${streamMessage.type}`;
+    banner.textContent = streamMessage.text;
+    fragments.push(banner);
   }
   if (statusMessage) {
-    messages.push(statusMessage);
+    const banner = document.createElement('div');
+    banner.className = `banner ${statusMessage.type}`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'banner-close';
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Dismiss notification');
+    closeBtn.addEventListener('click', () => {
+      clearBannerTimer();
+      setState('statusMessage', null);
+      renderBanner();
+    });
+    const text = document.createElement('span');
+    text.textContent = statusMessage.text;
+    banner.append(closeBtn, text);
+    fragments.push(banner);
   }
-  if (!messages.length) {
+  if (!fragments.length) {
     el.replaceChildren();
     return;
   }
-  const fragments = messages.map(message => {
-    const banner = document.createElement('div');
-    banner.className = `banner ${message.type}`;
-    banner.textContent = message.text;
-    return banner;
-  });
   el.replaceChildren(...fragments);
 }
 
@@ -171,6 +190,9 @@ function bindUiEvents() {
       case 'download-exchange':
         await downloadExchange(actionEl.dataset.format || 'json');
         break;
+      case 'clear-request-filters':
+        await clearRequestFilters();
+        break;
       case 'copy-current-headers':
         copyCurrentHeaders(parseBooleanAttr(actionEl.dataset.isRequest));
         break;
@@ -182,6 +204,22 @@ function bindUiEvents() {
         break;
       default:
         break;
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      const modal = document.getElementById('route-modal');
+      if (modal && modal.style.display !== 'none') {
+        closeRouteModal();
+      }
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      const el = event.target.closest('[data-action]:not(button):not(a)');
+      if (el) {
+        event.preventDefault();
+        el.click();
+      }
     }
   });
 
@@ -210,6 +248,7 @@ function bindUiEvents() {
 }
 
 function setStatus(type, text) {
+  clearBannerTimer();
   setState('statusMessage', { type, text });
   const activeSession = getState('activeSession');
   renderApp({
@@ -217,6 +256,24 @@ function setStatus(type, text) {
     subtitle: false,
     detail: Boolean(activeSession)
   });
+  const delay = type === 'success' ? 5000 : type === 'error' ? 10000 : 0;
+  if (delay > 0) {
+    setState('statusMessageDismissTimer', setTimeout(() => {
+      setState('statusMessageDismissTimer', null);
+      setState('statusMessage', null);
+      renderBanner();
+    }, delay));
+  }
+}
+
+function setConnectionStatus(status) {
+  const dot = document.getElementById('connection-status');
+  if (!dot) return;
+  dot.className = `connection-dot${status ? ' ' + status : ''}`;
+  const labels = { live: 'Connected — live updates active', offline: 'Disconnected — retrying…' };
+  const label = labels[status] || 'Connecting…';
+  dot.setAttribute('aria-label', label);
+  dot.title = label;
 }
 
 async function connectEventStream() {
@@ -224,9 +281,11 @@ async function connectEventStream() {
   if (currentEventSource) {
     currentEventSource.close();
   }
+  setConnectionStatus('');
   try {
     await fetchJson('/api/config');
   } catch (error) {
+    setConnectionStatus('offline');
     setState('streamMessage', { type: 'error', text: error.message });
     renderApp({ list: false, subtitle: false, detail: false });
     return;
@@ -234,10 +293,12 @@ async function connectEventStream() {
   const nextEventSource = new EventSource('/api/events');
   setState('eventSource', nextEventSource);
   nextEventSource.addEventListener('open', () => {
+    setConnectionStatus('live');
     setState('streamMessage', null);
     renderApp({ list: false, subtitle: false, detail: false });
   });
   nextEventSource.addEventListener('error', () => {
+    setConnectionStatus('offline');
     setState('streamMessage', { type: 'info', text: 'Live updates disconnected. Trying to reconnect...' });
     renderApp({ list: false, subtitle: false, detail: false });
     setTimeout(() => connectEventStream(), 1500);
@@ -431,6 +492,18 @@ async function initApp() {
     setStatus('error', error.message);
   }
   await connectEventStream();
+}
+
+async function clearRequestFilters() {
+  patchState({
+    requestSearchValue: '',
+    requestMethodFilterValue: '',
+    requestStatusCodeFilterValue: ''
+  });
+  const activeRoute = getState('activeRoute');
+  if (!activeRoute) return;
+  await loadRequestsForRoute(activeRoute);
+  renderRequestTable();
 }
 
 bindUiEvents();
