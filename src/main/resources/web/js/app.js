@@ -168,6 +168,9 @@ function bindUiEvents() {
       case 'copy-curl-from-session':
         await copyCurlFromSession();
         break;
+      case 'download-exchange':
+        await downloadExchange(actionEl.dataset.format || 'json');
+        break;
       case 'copy-current-headers':
         copyCurrentHeaders(parseBooleanAttr(actionEl.dataset.isRequest));
         break;

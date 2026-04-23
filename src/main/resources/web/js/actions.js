@@ -16,7 +16,9 @@ function renderRequestActions(data, exchangeIndex) {
     buildPayloadActionButton('secondary action-alt', 'replay-payload', {
       ...replayDataset, destination: 'target'
     }, 'Send direct'),
-    buildPayloadActionButton('utility', 'copy-curl-from-session', {}, 'Copy as cURL')
+    buildPayloadActionButton('utility', 'copy-curl-from-session', {}, 'Copy as cURL'),
+    buildPayloadActionButton('utility', 'download-exchange', { format: 'json' }, 'Download JSON'),
+    buildPayloadActionButton('utility', 'download-exchange', { format: 'xml' }, 'Download XML')
   );
   return actions;
 }
@@ -162,6 +164,111 @@ async function copyCurlFromSession() {
   const fullBodyText = await resolveFullBody(payload, true);
   const curl = generateCurl((lastLoadedSession || {}).targetAddress || '', { ...decoded, bodyText: fullBodyText });
   copyText(curl);
+}
+
+async function downloadExchange(format) {
+  const lastLoadedSession = getState('lastLoadedSession');
+  if (!lastLoadedSession) return;
+  const exchangeIndex = getState('activeExchangeIndex') || 0;
+  const exchange = (lastLoadedSession.exchanges || [])[exchangeIndex] || {};
+  const reqPayload = exchange.request || lastLoadedSession.latestRequest;
+  const resPayload = exchange.response || lastLoadedSession.latestResponse;
+  const reqDecoded = reqPayload?.decoded || {};
+  const resDecoded = resPayload?.decoded || {};
+  const [reqBody, resBody] = await Promise.all([
+    reqPayload ? resolveFullBody(reqPayload, true) : Promise.resolve(''),
+    resPayload ? resolveFullBody(resPayload, false) : Promise.resolve('')
+  ]);
+  const reqMeta = reqDecoded.request || {};
+  const resStart = (resDecoded.startLine || '').split(' ');
+  const meta = {
+    exportedAt: new Date().toISOString(),
+    sessionId: lastLoadedSession.sessionId || '',
+    targetAddress: lastLoadedSession.targetAddress || '',
+    startedAt: lastLoadedSession.startedAt || '',
+    durationMs: lastLoadedSession.durationMs ?? null
+  };
+  const request = {
+    method: reqMeta.method || '',
+    path: reqMeta.path || '',
+    query: reqMeta.query || '',
+    version: reqMeta.version || '',
+    headers: Array.isArray(reqDecoded.headers) ? reqDecoded.headers : [],
+    body: reqBody
+  };
+  const response = {
+    status: resStart[1] || '',
+    statusText: resStart.slice(2).join(' ') || '',
+    version: resStart[0] || '',
+    headers: Array.isArray(resDecoded.headers) ? resDecoded.headers : [],
+    body: resBody
+  };
+  const sessionId = lastLoadedSession.sessionId || 'exchange';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const filename = `tcpmon-${sessionId}-ex${exchangeIndex}-${dateStr}`;
+  if (format === 'xml') {
+    const xml = buildExchangeXml(meta, request, response);
+    triggerDownload(xml, `${filename}.xml`, 'application/xml');
+  } else {
+    const json = JSON.stringify({ meta, request, response }, null, 2);
+    triggerDownload(json, `${filename}.json`, 'application/json');
+  }
+}
+
+function buildExchangeXml(meta, request, response) {
+  function tag(name, value) {
+    return `<${name}>${escapeXml(String(value ?? ''))}</${name}>`;
+  }
+  function headersXml(headers) {
+    return headers.map(h => `    <header name="${escapeXml(h.name || '')}">${escapeXml(h.value || '')}</header>`).join('\n');
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<exchange>
+  <meta>
+    ${tag('exportedAt', meta.exportedAt)}
+    ${tag('sessionId', meta.sessionId)}
+    ${tag('targetAddress', meta.targetAddress)}
+    ${tag('startedAt', meta.startedAt)}
+    ${tag('durationMs', meta.durationMs ?? '')}
+  </meta>
+  <request>
+    ${tag('method', request.method)}
+    ${tag('path', request.path)}
+    ${tag('query', request.query)}
+    ${tag('version', request.version)}
+    <headers>
+${headersXml(request.headers)}
+    </headers>
+    <body>${escapeXml(request.body)}</body>
+  </request>
+  <response>
+    ${tag('status', response.status)}
+    ${tag('statusText', response.statusText)}
+    ${tag('version', response.version)}
+    <headers>
+${headersXml(response.headers)}
+    </headers>
+    <body>${escapeXml(response.body)}</body>
+  </response>
+</exchange>`;
+}
+
+function escapeXml(str) {
+  return String(str)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function triggerDownload(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function generateCurl(targetAddress, decoded) {
