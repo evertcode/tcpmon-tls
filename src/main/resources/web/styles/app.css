@@ -837,9 +837,14 @@ tr.session-entry.active {
   justify-content: space-between;
   align-items: start;
   gap: 12px;
+  min-width: 0;
+}
+.payload-header > :first-child {
+  min-width: 0;
 }
 .payload-section {
   padding: 0 12px 12px;
+  min-width: 0;
 }
 .payload-details {
   margin: 0 12px 12px;
@@ -894,6 +899,7 @@ tr.session-entry.active {
 .payload-body {
   padding: 0 12px 12px;
   min-height: 0;
+  min-width: 0;
 }
 .payload-body-head {
   display: flex;
@@ -901,16 +907,18 @@ tr.session-entry.active {
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
+  min-width: 0;
 }
 .payload-actions {
   display: flex;
   gap: 10px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   padding: 0 12px 12px;
   border-top: 1px solid var(--border);
   margin-top: 4px;
   padding-top: 12px;
   align-items: stretch;
+  min-width: 0;
 }
 pre {
   margin: 0;
