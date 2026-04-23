@@ -276,29 +276,53 @@ function renderConfigButton() {
   themeCluster.className = 'theme-cluster';
 
   const currentPreference = getState('themePreference');
-  const effectiveTheme = document.documentElement.dataset.theme || 'light';
+  const themeButtons = [
+    {
+      action: 'set-theme-light',
+      label: 'Light',
+      icon: '☀',
+      title: 'Use light theme',
+      active: currentPreference === 'light'
+    },
+    {
+      action: 'set-theme-system',
+      label: 'Auto',
+      icon: '◐',
+      title: 'Use system theme',
+      active: currentPreference === 'system'
+    },
+    {
+      action: 'set-theme-dark',
+      label: 'Dark',
+      icon: '☾',
+      title: 'Use dark theme',
+      active: currentPreference === 'dark'
+    }
+  ];
 
-  const themeToggle = document.createElement('button');
-  themeToggle.className = `utility theme-toggle${effectiveTheme === 'dark' ? ' dark' : ' light'}`;
-  themeToggle.dataset.action = 'toggle-theme';
-  themeToggle.setAttribute('aria-label', effectiveTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
-  themeToggle.title = currentPreference === 'system'
-    ? `Theme: System (${effectiveTheme === 'dark' ? 'Dark' : 'Light'})`
-    : `Theme: ${effectiveTheme === 'dark' ? 'Dark' : 'Light'}`;
-  themeToggle.textContent = effectiveTheme === 'dark' ? '☀' : '☾';
+  for (const config of themeButtons) {
+    const buttonEl = document.createElement('button');
+    buttonEl.className = `utility theme-option${config.active ? ' active' : ''}`;
+    buttonEl.dataset.action = config.action;
+    buttonEl.setAttribute('aria-pressed', String(config.active));
+    buttonEl.title = config.title;
 
-  const themeAuto = document.createElement('button');
-  themeAuto.className = `utility theme-auto${currentPreference === 'system' ? ' active' : ''}`;
-  themeAuto.dataset.action = 'set-theme-system';
-  themeAuto.textContent = 'Auto';
-  themeAuto.setAttribute('aria-pressed', String(currentPreference === 'system'));
-  themeAuto.title = 'Use system theme';
+    const icon = document.createElement('span');
+    icon.className = 'theme-option-icon';
+    icon.textContent = config.icon;
+
+    const label = document.createElement('span');
+    label.className = 'theme-option-label';
+    label.textContent = config.label;
+
+    buttonEl.append(icon, label);
+    themeCluster.appendChild(buttonEl);
+  }
 
   const button = document.createElement('button');
   button.className = 'utility';
   button.dataset.action = 'toggle-config-panel';
   button.textContent = 'Config';
-  themeCluster.append(themeToggle, themeAuto);
   wrap.append(themeCluster, button);
   el.replaceChildren(wrap);
 }

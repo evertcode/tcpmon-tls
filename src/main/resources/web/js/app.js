@@ -124,12 +124,6 @@ function applyThemePreference(preference) {
   }
 }
 
-function toggleThemePreference() {
-  const currentPreference = getState('themePreference');
-  const effectiveTheme = getEffectiveTheme(currentPreference);
-  applyThemePreference(effectiveTheme === 'dark' ? 'light' : 'dark');
-}
-
 function initializeTheme() {
   applyThemePreference(getStoredThemePreference());
   renderConfigButton();
@@ -206,12 +200,16 @@ function bindUiEvents() {
       case 'toggle-config-panel':
         toggleConfigPanel();
         break;
-      case 'toggle-theme':
-        toggleThemePreference();
+      case 'set-theme-light':
+        applyThemePreference('light');
         renderConfigButton();
         break;
       case 'set-theme-system':
         applyThemePreference('system');
+        renderConfigButton();
+        break;
+      case 'set-theme-dark':
+        applyThemePreference('dark');
         renderConfigButton();
         break;
       case 'select-session':
