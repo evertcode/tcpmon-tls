@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.6] - 2026-04-22
+
+### Features
+
+- **JSON and XML exchange download** — two new buttons in the request action bar let the user download the active exchange as a structured file. Both formats include metadata (exportedAt, sessionId, targetAddress, startedAt, durationMs), the request (method, path, query, body) and the response (body). Bodies are fetched from the server when truncated so the download always contains the complete content
+
+### Bug fixes
+
+- **Pagination footer shows range instead of row count** — the footer now displays "Showing 11–20 of 300 requests" reflecting the actual position in the result set, derived from the cursor stack depth and page size
+
 ## [0.6.5] - 2026-04-22
 
 ### Features
