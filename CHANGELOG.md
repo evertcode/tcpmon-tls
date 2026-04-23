@@ -5,10 +5,13 @@
 ### Features
 
 - **JSON and XML exchange download** — two new buttons in the request action bar let the user download the active exchange as a structured file. Both formats include metadata (exportedAt, sessionId, targetAddress, startedAt, durationMs), the request (method, path, query, body) and the response (body). Bodies are fetched from the server when truncated so the download always contains the complete content
+- **Self-hosted IBM Plex typography** — the control plane now ships local `IBM Plex Sans` and `IBM Plex Mono` webfonts, improving technical readability and giving the UI a more deliberate product identity without relying on third-party font CDNs
+- **Persistent theme selector in the topbar** — the web UI now exposes explicit `Light`, `Auto`, and `Dark` theme controls in the topbar, persists the choice in local storage, and applies it on first paint to avoid theme flicker during page load
 
 ### Bug fixes
 
 - **Pagination footer shows range instead of row count** — the footer now displays "Showing 11–20 of 300 requests" reflecting the actual position in the result set, derived from the cursor stack depth and page size
+- **Theme changes transition smoothly** — switching between light and dark themes now animates key surfaces with a short transition while respecting `prefers-reduced-motion`
 
 ## [0.6.5] - 2026-04-22
 
