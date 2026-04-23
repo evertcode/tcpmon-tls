@@ -194,9 +194,142 @@ function buildPayloadHeadersDetails(title, headers, decoded, isRequest, payloadH
   return details;
 }
 
-function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex) {
+function buildBodyViewer(text, mode) {
+  const root = document.createElement('div');
+  root.className = 'body-viewer';
+  root.dataset.mode = mode;
+
+  const scroll = document.createElement('div');
+  scroll.className = 'body-viewer-scroll';
+
+  const gutter = document.createElement('div');
+  gutter.className = 'body-viewer-gutter';
+  gutter.setAttribute('aria-hidden', 'true');
+
+  const code = document.createElement('div');
+  code.className = 'body-viewer-code';
+  code.setAttribute('role', 'textbox');
+  code.setAttribute('aria-readonly', 'true');
+  code.tabIndex = 0;
+
+  scroll.append(gutter, code);
+  root.appendChild(scroll);
+
+  root.setValue = value => {
+    renderBodyViewer(root, String(value || ''), mode);
+  };
+  root.setValue(text);
+  return root;
+}
+
+function renderBodyViewer(root, text, mode) {
+  const scroll = root.children[0];
+  const gutter = scroll.children[0];
+  const code = scroll.children[1];
+  const lines = String(text || '').split('\n');
+
+  gutter.replaceChildren();
+  code.replaceChildren();
+
+  for (let index = 0; index < lines.length; index++) {
+    const lineNumber = document.createElement('span');
+    lineNumber.className = 'body-viewer-line-number';
+    lineNumber.textContent = String(index + 1);
+    gutter.appendChild(lineNumber);
+
+    const line = document.createElement('div');
+    line.className = 'body-viewer-line';
+    appendHighlightedLine(line, lines[index], mode);
+    code.appendChild(line);
+  }
+}
+
+function appendHighlightedLine(line, text, mode) {
+  const tokens = mode === 'json'
+    ? tokenizeJsonLine(text)
+    : mode === 'xml'
+      ? tokenizeXmlLine(text)
+      : [{ type: 'text', value: text }];
+
+  if (!tokens.length) {
+    line.appendChild(document.createTextNode(''));
+    return;
+  }
+
+  for (const token of tokens) {
+    if (!token.value) continue;
+    if (token.type === 'text') {
+      line.appendChild(document.createTextNode(token.value));
+      continue;
+    }
+    const span = document.createElement('span');
+    span.className = `tok-${token.type}`;
+    span.textContent = token.value;
+    line.appendChild(span);
+  }
+}
+
+function tokenizeJsonLine(text) {
+  const tokens = [];
+  const pattern = /"(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\btrue\b|\bfalse\b|\bnull\b|[{}\[\],:]/g;
+  let lastIndex = 0;
+  for (const match of text.matchAll(pattern)) {
+    const value = match[0];
+    const index = match.index || 0;
+    if (index > lastIndex) {
+      tokens.push({ type: 'text', value: text.slice(lastIndex, index) });
+    }
+    const trailing = text.slice(index + value.length);
+    const type = value.startsWith('"') && trailing.trimStart().startsWith(':')
+      ? 'json-key'
+      : value.startsWith('"')
+        ? 'json-string'
+        : value === 'true' || value === 'false'
+          ? 'json-boolean'
+          : value === 'null'
+            ? 'json-null'
+            : /^[{}\[\],:]$/.test(value)
+              ? 'json-punctuation'
+              : 'json-number';
+    tokens.push({ type, value });
+    lastIndex = index + value.length;
+  }
+  if (lastIndex < text.length) {
+    tokens.push({ type: 'text', value: text.slice(lastIndex) });
+  }
+  return tokens;
+}
+
+function tokenizeXmlLine(text) {
+  const tokens = [];
+  const pattern = /<!--.*?-->|<\/?[\w:-]+|\/?>|[\w:-]+="[^"]*"/g;
+  let lastIndex = 0;
+  for (const match of text.matchAll(pattern)) {
+    const value = match[0];
+    const index = match.index || 0;
+    if (index > lastIndex) {
+      tokens.push({ type: 'text', value: text.slice(lastIndex, index) });
+    }
+    const type = value.startsWith('<!--')
+      ? 'xml-comment'
+      : value.includes('=')
+        ? 'xml-attr'
+        : value.startsWith('<')
+          ? 'xml-tag'
+          : 'text';
+    tokens.push({ type, value });
+    lastIndex = index + value.length;
+  }
+  if (lastIndex < text.length) {
+    tokens.push({ type: 'text', value: text.slice(lastIndex) });
+  }
+  return tokens;
+}
+
+function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex, decoded) {
   const body = document.createElement('div');
   body.className = 'payload-body';
+  const viewerMode = detectBodyViewerMode(decoded || {});
 
   const head = document.createElement('div');
   head.className = 'payload-body-head';
@@ -214,9 +347,7 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
     head.appendChild(copyBtn);
   }
 
-  const pre = document.createElement('pre');
-  pre.className = 'scroll';
-  pre.textContent = bodyText;
+  const viewer = buildBodyViewer(bodyText, viewerMode);
 
   if (bodyTruncated) {
     const expandBtn = document.createElement('button');
@@ -231,7 +362,8 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
         const data = await fetchJson(
           `/api/sessions/${sessionId}/exchanges/${exchangeIndex}/body?direction=${direction}`
         );
-        pre.textContent = data.bodyText || '';
+        const fullBodyText = formatBody({ ...(decoded || {}), bodyText: data.bodyText || '' });
+        viewer.setValue(fullBodyText);
         const copyBtn = document.createElement('button');
         copyBtn.className = 'utility';
         copyBtn.dataset.action = 'copy-current-body';
@@ -244,9 +376,9 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
         expandBtn.disabled = false;
       }
     });
-    body.append(head, pre, expandBtn);
+    body.append(head, viewer, expandBtn);
   } else {
-    body.append(head, pre);
+    body.append(head, viewer);
   }
 
   return body;
@@ -281,7 +413,7 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
     buildPayloadHeader(title, payload.timestamp || '', payload.size || 0, chunkText, payload.direction || expectedDirection, ttfb),
     buildStartLineSection(decoded.startLine || 'No HTTP start line'),
     buildPayloadHeadersDetails(title, headers, decoded, isRequest, payloadHeadersExpanded),
-    buildPayloadBodySection(bodyText || 'No body captured', hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex)
+    buildPayloadBodySection(bodyText || 'No body captured', hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex, decoded)
   );
   if (actions) {
     article.appendChild(actions);

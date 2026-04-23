@@ -65,6 +65,33 @@ function formatBody(decoded) {
   return bodyText;
 }
 
+function getHeaderValue(headers, name) {
+  if (!Array.isArray(headers)) {
+    return '';
+  }
+  const expected = String(name || '').toLowerCase();
+  const header = headers.find(item => String(item?.name || '').toLowerCase() === expected);
+  return String(header?.value || '');
+}
+
+function detectBodyViewerMode(decoded) {
+  const bodyText = String(decoded?.bodyText || '').trim();
+  if (!bodyText) {
+    return 'text';
+  }
+  if (!decoded?.isHttp) {
+    return 'text';
+  }
+  const contentType = getHeaderValue(decoded.headers, 'content-type').toLowerCase();
+  if (contentType.includes('json') || looksLikeJson(bodyText)) {
+    return 'json';
+  }
+  if (contentType.includes('xml') || contentType.includes('soap') || looksLikeXml(bodyText)) {
+    return 'xml';
+  }
+  return 'text';
+}
+
 function formatTime(value) {
   if (!value) return '';
   const date = new Date(value);

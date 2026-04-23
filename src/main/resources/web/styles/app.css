@@ -1066,6 +1066,66 @@ tr.session-entry.active {
   align-items: stretch;
   min-width: 0;
 }
+.body-viewer {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.body-viewer-scroll {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  max-height: 320px;
+  overflow: auto;
+}
+.body-viewer-gutter {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  padding: 10px 0 10px 10px;
+  background: color-mix(in srgb, var(--surface-2) 82%, var(--surface) 18%);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  left: 0;
+}
+.body-viewer-code {
+  min-width: 0;
+  padding: 10px 12px;
+  font: 12px/1.5 var(--mono);
+  font-variant-ligatures: none;
+  color: var(--text);
+  white-space: pre;
+  tab-size: 2;
+}
+.body-viewer-line-number,
+.body-viewer-line {
+  min-height: 18px;
+}
+.body-viewer-line-number {
+  min-width: 40px;
+  padding-right: 10px;
+  text-align: right;
+  font: 11px/1.5 var(--mono);
+  color: var(--text-muted);
+  user-select: none;
+}
+.tok-json-key,
+.tok-xml-tag {
+  color: var(--accent);
+}
+.tok-json-string,
+.tok-xml-attr {
+  color: var(--ok);
+}
+.tok-json-number,
+.tok-json-boolean,
+.tok-json-null {
+  color: var(--warn);
+}
+.tok-json-punctuation,
+.tok-xml-comment {
+  color: var(--text-muted);
+}
 pre {
   margin: 0;
   white-space: pre-wrap;
@@ -1077,10 +1137,6 @@ pre {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
-}
-.payload-body pre {
-  max-height: 320px;
-  overflow: auto;
 }
 .loading-overlay {
   opacity: 0.5;

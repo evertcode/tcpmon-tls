@@ -18,9 +18,14 @@ class FakeNode {
     this.className = '';
     this.id = '';
     this._textContent = '';
+    this.attributes = {};
+    this.listeners = {};
+    this.parentNode = null;
+    this.tabIndex = -1;
   }
 
   appendChild(child) {
+    child.parentNode = this;
     this.children.push(child);
     return child;
   }
@@ -40,6 +45,20 @@ class FakeNode {
     this.append(...items);
   }
 
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+  }
+
+  addEventListener(type, listener) {
+    this.listeners[type] = listener;
+  }
+
+  remove() {
+    if (!this.parentNode) return;
+    this.parentNode.children = this.parentNode.children.filter(child => child !== this);
+    this.parentNode = null;
+  }
+
   set textContent(value) {
     this._textContent = String(value);
   }
@@ -53,6 +72,17 @@ class FakeNode {
     }
     return this._textContent;
   }
+}
+
+function findFirst(node, predicate) {
+  if (predicate(node)) {
+    return node;
+  }
+  for (const child of node.children || []) {
+    const match = findFirst(child, predicate);
+    if (match) return match;
+  }
+  return null;
 }
 
 class FakeDocument {
@@ -258,6 +288,56 @@ test('buildPayloadActionButton creates a button with dataset and label', () => {
   assert.equal(button.dataset.routeId, 'route-a');
   assert.equal(button.dataset.destination, 'listener');
   assert.equal(button.textContent, 'Recapture request');
+});
+
+test('buildPayloadBodySection renders a body viewer for formatted json bodies', () => {
+  const ctx = loadWebHelpers();
+
+  const body = ctx.buildPayloadBodySection(
+    '{\n  "ok": true\n}',
+    true,
+    true,
+    false,
+    'session-1',
+    0,
+    {
+      isHttp: true,
+      bodyText: '{"ok":true}',
+      headers: [{ name: 'Content-Type', value: 'application/json' }]
+    }
+  );
+
+  const viewer = findFirst(body, node => node.className === 'body-viewer');
+  assert.ok(viewer);
+  assert.equal(viewer.dataset.mode, 'json');
+  assert.equal(findFirst(body, node => node.tagName === 'pre'), null);
+  assert.equal(findFirst(body, node => node.className === 'body-viewer-code').textContent, '{  "ok": true}');
+});
+
+test('body viewer load-full-body handler updates content using formatted payload text', async () => {
+  const ctx = loadWebHelpers();
+  ctx.fetchJson = async () => ({ bodyText: '<root><ok>true</ok></root>' });
+
+  const body = ctx.buildPayloadBodySection(
+    '<root/>',
+    true,
+    false,
+    true,
+    'session-1',
+    2,
+    {
+      isHttp: true,
+      bodyText: '<root/>',
+      headers: [{ name: 'Content-Type', value: 'application/xml' }]
+    }
+  );
+
+  const button = findFirst(body, node => node.tagName === 'button' && node.textContent === 'Load full body');
+  await button.listeners.click();
+
+  const viewerCode = findFirst(body, node => node.className === 'body-viewer-code');
+  assert.equal(viewerCode.textContent, '<root>  <ok>true</ok></root>');
+  assert.equal(findFirst(body, node => node.tagName === 'button' && node.textContent === 'Copy body').dataset.isRequest, 'false');
 });
 
 test('buildExchangeButtons creates exchange selectors and compare action', () => {
