@@ -437,6 +437,10 @@ class ControlPlaneServerTest {
         assertEquals("text/javascript; charset=utf-8", ControlPlaneServer.assetContentType("app.js"));
         assertEquals("text/html; charset=utf-8", ControlPlaneServer.assetContentType("index.html"));
         assertEquals("image/svg+xml", ControlPlaneServer.assetContentType("favicon.svg"));
+        assertEquals("font/woff2", ControlPlaneServer.assetContentType("ibm-plex-sans-400.woff2"));
+        assertEquals("font/woff", ControlPlaneServer.assetContentType("ibm-plex-mono-400.woff"));
+        assertEquals("font/ttf", ControlPlaneServer.assetContentType("ibm-plex-sans-500.ttf"));
+        assertEquals("font/otf", ControlPlaneServer.assetContentType("ibm-plex-sans-600.otf"));
         assertEquals("application/octet-stream", ControlPlaneServer.assetContentType("binary.bin"));
     }
 }

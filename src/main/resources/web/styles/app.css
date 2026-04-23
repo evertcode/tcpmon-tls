@@ -1,3 +1,51 @@
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/assets/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/assets/fonts/IBMPlexSans-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("/assets/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/assets/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/assets/fonts/IBMPlexMono-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/assets/fonts/IBMPlexMono-SemiBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
 :root {
   --canvas: #f4f5f7;
   --surface: #ffffff;
@@ -15,8 +63,10 @@
   --warn: #a15c07;
   --danger: #b42318;
   --button-shadow: 0 1px 2px rgba(24, 33, 47, 0.08), 0 6px 14px rgba(24, 33, 47, 0.04);
-  --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-  --sans: "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-ui: "IBM Plex Sans", "Aptos", "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  --mono: var(--font-mono);
+  --sans: var(--font-ui);
   --shadow: 0 10px 26px rgba(24, 33, 47, 0.06);
 }
 * { box-sizing: border-box; }
@@ -38,6 +88,8 @@ body {
   background: var(--canvas);
   color: var(--text);
   font-family: var(--sans);
+  letter-spacing: -0.01em;
+  text-rendering: optimizeLegibility;
 }
 .app {
   display: flex;
@@ -60,6 +112,8 @@ body {
 }
 .topbar-title strong {
   font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 .layout {
   display: grid;
@@ -272,10 +326,13 @@ button.action-edit {
   align-items: center;
   border-radius: 999px;
   padding: 3px 8px;
+  font-family: var(--sans);
   font-size: 11px;
+  font-weight: 600;
   line-height: 1;
   border: 1px solid transparent;
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 .pill.route {
   background: rgba(16, 108, 90, 0.08);
@@ -336,6 +393,7 @@ button.action-edit {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
+  font-variant-ligatures: none;
   line-height: 1;
   border: 1px solid transparent;
 }
@@ -436,6 +494,7 @@ button.action-edit {
 .wf-dur {
   font-family: var(--mono);
   font-size: 11px;
+  font-variant-ligatures: none;
   color: var(--text-muted);
   text-align: right;
   white-space: nowrap;
@@ -570,6 +629,8 @@ button.action-edit {
 .route-title strong {
   display: block;
   font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 .route-header-card {
   padding: 14px;
@@ -604,6 +665,8 @@ button.action-edit {
 .route-header-name {
   display: block;
   font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
   line-height: 1.1;
 }
 .route-header-flow {
@@ -666,6 +729,8 @@ button.action-edit {
 .route-pending-value {
   font-size: 14px;
   line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .route-state-badge.state-live {
   background: rgba(16, 108, 90, 0.08);
@@ -712,6 +777,7 @@ button.action-edit {
 .stat-block .stat-value {
   font-size: 22px;
   font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: var(--text);
 }
@@ -803,8 +869,10 @@ td {
   vertical-align: top;
 }
 th {
+  font-family: var(--sans);
   color: var(--text-muted);
   font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -870,6 +938,7 @@ tr.session-entry.active {
   float: right;
   color: var(--text-muted);
   font: 14px/1 var(--mono);
+  font-variant-ligatures: none;
 }
 .payload-details[open] summary::after {
   content: '-';
@@ -925,6 +994,7 @@ pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: 12px/1.5 var(--mono);
+  font-variant-ligatures: none;
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -1021,6 +1091,7 @@ pre {
 .tl-detail {
   font-family: var(--mono);
   font-size: 11px;
+  font-variant-ligatures: none;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -1110,32 +1181,34 @@ pre {
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #0d1117;
-    --surface: #161b22;
-    --surface-2: #1c2128;
-    --surface-3: #22272e;
-    --text: #e6edf3;
-    --text-muted: #8b949e;
-    --border: rgba(230, 237, 243, 0.1);
-    --border-strong: rgba(230, 237, 243, 0.18);
-    --accent: #388bfd;
-    --accent-strong: #58a6ff;
-    --accent-soft: rgba(56, 139, 253, 0.12);
-    --route: #3fb950;
-    --ok: #3fb950;
-    --warn: #d29922;
-    --danger: #f85149;
-    --button-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 14px rgba(0,0,0,0.15);
-    --shadow: 0 10px 26px rgba(0,0,0,0.25);
+  --canvas: #0d1117;
+  --surface: #161b22;
+  --surface-2: #1c2128;
+  --surface-3: #22272e;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --border: rgba(230, 237, 243, 0.1);
+  --border-strong: rgba(230, 237, 243, 0.18);
+  --accent: #388bfd;
+  --accent-strong: #58a6ff;
+  --accent-soft: rgba(56, 139, 253, 0.12);
+  --route: #3fb950;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --danger: #f85149;
+  --button-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 14px rgba(0,0,0,0.15);
+  --shadow: 0 10px 26px rgba(0,0,0,0.25);
   }
 }
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; }
 .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:0; min-width:440px; max-width:620px; max-height:90vh; overflow-y:auto; }
 .modal-hdr { display:flex; justify-content:space-between; align-items:center; padding:16px 20px 14px; border-bottom:1px solid var(--border); }
+.modal-hdr strong { font-family: var(--sans); font-weight: 600; letter-spacing: -0.02em; }
 .modal-body { padding:16px 20px 20px; }
 .form-group { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
 .form-group label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
-.form-group input[type=text], .form-group input[type=number], .form-group select { background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:4px; font-size:13px; width:100%; }
+.form-group input[type=text], .form-group input[type=number], .form-group input[type=password], .form-group select { background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:4px; font-size:13px; width:100%; }
+.form-group input[type=text], .form-group input[type=number], .form-group input[type=password] { font-family: var(--mono); font-size: 12px; font-variant-ligatures: none; }
 .form-section-hdr { display:flex; align-items:center; gap:8px; margin:18px 0 10px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
 .form-section-hdr::after { content:''; flex:1; height:1px; background:var(--border); }
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
