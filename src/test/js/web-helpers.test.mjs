@@ -208,6 +208,33 @@ test('formatExportBody pretty prints downloaded payload bodies', () => {
   );
 });
 
+test('formatExportJsonBody embeds valid JSON bodies as JSON values', () => {
+  const ctx = loadWebHelpers();
+
+  const body = ctx.formatExportJsonBody(
+    {
+      isHttp: true,
+      headers: [{ name: 'Content-Type', value: 'application/json' }]
+    },
+    '{"id":5,"products":[{"productId":7,"quantity":1}]}'
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(body)), {
+    id: 5,
+    products: [{ productId: 7, quantity: 1 }]
+  });
+  assert.equal(
+    ctx.formatExportJsonBody(
+      {
+        isHttp: true,
+        headers: [{ name: 'Content-Type', value: 'application/xml' }]
+      },
+      '<root><ok>true</ok></root>'
+    ),
+    '<root>\n  <ok>true</ok>\n</root>'
+  );
+});
+
 test('buildExchangeXml preserves readable body content inside CDATA', () => {
   const ctx = loadWebHelpers();
 

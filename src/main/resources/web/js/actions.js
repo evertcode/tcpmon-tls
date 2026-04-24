@@ -188,14 +188,16 @@ async function downloadExchange(format) {
     startedAt: lastLoadedSession.startedAt || '',
     durationMs: lastLoadedSession.durationMs ?? null
   };
+  const requestBody = formatExportBody(reqDecoded, reqBody);
+  const responseBody = formatExportBody(resDecoded, resBody);
   const request = {
     method: reqMeta.method || '',
     path: reqMeta.path || '',
     query: reqMeta.query || '',
-    body: formatExportBody(reqDecoded, reqBody)
+    body: requestBody
   };
   const response = {
-    body: formatExportBody(resDecoded, resBody)
+    body: responseBody
   };
   const sessionId = lastLoadedSession.sessionId || 'exchange';
   const dateStr = new Date().toISOString().slice(0, 10);
@@ -204,13 +206,33 @@ async function downloadExchange(format) {
     const xml = buildExchangeXml(meta, request, response);
     triggerDownload(xml, `${filename}.xml`, 'application/xml');
   } else {
-    const json = JSON.stringify({ meta, request, response }, null, 2);
+    const json = JSON.stringify({
+      meta,
+      request: { ...request, body: formatExportJsonBody(reqDecoded, reqBody) },
+      response: { ...response, body: formatExportJsonBody(resDecoded, resBody) }
+    }, null, 2);
     triggerDownload(json, `${filename}.json`, 'application/json');
   }
 }
 
 function formatExportBody(decoded, bodyText) {
   return formatBody({ ...(decoded || {}), bodyText: bodyText || '' });
+}
+
+function formatExportJsonBody(decoded, bodyText) {
+  const rawBody = String(bodyText || '');
+  if (!rawBody) {
+    return '';
+  }
+  const contentType = getHeaderValue(decoded?.headers, 'content-type').toLowerCase();
+  if (contentType.includes('json') || looksLikeJson(rawBody)) {
+    try {
+      return JSON.parse(rawBody);
+    } catch {
+      return formatExportBody(decoded, rawBody);
+    }
+  }
+  return formatExportBody(decoded, rawBody);
 }
 
 function buildExchangeXml(meta, request, response) {
