@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.8] - 2026-04-24
+
+### Features
+
+- **Configurable operational logging** — added SLF4J/Logback based runtime logging with `--log-level`, `--log-format`, `--access-log`, and `--metrics-log` options. Logs now cover startup, route binding, route changes, replay completion, TLS warnings, control plane metrics, and recoverable proxy errors without logging payloads or secrets
+- **Body viewer code folding** — JSON and XML payload viewers now support folding blocks from the line gutter. JSON objects/arrays and XML nodes can be collapsed and expanded without modifying the underlying body content
+- **Full body hydration on detail load** — opening a request detail now automatically fetches complete request/response bodies when the API response contains a truncated preview, avoiding the normal need to click `Load full body`
+- **Structured JSON exchange exports** — JSON downloads now embed valid JSON request/response bodies as real JSON values instead of escaped strings, while XML/text bodies remain readable strings. XML downloads continue using CDATA for body readability
+
+### UI improvements
+
+- **Request filter toolbar alignment** — the request search field and method/status/page-size selectors now stay aligned on desktop, with more width reserved for the search field and compact widths for the selects
+- **Payload action menu** — request replay actions remain visible while secondary actions (`Copy as cURL`, `Download JSON`, `Download XML`) moved into a compact `More` menu to reduce visual noise
+- **Request/response detail alignment** — request cards now reserve equivalent spacing after the `Start line` label so headers and body sections align visually with response cards that show TTFB
+
 ## [0.6.7] - 2026-04-23
 
 ### Features
