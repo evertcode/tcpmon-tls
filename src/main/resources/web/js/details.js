@@ -139,8 +139,7 @@ function buildPayloadHeader(title, timestamp, size, chunkText, direction, ttfb) 
 
   if (ttfb !== null) {
     const ttfbWrap = document.createElement('span');
-    ttfbWrap.className = 'muted';
-    ttfbWrap.style.fontSize = '11px';
+    ttfbWrap.className = 'payload-header-metric muted';
     ttfbWrap.append('TTFB: ');
     const ttfbValue = document.createElement('span');
     ttfbValue.className = ttfb < 200 ? 'timing-fast' : ttfb < 1000 ? 'timing-medium' : 'timing-slow';
@@ -164,7 +163,7 @@ function buildPayloadEmptySection(message) {
   return section;
 }
 
-function buildStartLineSection(text) {
+function buildStartLineSection(text, reserveMetricSpace = false) {
   const section = document.createElement('div');
   section.className = 'payload-section';
   const label = document.createElement('span');
@@ -172,7 +171,14 @@ function buildStartLineSection(text) {
   label.textContent = 'Start line';
   const pre = document.createElement('pre');
   pre.textContent = text;
-  section.append(label, pre);
+  section.appendChild(label);
+  if (reserveMetricSpace) {
+    const spacer = document.createElement('div');
+    spacer.className = 'payload-startline-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
+    section.appendChild(spacer);
+  }
+  section.appendChild(pre);
   return section;
 }
 
@@ -411,7 +417,9 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
   }
   article.append(
     buildPayloadHeader(title, payload.timestamp || '', payload.size || 0, chunkText, payload.direction || expectedDirection, ttfb),
-    buildStartLineSection(decoded.startLine || 'No HTTP start line'),
+    buildStartLineSection(decoded.startLine || 'No HTTP start line', isRequest)
+  );
+  article.append(
     buildPayloadHeadersDetails(title, headers, decoded, isRequest, payloadHeadersExpanded),
     buildPayloadBodySection(bodyText || 'No body captured', hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex, decoded)
   );

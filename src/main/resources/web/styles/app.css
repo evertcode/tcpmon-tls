@@ -998,6 +998,14 @@ tr.session-entry.active {
 .payload-header > :first-child {
   min-width: 0;
 }
+.payload-header-metric {
+  display: block;
+  font-size: 11px;
+}
+.payload-startline-spacer {
+  min-height: 16px;
+  visibility: hidden;
+}
 .payload-section {
   padding: 0 12px 12px;
   min-width: 0;
