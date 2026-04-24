@@ -341,6 +341,47 @@ test('buildPayloadBodySection renders a body viewer for formatted json bodies', 
   assert.equal(findFirst(body, node => node.className === 'body-viewer-code').textContent, '{  "ok": true}');
 });
 
+test('body viewer folds and expands JSON object blocks', () => {
+  const ctx = loadWebHelpers();
+
+  const viewer = ctx.buildBodyViewer('{\n  "items": [\n    {\n      "id": 1\n    }\n  ]\n}', 'json');
+  const code = findFirst(viewer, node => node.className === 'body-viewer-code');
+  const toggle = findFirst(viewer, node => node.className === 'body-viewer-fold-toggle');
+
+  assert.ok(toggle);
+  assert.equal(code.textContent.includes('"id": 1'), true);
+
+  toggle.listeners.click();
+
+  assert.equal(toggle.textContent, '-');
+  const collapsedCode = findFirst(viewer, node => node.className === 'body-viewer-code');
+  assert.equal(collapsedCode.textContent.includes('"id": 1'), false);
+  assert.equal(collapsedCode.textContent.includes('{ ... }'), true);
+
+  const expandToggle = findFirst(viewer, node => node.className === 'body-viewer-fold-toggle');
+  expandToggle.listeners.click();
+
+  const expandedCode = findFirst(viewer, node => node.className === 'body-viewer-code');
+  assert.equal(expandedCode.textContent.includes('"id": 1'), true);
+});
+
+test('body viewer folds XML element blocks', () => {
+  const ctx = loadWebHelpers();
+
+  const viewer = ctx.buildBodyViewer('<root>\n  <items>\n    <item>one</item>\n  </items>\n</root>', 'xml');
+  const code = findFirst(viewer, node => node.className === 'body-viewer-code');
+  const toggle = findFirst(viewer, node => node.className === 'body-viewer-fold-toggle');
+
+  assert.ok(toggle);
+  assert.equal(code.textContent.includes('<item>one</item>'), true);
+
+  toggle.listeners.click();
+
+  const collapsedCode = findFirst(viewer, node => node.className === 'body-viewer-code');
+  assert.equal(collapsedCode.textContent.includes('<item>one</item>'), false);
+  assert.equal(collapsedCode.textContent.includes('<root> ... </root>'), true);
+});
+
 test('body viewer load-full-body handler updates content using formatted payload text', async () => {
   const ctx = loadWebHelpers();
   ctx.fetchJson = async () => ({ bodyText: '<root><ok>true</ok></root>' });

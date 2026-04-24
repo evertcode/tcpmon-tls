@@ -210,7 +210,6 @@ function buildBodyViewer(text, mode) {
 
   const gutter = document.createElement('div');
   gutter.className = 'body-viewer-gutter';
-  gutter.setAttribute('aria-hidden', 'true');
 
   const code = document.createElement('div');
   code.className = 'body-viewer-code';
@@ -222,6 +221,8 @@ function buildBodyViewer(text, mode) {
   root.appendChild(scroll);
 
   root.setValue = value => {
+    root._bodyViewerText = String(value || '');
+    root._bodyViewerCollapsed = new Set();
     renderBodyViewer(root, String(value || ''), mode);
   };
   root.setValue(text);
@@ -233,21 +234,145 @@ function renderBodyViewer(root, text, mode) {
   const gutter = scroll.children[0];
   const code = scroll.children[1];
   const lines = String(text || '').split('\n');
+  const foldRanges = buildFoldRanges(lines, mode);
+  const collapsed = root._bodyViewerCollapsed || new Set();
 
   gutter.replaceChildren();
   code.replaceChildren();
 
   for (let index = 0; index < lines.length; index++) {
-    const lineNumber = document.createElement('span');
-    lineNumber.className = 'body-viewer-line-number';
-    lineNumber.textContent = String(index + 1);
-    gutter.appendChild(lineNumber);
+    const range = foldRanges.get(index);
+    const isCollapsed = Boolean(range && collapsed.has(index));
 
+    gutter.appendChild(buildBodyViewerGutterLine(root, index, range, isCollapsed, mode));
     const line = document.createElement('div');
     line.className = 'body-viewer-line';
-    appendHighlightedLine(line, lines[index], mode);
+    appendHighlightedLine(line, isCollapsed ? collapsedLineText(lines[index], lines[range.end], mode) : lines[index], mode);
     code.appendChild(line);
+
+    if (isCollapsed) {
+      index = range.end;
+    }
   }
+}
+
+function buildBodyViewerGutterLine(root, index, range, isCollapsed, mode) {
+  const lineNumber = document.createElement('span');
+  lineNumber.className = 'body-viewer-line-number';
+  if (!range || mode === 'text') {
+    lineNumber.textContent = String(index + 1);
+    return lineNumber;
+  }
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'body-viewer-fold-toggle';
+  toggle.textContent = isCollapsed ? '+' : '-';
+  toggle.title = isCollapsed ? 'Expand block' : 'Collapse block';
+  toggle.setAttribute('aria-label', `${isCollapsed ? 'Expand' : 'Collapse'} block at line ${index + 1}`);
+  toggle.addEventListener('click', () => {
+    const collapsed = root._bodyViewerCollapsed || new Set();
+    if (collapsed.has(index)) {
+      collapsed.delete(index);
+    } else {
+      collapsed.add(index);
+    }
+    root._bodyViewerCollapsed = collapsed;
+    renderBodyViewer(root, root._bodyViewerText || '', root.dataset.mode || mode);
+  });
+
+  const number = document.createElement('span');
+  number.textContent = String(index + 1);
+  lineNumber.append(toggle, number);
+  return lineNumber;
+}
+
+function buildFoldRanges(lines, mode) {
+  if (mode === 'json') {
+    return buildJsonFoldRanges(lines);
+  }
+  if (mode === 'xml') {
+    return buildXmlFoldRanges(lines);
+  }
+  return new Map();
+}
+
+function buildJsonFoldRanges(lines) {
+  const ranges = new Map();
+  const stack = [];
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    let inString = false;
+    let escaped = false;
+    for (let charIndex = 0; charIndex < line.length; charIndex++) {
+      const char = line[charIndex];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === '\\') {
+          escaped = true;
+        } else if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (char === '"') {
+        inString = true;
+      } else if (char === '{' || char === '[') {
+        stack.push({ lineIndex, char });
+      } else if (char === '}' || char === ']') {
+        const expected = char === '}' ? '{' : '[';
+        for (let stackIndex = stack.length - 1; stackIndex >= 0; stackIndex--) {
+          const opener = stack[stackIndex];
+          stack.splice(stackIndex);
+          if (opener.char === expected && lineIndex > opener.lineIndex + 1) {
+            ranges.set(opener.lineIndex, { start: opener.lineIndex, end: lineIndex, closeText: char });
+          }
+          break;
+        }
+      }
+    }
+  }
+  return ranges;
+}
+
+function buildXmlFoldRanges(lines) {
+  const ranges = new Map();
+  const stack = [];
+  const openPattern = /^<([A-Za-z_][\w:.-]*)(?:\s[^>]*)?>$/;
+  const closePattern = /^<\/([A-Za-z_][\w:.-]*)>$/;
+  for (let index = 0; index < lines.length; index++) {
+    const trimmed = lines[index].trim();
+    if (!trimmed || trimmed.startsWith('<?') || trimmed.startsWith('<!--') || trimmed.endsWith('/>') || /<[^>]+>.*<\/[^>]+>$/.test(trimmed)) {
+      continue;
+    }
+    const close = trimmed.match(closePattern);
+    if (close) {
+      for (let stackIndex = stack.length - 1; stackIndex >= 0; stackIndex--) {
+        const opener = stack[stackIndex];
+        stack.splice(stackIndex);
+        if (opener.name === close[1] && index > opener.lineIndex + 1) {
+          ranges.set(opener.lineIndex, { start: opener.lineIndex, end: index, closeText: trimmed });
+        }
+        break;
+      }
+      continue;
+    }
+    const open = trimmed.match(openPattern);
+    if (open) {
+      stack.push({ lineIndex: index, name: open[1] });
+    }
+  }
+  return ranges;
+}
+
+function collapsedLineText(openLine, closeLine, mode) {
+  if (mode === 'xml') {
+    return `${openLine} ... ${String(closeLine || '').trim()}`;
+  }
+  const closeText = String(closeLine || '').trim();
+  const closing = closeText.match(/^([\]}])[,]?/)?.[0] || '...';
+  return `${openLine} ... ${closing}`;
 }
 
 function appendHighlightedLine(line, text, mode) {

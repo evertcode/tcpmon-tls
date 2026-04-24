@@ -1128,6 +1128,27 @@ tr.session-entry.active {
   color: var(--text-muted);
   user-select: none;
 }
+.body-viewer-fold-toggle {
+  display: inline-flex;
+  width: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  height: 14px;
+  margin-right: 4px;
+  padding: 0;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: 10px/1 var(--mono);
+  box-shadow: none;
+  vertical-align: middle;
+}
+.body-viewer-fold-toggle:hover:not(:disabled) {
+  transform: none;
+  background: var(--surface-3);
+  color: var(--text);
+}
 .tok-json-key,
 .tok-xml-tag {
   color: var(--accent);
