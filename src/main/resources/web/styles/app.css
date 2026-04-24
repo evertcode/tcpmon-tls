@@ -914,9 +914,20 @@ button.action-edit {
 }
 .request-toolbar {
   display: grid;
-  grid-template-columns: 1fr 140px 140px;
+  grid-template-columns: minmax(360px, 1fr) 112px 128px 104px;
+  align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+}
+.request-toolbar input[type="search"] {
+  min-width: 0;
+}
+.request-toolbar select {
+  min-width: 0;
+  width: 100%;
+}
+.request-toolbar button {
+  width: max-content;
 }
 .table-footer {
   display: flex;
@@ -1289,9 +1300,17 @@ pre {
     justify-content: flex-end;
     flex-wrap: wrap;
   }
-  .request-toolbar,
   .request-grid {
     grid-template-columns: 1fr;
+  }
+  .request-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .request-toolbar input[type="search"],
+  .request-toolbar select,
+  .request-toolbar button {
+    min-width: 0;
+    width: 100%;
   }
   .route-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
