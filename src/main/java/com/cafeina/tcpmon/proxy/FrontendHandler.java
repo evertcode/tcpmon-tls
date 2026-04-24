@@ -17,6 +17,8 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
 import java.net.InetSocketAddress;
@@ -25,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 final class FrontendHandler extends ChannelInboundHandlerAdapter {
+    private static final Logger log = LoggerFactory.getLogger(FrontendHandler.class);
     private final ProxyConfig config;
     private final RouteConfig route;
     private final SessionStore sessionStore;
@@ -50,6 +53,8 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 client.getHostString() + ":" + client.getPort(),
                 listener.getHostString() + ":" + listener.getPort(),
                 route.target().host() + ":" + route.target().port());
+        log.debug("Client connected routeId={} sessionId={} client={} listener={}",
+                route.id(), sessionId, client, listener);
         sessionStore.recordLifecycleAsync(sessionId, "CLIENT_CONNECTED", Map.of("client", client.toString()));
 
         Bootstrap bootstrap = new Bootstrap()
@@ -61,11 +66,15 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         bootstrap.connect(route.target().host(), route.target().port()).addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
                 outboundChannel = future.channel();
+                log.debug("Target connected routeId={} sessionId={} target={}",
+                        route.id(), sessionId, future.channel().remoteAddress());
                 sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECTED", Map.of("target", future.channel().remoteAddress().toString()));
                 inboundChannel.config().setAutoRead(true);
                 inboundChannel.read();
             } else {
                 sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECT_FAILED", Map.of("error", future.cause().toString()));
+                log.warn("Target connection failed routeId={} sessionId={} target={}:{} error={}",
+                        route.id(), sessionId, route.target().host(), route.target().port(), future.cause().toString());
                 inboundChannel.close();
             }
         });
@@ -88,8 +97,12 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
 
         if (outboundChannel == null || !outboundChannel.isActive()) {
             sessionStore.recordLifecycleAsync(sessionId, "DROP", Map.of("reason", "outbound channel unavailable"));
+            log.warn("Dropping client payload routeId={} sessionId={} bytes={} reason=outbound channel unavailable",
+                    route.id(), sessionId, outboundPayload.length);
             return;
         }
+        log.trace("Forwarding client payload routeId={} sessionId={} bytes={} intercepted={}",
+                route.id(), sessionId, outboundPayload.length, config.interceptMode().intercepts(Direction.CLIENT_TO_TARGET));
 
         if (config.interceptMode().intercepts(Direction.CLIENT_TO_TARGET)) {
             PendingPayload pendingPayload = sessionStore.addPending(
@@ -119,6 +132,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         closeOnFlush(outboundChannel);
         if (sessionId != null) {
             sessionStore.closeSessionAsync(sessionId, "CLIENT_CLOSED");
+            log.debug("Client disconnected routeId={} sessionId={}", route.id(), sessionId);
         }
     }
 
@@ -126,6 +140,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
     public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
         if (sessionId != null) {
             sessionStore.recordLifecycleAsync(sessionId, "CLIENT_ERROR", Map.of("error", cause.toString()));
+            log.warn("Client channel error routeId={} sessionId={} error={}", route.id(), sessionId, cause.toString());
         }
         closeOnFlush(context.channel());
     }
@@ -135,8 +150,11 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         if (event instanceof SslHandshakeCompletionEvent handshakeEvent && sessionId != null) {
             if (handshakeEvent.isSuccess()) {
                 sessionStore.recordTlsAsync(sessionId, true, sslDetails(context.channel(), handshakeEvent));
+                log.debug("Inbound TLS handshake succeeded routeId={} sessionId={}", route.id(), sessionId);
             } else {
                 sessionStore.recordLifecycleAsync(sessionId, "TLS_INBOUND_FAILED", Map.of("error", handshakeEvent.cause().toString()));
+                log.warn("Inbound TLS handshake failed routeId={} sessionId={} error={}",
+                        route.id(), sessionId, handshakeEvent.cause().toString());
             }
         }
         super.userEventTriggered(context, event);

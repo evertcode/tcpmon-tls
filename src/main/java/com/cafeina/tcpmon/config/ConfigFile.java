@@ -7,7 +7,8 @@ public record ConfigFile(
         String sessionsDir,
         String interceptMode,
         List<String> tlsProtocols,
-        List<String> tlsCiphers) {
+        List<String> tlsCiphers,
+        LoggingSection logging) {
     public record UiSection(
             String host,
             Integer port,
@@ -16,5 +17,12 @@ public record ConfigFile(
             String tlsKeystore,
             String tlsKeystorePassword,
             String tlsKeystoreType) {
+    }
+
+    public record LoggingSection(
+            String level,
+            String format,
+            Boolean accessLog,
+            Boolean metricsLog) {
     }
 }

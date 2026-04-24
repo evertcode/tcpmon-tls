@@ -8,5 +8,14 @@ public record ProxyConfig(
         Path sessionsDir,
         InterceptMode interceptMode,
         List<String> enabledProtocols,
-        List<String> enabledCiphers) {
+        List<String> enabledCiphers,
+        LoggingConfig logging) {
+    public ProxyConfig(
+            UiConfig ui,
+            Path sessionsDir,
+            InterceptMode interceptMode,
+            List<String> enabledProtocols,
+            List<String> enabledCiphers) {
+        this(ui, sessionsDir, interceptMode, enabledProtocols, enabledCiphers, LoggingConfig.defaults());
+    }
 }

@@ -199,7 +199,13 @@ java -jar target/tcpmon-tls-0.6.3.jar --config tcpmon.json
   "sessionsDir": "./sessions",
   "interceptMode": "NONE",
   "tlsProtocols": ["TLSv1.3", "TLSv1.2"],
-  "tlsCiphers": []
+  "tlsCiphers": [],
+  "logging": {
+    "level": "INFO",
+    "format": "text",
+    "accessLog": false,
+    "metricsLog": false
+  }
 }
 ```
 
@@ -218,6 +224,11 @@ interceptMode: NONE
 tlsProtocols:
   - TLSv1.3
   - TLSv1.2
+logging:
+  level: INFO
+  format: text
+  accessLog: false
+  metricsLog: false
 ```
 
 ### CLI flags
@@ -230,6 +241,8 @@ java -jar target/tcpmon-tls-0.6.3.jar \
   --ui-token your-secret-token \
   --sessions-dir ./sessions \
   --intercept-mode NONE \
+  --log-level INFO \
+  --log-format text \
   --config tcpmon.json
 ```
 
@@ -246,6 +259,16 @@ java -jar target/tcpmon-tls-0.6.3.jar \
 | `--ui-tls-keystore-type` | Keystore type (`PKCS12` by default) |
 | `--sessions-dir` | Directory for the SQLite session database |
 | `--intercept-mode` | `NONE`, `REQUEST`, `RESPONSE`, or `BOTH` |
+| `--log-level` | Logging level: `TRACE`, `DEBUG`, `INFO`, `WARN`, or `ERROR` |
+| `--log-format` | Console log format: `text` or `json` |
+| `--access-log` | Enable control plane access logs |
+| `--metrics-log` | Enable lightweight metrics logs for selected API queries |
+
+### Logging
+
+By default, `tcpmon-tls` logs operational events at `INFO`: startup, shutdown, bound routes, control plane state, route changes, replay completion, and warnings/errors. Use `DEBUG` when diagnosing route connectivity, TLS handshakes, replay behavior, or connection lifecycle. Use `TRACE` only for short local investigations.
+
+Logs intentionally do not include payload bodies, base64 payloads, API tokens, keystore passwords, private keys, or full certificates. Captured traffic remains in the SQLite session store and the web UI; logs are for runtime diagnosis, not traffic history.
 
 ## Certificates and TLS
 

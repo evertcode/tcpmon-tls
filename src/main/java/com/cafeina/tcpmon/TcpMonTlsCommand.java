@@ -3,6 +3,7 @@ package com.cafeina.tcpmon;
 import com.cafeina.tcpmon.config.ConfigFile;
 import com.cafeina.tcpmon.config.ConfigLoader;
 import com.cafeina.tcpmon.proxy.TcpMonApplication;
+import com.cafeina.tcpmon.util.LoggingConfigurator;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -54,6 +55,18 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
     @Option(names = "--tls-cipher", split = ",")
     private String[] tlsCiphers = new String[0];
 
+    @Option(names = "--log-level", description = "Logging level: TRACE, DEBUG, INFO, WARN or ERROR.")
+    private String logLevel;
+
+    @Option(names = "--log-format", description = "Logging format: text or json.")
+    private String logFormat;
+
+    @Option(names = "--access-log", fallbackValue = "true", arity = "0..1", description = "Enable control plane access logs.")
+    private Boolean accessLog;
+
+    @Option(names = "--metrics-log", fallbackValue = "true", arity = "0..1", description = "Enable lightweight metrics logs.")
+    private Boolean metricsLog;
+
     @Override
     public Integer call() throws Exception {
         if (initConfigFile != null) {
@@ -63,6 +76,7 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
         }
 
         ProxyConfig config = toConfig();
+        LoggingConfigurator.configure(config.logging());
 
         try (TcpMonApplication app = new TcpMonApplication(config)) {
             app.start();
@@ -111,13 +125,33 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
                         : List.of();
 
         TlsMaterial effectiveUiTls = resolveUiTlsMaterial(fileConfig);
+        LoggingConfig effectiveLogging = resolveLogging(fileConfig);
 
         return new ProxyConfig(
                 new UiConfig(effectiveUiHost, effectiveUiPort, effectiveUiEnabled, effectiveUiToken, effectiveUiTls),
                 effectiveSessionsDir,
                 effectiveInterceptMode,
                 effectiveProtocols,
-                effectiveCiphers);
+                effectiveCiphers,
+                effectiveLogging);
+    }
+
+    private LoggingConfig resolveLogging(ConfigFile fileConfig) {
+        ConfigFile.LoggingSection fileLogging = fileConfig == null ? null : fileConfig.logging();
+        LoggingConfig defaults = LoggingConfig.defaults();
+        String effectiveLevel = select(logLevel,
+                fileLogging == null ? null : fileLogging.level(), defaults.level());
+        String effectiveFormat = select(logFormat,
+                fileLogging == null ? null : fileLogging.format(), defaults.format());
+        boolean effectiveAccessLog = selectBoolean(accessLog,
+                fileLogging == null ? null : fileLogging.accessLog(), defaults.accessLog());
+        boolean effectiveMetricsLog = selectBoolean(metricsLog,
+                fileLogging == null ? null : fileLogging.metricsLog(), defaults.metricsLog());
+        return new LoggingConfig(
+                effectiveLevel.trim().toUpperCase(),
+                effectiveFormat.trim().toLowerCase(),
+                effectiveAccessLog,
+                effectiveMetricsLog);
     }
 
     private TlsMaterial resolveUiTlsMaterial(ConfigFile fileConfig) {
@@ -188,6 +222,7 @@ public final class TcpMonTlsCommand implements Callable<Integer> {
                 "./sessions",
                 "NONE",
                 List.of("TLSv1.3", "TLSv1.2"),
-                List.of());
+                List.of(),
+                new ConfigFile.LoggingSection("INFO", "text", false, false));
     }
 }

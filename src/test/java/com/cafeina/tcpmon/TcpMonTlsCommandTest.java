@@ -27,6 +27,10 @@ class TcpMonTlsCommandTest {
         assertEquals(8080, config.ui().port());
         assertTrue(config.ui().enabled());
         assertEquals(InterceptMode.NONE, config.interceptMode());
+        assertEquals("INFO", config.logging().level());
+        assertEquals("text", config.logging().format());
+        assertFalse(config.logging().accessLog());
+        assertFalse(config.logging().metricsLog());
     }
 
     @Test
@@ -37,6 +41,10 @@ class TcpMonTlsCommandTest {
                 "--ui-port", "9090",
                 "--ui-enabled=false",
                 "--intercept-mode", "BOTH",
+                "--log-level", "DEBUG",
+                "--log-format", "json",
+                "--access-log",
+                "--metrics-log",
                 "--sessions-dir", "/tmp/s");
 
         ProxyConfig config = command.toConfig();
@@ -45,6 +53,10 @@ class TcpMonTlsCommandTest {
         assertFalse(config.ui().enabled());
         assertEquals(InterceptMode.BOTH, config.interceptMode());
         assertEquals(Path.of("/tmp/s"), config.sessionsDir());
+        assertEquals("DEBUG", config.logging().level());
+        assertEquals("json", config.logging().format());
+        assertTrue(config.logging().accessLog());
+        assertTrue(config.logging().metricsLog());
     }
 
     @Test
@@ -59,7 +71,13 @@ class TcpMonTlsCommandTest {
                   },
                   "sessionsDir": "./sessions-json",
                   "interceptMode": "NONE",
-                  "tlsProtocols": ["TLSv1.3", "TLSv1.2"]
+                  "tlsProtocols": ["TLSv1.3", "TLSv1.2"],
+                  "logging": {
+                    "level": "WARN",
+                    "format": "json",
+                    "accessLog": true,
+                    "metricsLog": true
+                  }
                 }
                 """);
 
@@ -71,6 +89,10 @@ class TcpMonTlsCommandTest {
         assertEquals("127.0.0.1", config.ui().host());
         assertTrue(config.ui().enabled());
         assertEquals(2, config.enabledProtocols().size());
+        assertEquals("WARN", config.logging().level());
+        assertEquals("json", config.logging().format());
+        assertTrue(config.logging().accessLog());
+        assertTrue(config.logging().metricsLog());
     }
 
     @Test
@@ -86,6 +108,11 @@ class TcpMonTlsCommandTest {
                 tlsProtocols:
                   - TLSv1.3
                   - TLSv1.2
+                logging:
+                  level: DEBUG
+                  format: text
+                  accessLog: true
+                  metricsLog: false
                 """);
 
         TcpMonTlsCommand command = new TcpMonTlsCommand();
@@ -94,6 +121,10 @@ class TcpMonTlsCommandTest {
         ProxyConfig config = command.toConfig();
         assertEquals(8082, config.ui().port());
         assertEquals(2, config.enabledProtocols().size());
+        assertEquals("DEBUG", config.logging().level());
+        assertEquals("text", config.logging().format());
+        assertTrue(config.logging().accessLog());
+        assertFalse(config.logging().metricsLog());
     }
 
     @Test

@@ -6,11 +6,14 @@ import com.cafeina.tcpmon.replay.ReplayService;
 import com.cafeina.tcpmon.session.SessionStore;
 import com.cafeina.tcpmon.util.JsonSupport;
 import com.cafeina.tcpmon.web.ControlPlaneServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 public final class TcpMonApplication implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(TcpMonApplication.class);
     private final ProxyConfig config;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private TcpMonProxy proxy;
@@ -21,6 +24,8 @@ public final class TcpMonApplication implements AutoCloseable {
     }
 
     public void start() throws Exception {
+        log.info("Starting tcpmon-tls sessionsDir={} interceptMode={} uiEnabled={}",
+                config.sessionsDir().toAbsolutePath(), config.interceptMode(), config.ui().enabled());
         SessionStore sessionStore = new SessionStore(config.sessionsDir(), JsonSupport.objectMapper());
 
         List<RouteConfig> initialRoutes = sessionStore.loadRoutes();
@@ -40,8 +45,8 @@ public final class TcpMonApplication implements AutoCloseable {
 
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
         for (RouteConfig route : registry.routes()) {
-            System.out.printf(
-                    "route %s listening on %s:%d (%s) -> %s:%d (%s)%n",
+            log.info(
+                    "Route {} listening on {}:{} ({}) -> {}:{} ({})",
                     route.id(),
                     route.listener().host(),
                     route.listener().port(),
@@ -51,7 +56,10 @@ public final class TcpMonApplication implements AutoCloseable {
                     route.target().transportMode());
         }
         if (config.ui().enabled()) {
-            System.out.printf("control plane: http://%s:%d/%n", config.ui().host(), config.ui().port());
+            log.info("Control plane: {}://{}:{}/",
+                    config.ui().tlsMaterial() == null ? "http" : "https",
+                    config.ui().host(),
+                    config.ui().port());
         }
     }
 
@@ -61,6 +69,7 @@ public final class TcpMonApplication implements AutoCloseable {
 
     @Override
     public void close() {
+        log.info("Stopping tcpmon-tls");
         if (controlPlaneServer != null) {
             controlPlaneServer.close();
         }

@@ -24,6 +24,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -57,6 +59,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 public final class ControlPlaneServer implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(ControlPlaneServer.class);
+    private static final Logger accessLog = LoggerFactory.getLogger("com.cafeina.tcpmon.access");
+    private static final Logger metricsLog = LoggerFactory.getLogger("com.cafeina.tcpmon.metrics");
     private static final Pattern SAFE_HOSTNAME = Pattern.compile("^[a-zA-Z0-9.\\-_:\\[\\]%*]+$");
     static final String PRESERVE_SECRET = "__PRESERVE_SECRET__";
     private static final String AUTH_COOKIE_NAME = "tcpmon_auth";
@@ -66,7 +71,6 @@ public final class ControlPlaneServer implements AutoCloseable {
     private static final int HTTP_EXECUTOR_THREADS = Math.max(4, Math.min(16, Runtime.getRuntime().availableProcessors() * 2));
     private static final int HTTP_EXECUTOR_QUEUE_CAPACITY = 256;
     private static final String WEB_ROOT = "/web";
-    private static final boolean METRICS_ENABLED = Boolean.getBoolean("tcpmon.metrics");
     private static final int MAX_REQUEST_LIMIT = 200;
 
     private final ProxyConfig proxyConfig;
@@ -125,6 +129,9 @@ public final class ControlPlaneServer implements AutoCloseable {
         server.setExecutor(httpExecutor);
         sessionStore.addChangeListener(changeListener);
         server.start();
+        log.info("Control plane started on {}:{} tlsEnabled={} authEnabled={}",
+                config.host(), config.port(), config.tlsMaterial() != null,
+                config.apiToken() != null && !config.apiToken().isBlank());
     }
 
     private void handleRoot(HttpExchange exchange) throws IOException {
@@ -184,9 +191,9 @@ public final class ControlPlaneServer implements AutoCloseable {
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
             payload.put("sessions", sessions);
             payload.put("routeStats", routeStats);
-            if (METRICS_ENABLED) {
+            if (metricsLog.isInfoEnabled()) {
                 long t3 = System.currentTimeMillis();
-                System.err.printf("/api/sessions sessions=%d dbMs=%d statsMs=%d jsonMs=%d%n",
+                metricsLog.info("/api/sessions sessions={} dbMs={} statsMs={} jsonMs={}",
                         sessions.size(), t1 - t0, t2 - t1, t3 - t2);
             }
             sendJson(exchange, 200, payload);
@@ -261,10 +268,10 @@ public final class ControlPlaneServer implements AutoCloseable {
         long t0 = System.currentTimeMillis();
         Map<String, Object> result = sessionStore.listRequestRowsPaginated(routeId, limit, cursor, method, statusCode, q);
         long t1 = System.currentTimeMillis();
-        if (METRICS_ENABLED) {
+        if (metricsLog.isInfoEnabled()) {
             Object rows = result.get("requests");
             int rowCount = rows instanceof List<?> list ? list.size() : 0;
-            System.err.printf("/api/requests routeId=%s limit=%d dbMs=%d rows=%d hasMore=%s%n",
+            metricsLog.info("/api/requests routeId={} limit={} dbMs={} rows={} hasMore={}",
                     routeId, limit, t1 - t0, rowCount, result.get("hasMore"));
         }
         sendJson(exchange, 200, result);
@@ -292,6 +299,7 @@ public final class ControlPlaneServer implements AutoCloseable {
             return;
         }
         if (sseClients.size() >= MAX_SSE_CLIENTS) {
+            log.warn("Rejecting SSE client: live update client limit reached limit={}", MAX_SSE_CLIENTS);
             sendJson(exchange, 503, Map.of("error", "too many live update clients"));
             return;
         }
@@ -538,10 +546,12 @@ public final class ControlPlaneServer implements AutoCloseable {
             proxy.bindRoute(route);
         } catch (Exception e) {
             registry.remove(route.id());
+            log.error("Failed to bind created route routeId={}", route.id(), e);
             sendJson(exchange, 500, Map.of("error", "Failed to bind route: " + e.getMessage()));
             return;
         }
 
+        log.info("Created route {}", route.id());
         sendJson(exchange, 201, buildConfigPayload());
     }
 
@@ -580,10 +590,12 @@ public final class ControlPlaneServer implements AutoCloseable {
         } catch (Exception e) {
             try { proxy.bindRoute(original); } catch (Exception ignored) {}
             registry.replace(id, original);
+            log.error("Failed to bind updated route routeId={}", id, e);
             sendJson(exchange, 500, Map.of("error", "Failed to bind updated route: " + e.getMessage()));
             return;
         }
 
+        log.info("Updated route {}", id);
         sendJson(exchange, 200, buildConfigPayload());
     }
 
@@ -595,6 +607,7 @@ public final class ControlPlaneServer implements AutoCloseable {
 
         proxy.unbindRoute(id);
         registry.remove(id);
+        log.info("Deleted route {}", id);
         sendJson(exchange, 200, buildConfigPayload());
     }
 
@@ -949,6 +962,13 @@ public final class ControlPlaneServer implements AutoCloseable {
         try (OutputStream stream = exchange.getResponseBody()) {
             stream.write(bytes);
         }
+        if (accessLog.isInfoEnabled()) {
+            accessLog.info("{} {} status={} bytes={}",
+                    exchange.getRequestMethod(),
+                    exchange.getRequestURI().getPath(),
+                    status,
+                    bytes.length);
+        }
     }
 
     static String readWebText(String resourcePath) {
@@ -1147,6 +1167,7 @@ public final class ControlPlaneServer implements AutoCloseable {
 
     @Override
     public void close() {
+        log.info("Stopping control plane");
         sessionStore.removeChangeListener(changeListener);
         for (SseClient client : sseClients) {
             client.close();

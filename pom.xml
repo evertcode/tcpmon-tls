@@ -23,6 +23,8 @@
         <jackson.version>2.18.3</jackson.version>
         <netty.version>4.1.118.Final</netty.version>
         <picocli.version>4.7.6</picocli.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <logback.version>1.5.32</logback.version>
         <jacoco.version>0.8.12</jacoco.version>
     </properties>
 
@@ -36,6 +38,16 @@
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
             <version>${picocli.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

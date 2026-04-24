@@ -30,6 +30,9 @@ class ConfigLoaderTest {
         assertEquals("127.0.0.1", config.ui().host());
         assertTrue(Boolean.TRUE.equals(config.ui().enabled()));
         assertEquals("./sessions", config.sessionsDir());
+        assertNotNull(config.logging());
+        assertEquals("INFO", config.logging().level());
+        assertEquals("text", config.logging().format());
     }
 
     @Test
@@ -46,5 +49,8 @@ class ConfigLoaderTest {
         assertEquals("127.0.0.1", config.ui().host());
         assertTrue(Boolean.TRUE.equals(config.ui().enabled()));
         assertEquals("./sessions", config.sessionsDir());
+        assertNotNull(config.logging());
+        assertEquals("INFO", config.logging().level());
+        assertEquals("text", config.logging().format());
     }
 }

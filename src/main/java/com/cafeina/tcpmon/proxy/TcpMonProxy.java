@@ -13,12 +13,15 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public final class TcpMonProxy implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(TcpMonProxy.class);
     private final ProxyConfig config;
     private final RouteRegistry registry;
     private final SessionStore sessionStore;
@@ -46,6 +49,9 @@ public final class TcpMonProxy implements AutoCloseable {
         }
         if (route.target().transportMode() == TransportMode.TLS) {
             outboundTls = TlsContextFactory.buildClientContext(config, route);
+            if (route.target().insecureTrustAll()) {
+                log.warn("Route {} target TLS certificate validation is disabled", route.id());
+            }
         }
         final SslContext inboundTlsContext = inboundTls;
         final SslContext outboundTlsContext = outboundTls;
@@ -63,12 +69,17 @@ public final class TcpMonProxy implements AutoCloseable {
                     }
                 });
 
-        channelsByRouteId.put(route.id(), bootstrap.bind(route.listener().host(), route.listener().port()).sync().channel());
+        Channel channel = bootstrap.bind(route.listener().host(), route.listener().port()).sync().channel();
+        channelsByRouteId.put(route.id(), channel);
+        log.info("Bound route {} on {}:{}", route.id(), route.listener().host(), route.listener().port());
     }
 
     public void unbindRoute(String routeId) {
         Channel ch = channelsByRouteId.remove(routeId);
-        if (ch != null) ch.close().syncUninterruptibly();
+        if (ch != null) {
+            ch.close().syncUninterruptibly();
+            log.info("Unbound route {}", routeId);
+        }
     }
 
     @Override
@@ -81,6 +92,7 @@ public final class TcpMonProxy implements AutoCloseable {
             workerGroup.shutdownGracefully(0, 100, TimeUnit.MILLISECONDS).await(3, TimeUnit.SECONDS);
             bossGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS).await(1, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
+            log.warn("Interrupted while shutting down proxy event loops");
             Thread.currentThread().interrupt();
         }
     }

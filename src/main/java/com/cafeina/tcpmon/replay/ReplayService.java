@@ -21,6 +21,8 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.handler.timeout.ReadTimeoutHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ReplayService {
+    private static final Logger log = LoggerFactory.getLogger(ReplayService.class);
     private static final EventLoopGroup REPLAY_GROUP = new NioEventLoopGroup(1);
 
     private final ProxyConfig config;
@@ -48,6 +51,8 @@ public final class ReplayService {
                 .orElseThrow(() -> new IllegalArgumentException("Route not found: " + routeId));
         Endpoint endpoint = resolveEndpoint(route, destination);
         SslContext sslContext = resolveSslContext(route, destination);
+        log.debug("Replaying payload routeId={} destination={} target={}:{} bytes={}",
+                routeId, destination.name().toLowerCase(), endpoint.host(), endpoint.port(), payload.length);
         Bootstrap bootstrap = new Bootstrap()
                 .group(REPLAY_GROUP)
                 .channel(NioSocketChannel.class)
@@ -92,11 +97,15 @@ public final class ReplayService {
 
         bootstrap.connect(endpoint.host(), endpoint.port()).sync();
         latch.await(10, TimeUnit.SECONDS);
+        long durationMillis = Duration.between(startedAt, Instant.now()).toMillis();
+        log.info("Replay completed routeId={} destination={} target={}:{} bytesSent={} bytesReceived={} durationMs={}",
+                routeId, destination.name().toLowerCase(), endpoint.host(), endpoint.port(),
+                payload.length, bytesReceived.get(), durationMillis);
         return Map.of(
                 "status", "OK",
                 "bytesSent", payload.length,
                 "bytesReceived", bytesReceived.get(),
-                "durationMillis", Duration.between(startedAt, Instant.now()).toMillis(),
+                "durationMillis", durationMillis,
                 "destination", destination.name().toLowerCase(),
                 "target", endpoint.host() + ":" + endpoint.port());
     }
