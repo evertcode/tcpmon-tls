@@ -14,8 +14,31 @@ async function loadSessionDetails(sessionId) {
   }
   const selectedExchangeIndex = getState('activeExchangeIndex');
   const activeExchange = exchanges[selectedExchangeIndex] || {};
+  await hydrateExchangeBodies(data, activeExchange, selectedExchangeIndex);
   renderPayloads(activeExchange, data);
   renderEventsAndEditor(data);
+}
+
+async function hydrateExchangeBodies(session, exchange, exchangeIndex) {
+  if (!session?.sessionId || !exchange) return;
+  await Promise.all([
+    hydratePayloadBody(session.sessionId, exchangeIndex, exchange.request || session.latestRequest, 'request'),
+    hydratePayloadBody(session.sessionId, exchangeIndex, exchange.response || session.latestResponse, 'response')
+  ]);
+}
+
+async function hydratePayloadBody(sessionId, exchangeIndex, payload, direction) {
+  const decoded = payload?.decoded;
+  if (!decoded?.bodyTruncated) return;
+  try {
+    const data = await fetchJson(
+      `/api/sessions/${sessionId}/exchanges/${exchangeIndex}/body?direction=${direction}`
+    );
+    decoded.bodyText = data.bodyText || '';
+    decoded.bodyTruncated = false;
+  } catch {
+    // Keep the preview and fallback button if the full body cannot be fetched.
+  }
 }
 
 function renderPayloads(activeExchange, data) {

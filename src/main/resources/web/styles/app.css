@@ -1085,6 +1085,58 @@ tr.session-entry.active {
   align-items: stretch;
   min-width: 0;
 }
+.payload-actions-menu {
+  position: relative;
+}
+.payload-actions-menu-trigger {
+  list-style: none;
+  min-height: 38px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.payload-actions-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+.payload-actions-menu-trigger::after {
+  content: '▾';
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.payload-actions-menu[open] .payload-actions-menu-trigger {
+  background: var(--surface-2);
+  border-color: rgba(24, 33, 47, 0.16);
+  color: var(--text);
+}
+.payload-actions-menu-items {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.payload-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  justify-content: flex-start;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 500;
+}
+.payload-menu-item:hover:not(:disabled) {
+  transform: none;
+  background: var(--surface-2);
+}
 .body-viewer {
   border: 1px solid var(--border);
   border-radius: 8px;

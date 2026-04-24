@@ -22,6 +22,21 @@ class FakeNode {
     this.listeners = {};
     this.parentNode = null;
     this.tabIndex = -1;
+    this.classList = {
+      add: (...tokens) => {
+        const classes = new Set(String(this.className || '').split(/\s+/).filter(Boolean));
+        for (const token of tokens) classes.add(token);
+        this.className = [...classes].join(' ');
+      },
+      remove: (...tokens) => {
+        const removeSet = new Set(tokens);
+        this.className = String(this.className || '')
+          .split(/\s+/)
+          .filter(Boolean)
+          .filter(token => !removeSet.has(token))
+          .join(' ');
+      }
+    };
   }
 
   appendChild(child) {
@@ -86,6 +101,10 @@ function findFirst(node, predicate) {
 }
 
 class FakeDocument {
+  constructor() {
+    this.nodesById = new Map();
+  }
+
   createElement(tagName) {
     return new FakeNode(tagName);
   }
@@ -108,6 +127,15 @@ class FakeDocument {
         return fragment;
       }
     };
+  }
+
+  getElementById(id) {
+    if (!this.nodesById.has(id)) {
+      const node = new FakeNode('div');
+      node.id = id;
+      this.nodesById.set(id, node);
+    }
+    return this.nodesById.get(id);
   }
 }
 
@@ -317,6 +345,22 @@ test('buildPayloadActionButton creates a button with dataset and label', () => {
   assert.equal(button.textContent, 'Recapture request');
 });
 
+test('renderRequestActions keeps primary actions visible and secondary actions in menu', () => {
+  const ctx = loadWebHelpers();
+
+  const actions = ctx.renderRequestActions({ sessionId: 'session-1', routeId: 'route-a' }, 2);
+  const visibleButtons = actions.children.filter(child => child.tagName === 'button');
+  const menu = findFirst(actions, node => node.className === 'payload-actions-menu');
+
+  assert.equal(visibleButtons.length, 2);
+  assert.equal(visibleButtons[0].textContent, 'Recapture request');
+  assert.equal(visibleButtons[1].textContent, 'Send direct');
+  assert.ok(menu);
+  assert.equal(findFirst(menu, node => node.textContent === 'Copy as cURL').dataset.action, 'copy-curl-from-session');
+  assert.equal(findFirst(menu, node => node.textContent === 'Download JSON').dataset.format, 'json');
+  assert.equal(findFirst(menu, node => node.textContent === 'Download XML').dataset.format, 'xml');
+});
+
 test('buildPayloadBodySection renders a body viewer for formatted json bodies', () => {
   const ctx = loadWebHelpers();
 
@@ -406,6 +450,66 @@ test('body viewer load-full-body handler updates content using formatted payload
   const viewerCode = findFirst(body, node => node.className === 'body-viewer-code');
   assert.equal(viewerCode.textContent, '<root>  <ok>true</ok></root>');
   assert.equal(findFirst(body, node => node.tagName === 'button' && node.textContent === 'Copy body').dataset.isRequest, 'false');
+});
+
+test('loadSessionDetails hydrates truncated request and response bodies before rendering', async () => {
+  const ctx = loadWebHelpers();
+  const requestedUrls = [];
+  ctx.fetchJson = async url => {
+    requestedUrls.push(url);
+    if (url === '/api/sessions/session-1') {
+      return {
+        sessionId: 'session-1',
+        routeId: 'route-a',
+        exchanges: [{
+          index: 0,
+          request: {
+            timestamp: '2026-04-23T12:00:00.000Z',
+            size: 100,
+            direction: 'CLIENT_TO_TARGET',
+            decoded: {
+              isHttp: true,
+              bodyText: '{"preview":true}',
+              bodyTruncated: true,
+              startLine: 'POST /orders HTTP/1.1',
+              headers: [{ name: 'Content-Type', value: 'application/json' }]
+            }
+          },
+          response: {
+            timestamp: '2026-04-23T12:00:00.125Z',
+            size: 100,
+            direction: 'TARGET_TO_CLIENT',
+            decoded: {
+              isHttp: true,
+              bodyText: '{"preview":true}',
+              bodyTruncated: true,
+              startLine: 'HTTP/1.1 200 OK',
+              headers: [{ name: 'Content-Type', value: 'application/json' }]
+            }
+          }
+        }],
+        events: []
+      };
+    }
+    if (url.includes('direction=request')) {
+      return { bodyText: '{"fullRequest":true}' };
+    }
+    if (url.includes('direction=response')) {
+      return { bodyText: '{"fullResponse":true}' };
+    }
+    return {};
+  };
+  ctx.patchState({ activeSession: null, activeExchangeIndex: 0 });
+
+  await ctx.loadSessionDetails('session-1');
+
+  const payloads = ctx.document.getElementById('payloads');
+  assert.equal(requestedUrls.includes('/api/sessions/session-1'), true);
+  assert.equal(requestedUrls.some(url => url.includes('direction=request')), true);
+  assert.equal(requestedUrls.some(url => url.includes('direction=response')), true);
+  assert.equal(payloads.textContent.includes('fullRequest'), true);
+  assert.equal(payloads.textContent.includes('fullResponse'), true);
+  assert.equal(payloads.textContent.includes('Load full body'), false);
 });
 
 test('buildExchangeButtons creates exchange selectors and compare action', () => {

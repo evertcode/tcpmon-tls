@@ -16,11 +16,29 @@ function renderRequestActions(data, exchangeIndex) {
     buildPayloadActionButton('secondary action-alt', 'replay-payload', {
       ...replayDataset, destination: 'target'
     }, 'Send direct'),
-    buildPayloadActionButton('utility', 'copy-curl-from-session', {}, 'Copy as cURL'),
-    buildPayloadActionButton('utility', 'download-exchange', { format: 'json' }, 'Download JSON'),
-    buildPayloadActionButton('utility', 'download-exchange', { format: 'xml' }, 'Download XML')
+    buildPayloadActionsMenu()
   );
   return actions;
+}
+
+function buildPayloadActionsMenu() {
+  const menu = document.createElement('details');
+  menu.className = 'payload-actions-menu';
+
+  const summary = document.createElement('summary');
+  summary.className = 'utility payload-actions-menu-trigger';
+  summary.textContent = 'More';
+
+  const items = document.createElement('div');
+  items.className = 'payload-actions-menu-items';
+  items.append(
+    buildPayloadActionButton('payload-menu-item', 'copy-curl-from-session', {}, 'Copy as cURL'),
+    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'json' }, 'Download JSON'),
+    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'xml' }, 'Download XML')
+  );
+
+  menu.append(summary, items);
+  return menu;
 }
 
 async function fetchFullBodyText(sessionId, exchangeIndex, direction, decoded) {
