@@ -293,7 +293,7 @@ function renderConfigButton() {
   const button = document.createElement('button');
   button.className = 'utility';
   button.dataset.action = 'toggle-config-panel';
-  button.textContent = 'Config';
+  setButtonContent(button, 'Config', 'settings');
   wrap.append(themeCluster, button);
   el.replaceChildren(wrap);
 }
@@ -384,9 +384,10 @@ function buildRouteActionButton(action, routeId, title, label) {
   button.className = 'utility route-action-btn';
   button.dataset.action = action;
   button.dataset.routeId = routeId;
-  button.title = title;
-  button.setAttribute('aria-label', `${title} route "${routeId}"`);
-  button.textContent = label;
+  setButtonContent(button, label, action === 'delete-route' ? 'trash' : 'edit', {
+    title,
+    ariaLabel: `${title} route "${routeId}"`
+  });
   return button;
 }
 
@@ -546,7 +547,7 @@ function buildRouteHeaderActions(stateLabel, stateClass, pending, showExport) {
     const exportButton = document.createElement('button');
     exportButton.className = 'utility';
     exportButton.dataset.action = 'export-har';
-    exportButton.textContent = 'Export HAR';
+    setButtonContent(exportButton, 'Export HAR', 'download');
     actions.appendChild(exportButton);
   }
 

@@ -93,6 +93,23 @@ function parseBooleanAttr(value) {
   return String(value) === 'true';
 }
 
+function initializeStaticButtonIcons() {
+  setButtonContent(document.getElementById('add-route-btn'), '', 'plus', {
+    title: 'Add route',
+    ariaLabel: 'Add route'
+  });
+  setButtonContent(document.getElementById('refresh-routes-btn'), 'Refresh', 'refresh');
+  setButtonContent(document.getElementById('route-modal-close-btn'), '', 'close', {
+    title: 'Close dialog',
+    ariaLabel: 'Close dialog'
+  });
+  setButtonContent(document.getElementById('confirm-modal-close-btn'), '', 'close', {
+    title: 'Close dialog',
+    ariaLabel: 'Close dialog'
+  });
+  setButtonContent(document.getElementById('confirm-modal-confirm-btn'), 'Delete route', 'trash');
+}
+
 const THEME_STORAGE_KEY = 'tcpmon-theme-preference';
 
 function getStoredThemePreference() {
@@ -629,4 +646,5 @@ async function clearRequestFilters() {
 
 bindUiEvents();
 initializeTheme();
+initializeStaticButtonIcons();
 initApp();

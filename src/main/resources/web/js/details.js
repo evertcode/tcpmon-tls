@@ -509,10 +509,10 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
   if (bodyTruncated) {
     const expandBtn = document.createElement('button');
     expandBtn.className = 'utility';
-    expandBtn.textContent = 'Load full body';
+    setButtonContent(expandBtn, 'Load full body', 'download');
     expandBtn.addEventListener('click', async () => {
       expandBtn.disabled = true;
-      expandBtn.textContent = 'Loading…';
+      setButtonContent(expandBtn, 'Loading...', 'download');
       try {
         const direction = isRequest ? 'request' : 'response';
         const data = await fetchJson(
@@ -523,7 +523,7 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
         toolbar.appendChild(buildPayloadToolbarButton('copy-current-body', { isRequest: String(isRequest) }, 'Copy body'));
         expandBtn.remove();
       } catch {
-        expandBtn.textContent = 'Load failed — retry?';
+        setButtonContent(expandBtn, 'Load failed - retry?', 'download');
         expandBtn.disabled = false;
       }
     });
@@ -546,7 +546,7 @@ function buildPayloadToolbarButton(action, dataset, label) {
   for (const [key, value] of Object.entries(dataset || {})) {
     button.dataset[key] = value;
   }
-  button.textContent = label;
+  setButtonContent(button, label, 'copy');
   return button;
 }
 

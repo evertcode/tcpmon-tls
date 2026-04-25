@@ -12,10 +12,10 @@ function renderRequestActions(data, exchangeIndex) {
   actions.append(
     buildPayloadActionButton('primary action-main', 'replay-payload', {
       ...replayDataset, destination: 'listener'
-    }, 'Recapture via listener'),
+    }, 'Recapture via listener', 'replay'),
     buildPayloadActionButton('secondary action-alt', 'replay-payload', {
       ...replayDataset, destination: 'target'
-    }, 'Replay to target'),
+    }, 'Replay to target', 'send'),
     buildPayloadActionsMenu()
   );
   return actions;
@@ -27,14 +27,14 @@ function buildPayloadActionsMenu() {
 
   const summary = document.createElement('summary');
   summary.className = 'utility payload-actions-menu-trigger';
-  summary.textContent = 'More';
+  setButtonContent(summary, 'More', 'more');
 
   const items = document.createElement('div');
   items.className = 'payload-actions-menu-items';
   items.append(
-    buildPayloadActionButton('payload-menu-item', 'copy-curl-from-session', {}, 'Copy as cURL'),
-    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'json' }, 'Download JSON'),
-    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'xml' }, 'Download XML')
+    buildPayloadActionButton('payload-menu-item', 'copy-curl-from-session', {}, 'Copy as cURL', 'copy'),
+    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'json' }, 'Download JSON', 'download'),
+    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'xml' }, 'Download XML', 'download')
   );
 
   menu.append(summary, items);
@@ -556,18 +556,18 @@ function buildEditorActionButton(action, pendingId, label) {
   button.className = 'primary action-edit';
   button.dataset.action = action;
   button.dataset.pendingId = pendingId;
-  button.textContent = label;
+  setButtonContent(button, label, 'send');
   return button;
 }
 
-function buildPayloadActionButton(className, action, dataset, label) {
+function buildPayloadActionButton(className, action, dataset, label, iconName = '') {
   const button = document.createElement('button');
   button.className = className;
   button.dataset.action = action;
   for (const [key, value] of Object.entries(dataset)) {
     button.dataset[key] = value;
   }
-  button.textContent = label;
+  setButtonContent(button, label, iconName);
   return button;
 }
 

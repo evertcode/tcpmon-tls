@@ -212,6 +212,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 34px;
   border: 1px solid transparent;
   border-radius: 10px;
@@ -223,6 +224,23 @@ button {
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+.icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-only {
+  width: 30px;
+  padding-inline: 0;
+}
+.button-label {
+  min-width: 0;
 }
 button:hover:not(:disabled) {
   transform: translateY(-1px);

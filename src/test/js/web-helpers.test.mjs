@@ -109,6 +109,10 @@ class FakeDocument {
     return new FakeNode(tagName);
   }
 
+  createElementNS(_namespace, tagName) {
+    return new FakeNode(tagName);
+  }
+
   createDocumentFragment() {
     return new FakeNode('#fragment', 'fragment');
   }
@@ -337,7 +341,7 @@ test('buildPayloadActionButton creates a button with dataset and label', () => {
   const button = ctx.buildPayloadActionButton('primary action-main', 'replay-payload', {
     routeId: 'route-a',
     destination: 'listener'
-  }, 'Recapture request');
+  }, 'Recapture request', 'replay');
 
   assert.equal(button.tagName, 'button');
   assert.equal(button.className, 'primary action-main');
@@ -345,6 +349,8 @@ test('buildPayloadActionButton creates a button with dataset and label', () => {
   assert.equal(button.dataset.routeId, 'route-a');
   assert.equal(button.dataset.destination, 'listener');
   assert.equal(button.textContent, 'Recapture request');
+  assert.equal(button.children[0].tagName, 'svg');
+  assert.equal(button.children[0].attributes['aria-hidden'], 'true');
 });
 
 test('buildEmptyState renders message, hint and optional action', () => {
