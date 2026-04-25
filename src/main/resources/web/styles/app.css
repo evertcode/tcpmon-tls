@@ -1097,6 +1097,8 @@ tr.session-entry.active {
   padding-top: 12px;
   align-items: stretch;
   min-width: 0;
+  position: relative;
+  z-index: 5;
 }
 .payload-actions-menu {
   position: relative;
@@ -1126,6 +1128,7 @@ tr.session-entry.active {
   position: absolute;
   right: 0;
   bottom: calc(100% + 6px);
+  top: auto;
   z-index: 20;
   min-width: 180px;
   padding: 6px;
@@ -1624,11 +1627,6 @@ tr.session-entry:focus-visible {
 
 .payload-actions {
   background: var(--surface);
-}
-
-.payload-actions-menu-items {
-  bottom: auto;
-  top: calc(100% + 6px);
 }
 
 .body-viewer-scroll {
