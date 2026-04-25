@@ -67,7 +67,7 @@
   --font-mono: "IBM Plex Mono", "SFMono-Regular", "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
   --mono: var(--font-mono);
   --sans: var(--font-ui);
-  --shadow: 0 10px 26px rgba(24, 33, 47, 0.06);
+  --shadow: 0 1px 2px rgba(24, 33, 47, 0.04);
   --theme-transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 * { box-sizing: border-box; }
@@ -717,9 +717,7 @@ button.action-edit {
 }
 .route-header-card {
   padding: 14px;
-  background:
-    linear-gradient(180deg, rgba(15, 108, 189, 0.03), rgba(15, 108, 189, 0) 44%),
-    var(--surface);
+  background: var(--surface);
 }
 .route-header-top {
   display: flex;
@@ -844,28 +842,37 @@ button.action-edit {
 }
 .route-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
+}
+.route-stats-summary {
+  grid-row: span 1;
+  min-width: 0;
+  padding: 9px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 .stat-block {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 .stat-block .stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: 0;
   line-height: 1;
   color: var(--text);
 }
 .stat-block .stat-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1412,6 +1419,9 @@ pre {
   .route-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .route-stats-summary {
+    grid-column: 1 / -1;
+  }
   .route-selection-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1576,6 +1586,14 @@ tr.session-entry:focus-visible {
 }
 
 .route-header-card {
+  box-shadow: none;
+}
+
+.route-card,
+.table-card,
+.payload-card,
+.events-card,
+.editor-card {
   box-shadow: none;
 }
 

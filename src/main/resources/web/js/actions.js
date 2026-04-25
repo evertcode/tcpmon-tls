@@ -12,10 +12,10 @@ function renderRequestActions(data, exchangeIndex) {
   actions.append(
     buildPayloadActionButton('primary action-main', 'replay-payload', {
       ...replayDataset, destination: 'listener'
-    }, 'Recapture request'),
+    }, 'Recapture via listener'),
     buildPayloadActionButton('secondary action-alt', 'replay-payload', {
       ...replayDataset, destination: 'target'
-    }, 'Send direct'),
+    }, 'Replay to target'),
     buildPayloadActionsMenu()
   );
   return actions;

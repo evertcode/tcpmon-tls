@@ -174,6 +174,38 @@ function buildEmptyState(message, hint = '', action = null) {
   return empty;
 }
 
+function routeEndpointLabel(routeId, endpoint = 'listener') {
+  const config = getState('proxyConfig');
+  const route = config && (config.routes || []).find(item => item.id === routeId);
+  if (!route) return '';
+  const side = endpoint === 'target' ? route.target : route.listener;
+  return side && side.host && side.port ? `${side.host}:${side.port}` : '';
+}
+
+function activeRouteCaptureHint() {
+  const routeId = getState('activeRoute');
+  const listener = routeEndpointLabel(routeId, 'listener');
+  const target = routeEndpointLabel(routeId, 'target');
+  if (listener && target) {
+    return `Send client traffic to ${listener}; tcpmon will forward it to ${target}.`;
+  }
+  if (listener) {
+    return `Send client traffic to ${listener} to capture the first exchange.`;
+  }
+  return 'Send traffic through the selected listener to populate this route.';
+}
+
+function activeFilterSummary() {
+  const parts = [];
+  const query = String(getState('requestSearchValue') || '').trim();
+  const method = getState('requestMethodFilterValue');
+  const status = getState('requestStatusCodeFilterValue');
+  if (query) parts.push(`query "${query}"`);
+  if (method) parts.push(`method ${method}`);
+  if (status) parts.push(`status ${status}`);
+  return parts.join(', ');
+}
+
 function setFieldInvalid(field, message) {
   if (!field) return;
   field.setAttribute('aria-invalid', 'true');

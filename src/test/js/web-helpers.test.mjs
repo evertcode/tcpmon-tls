@@ -358,6 +358,25 @@ test('buildEmptyState renders message, hint and optional action', () => {
   assert.equal(findFirst(empty, node => node.tagName === 'button').textContent, 'Create route');
 });
 
+test('activeRouteCaptureHint uses configured listener and target', () => {
+  const ctx = loadWebHelpers();
+  ctx.patchState({
+    activeRoute: 'route-a',
+    proxyConfig: {
+      routes: [{
+        id: 'route-a',
+        listener: { host: '127.0.0.1', port: 9000 },
+        target: { host: 'api.example.test', port: 443 }
+      }]
+    }
+  });
+
+  assert.equal(
+    ctx.activeRouteCaptureHint(),
+    'Send client traffic to 127.0.0.1:9000; tcpmon will forward it to api.example.test:443.'
+  );
+});
+
 test('renderRequestActions keeps primary actions visible and secondary actions in menu', () => {
   const ctx = loadWebHelpers();
 
@@ -366,9 +385,9 @@ test('renderRequestActions keeps primary actions visible and secondary actions i
   const menu = findFirst(actions, node => node.className === 'payload-actions-menu');
 
   assert.equal(visibleButtons.length, 2);
-  assert.equal(visibleButtons[0].textContent, 'Recapture request');
-  assert.equal(visibleButtons[1].textContent, 'Send direct');
   assert.ok(menu);
+  assert.equal(visibleButtons[0].textContent, 'Recapture via listener');
+  assert.equal(visibleButtons[1].textContent, 'Replay to target');
   assert.equal(findFirst(menu, node => node.textContent === 'Copy as cURL').dataset.action, 'copy-curl-from-session');
   assert.equal(findFirst(menu, node => node.textContent === 'Download JSON').dataset.format, 'json');
   assert.equal(findFirst(menu, node => node.textContent === 'Download XML').dataset.format, 'xml');

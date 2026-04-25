@@ -61,13 +61,13 @@ function renderRouteList() {
   if (!routes.length) {
     const query = document.getElementById('route-search').value.trim();
     if (query) {
-      container.replaceChildren(buildEmptyState('No routes match your search.', 'Try a different route ID, host, or client address.'));
+      container.replaceChildren(buildEmptyState(`No route matches "${query}".`, 'Search checks route ID, target address, and client address.'));
     } else {
       const addBtn = document.createElement('button');
       addBtn.className = 'primary';
       addBtn.textContent = '+ Add route';
       addBtn.addEventListener('click', () => openAddRouteModal());
-      container.replaceChildren(buildEmptyState('No routes configured yet.', 'Create a listener and target to start capturing traffic.', addBtn));
+      container.replaceChildren(buildEmptyState('No listeners configured.', 'Add a route to bind a local listener and forward traffic to a target.', addBtn));
     }
     return;
   }
@@ -153,6 +153,7 @@ function buildRouteHeaderViewModel(routeId, sessions, requestRows, selectedSessi
     pendingStatClass: pendingCount >= 3 ? 'stat-danger' : pendingCount > 0 ? 'stat-warn' : '',
     stateLabel: liveCount > 0 ? 'Live' : 'Closed',
     stateClass: liveCount > 0 ? 'state-live' : 'state-closed',
+    summary: buildRouteActivitySummary(total, liveCount, pendingCount, avgDurationMs),
     activeSelection: buildActiveSelectionViewModel(activeSession, selectedSessionId)
   };
 }
@@ -169,7 +170,7 @@ function buildActiveSelectionViewModel(activeSession, selectedSessionId) {
   if (!activeSession) {
     return {
       empty: true,
-      clientAddress: 'Select a captured request to inspect client, status, duration and timing.',
+      clientAddress: 'Select a request below to inspect payloads and timing.',
       statusCode: '',
       durationMs: null,
       startedAt: ''
@@ -480,7 +481,9 @@ function buildRouteHeaderEmptyCard(routeId, listenerAddr, targetAddr) {
       stateClass: 'state-idle',
       showExport: false
     }),
-    buildRouteHeaderEmptyHint('This route is configured, but no sessions have been captured yet.')
+    buildRouteHeaderEmptyHint(listenerAddr
+      ? `Waiting for traffic on ${listenerAddr}${targetAddr ? ` -> ${targetAddr}` : ''}.`
+      : 'This route is configured, but the listener address is not available yet.')
   );
   return card;
 }
@@ -498,7 +501,7 @@ function buildRouteHeaderCard(data) {
       pending: data.pendingCount,
       showExport: true
     }),
-    buildRouteStats(data.total, data.liveCount, data.pendingCount, data.avgDurationMs, data.pendingStatClass),
+    buildRouteStats(data.total, data.liveCount, data.pendingCount, data.avgDurationMs, data.pendingStatClass, data.summary),
     buildActiveSelectionPanel(data.activeSelection)
   );
   return card;
@@ -613,9 +616,15 @@ function buildRouteHeaderEmptyHint(text) {
   return hint;
 }
 
-function buildRouteStats(total, liveCount, pendingCount, avgDurationMs, pendingStatClass) {
+function buildRouteStats(total, liveCount, pendingCount, avgDurationMs, pendingStatClass, summary = '') {
   const stats = document.createElement('div');
   stats.className = 'route-stats';
+  if (summary) {
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'route-stats-summary';
+    summaryEl.textContent = summary;
+    stats.appendChild(summaryEl);
+  }
   stats.append(
     buildRouteStatBlock(String(total), 'Captured'),
     buildRouteStatBlock(String(liveCount), 'Live'),
@@ -623,6 +632,16 @@ function buildRouteStats(total, liveCount, pendingCount, avgDurationMs, pendingS
     buildRouteStatBlock(formatMetricDuration(avgDurationMs), 'Avg duration', avgDurationMs == null ? '' : durationMetricClass(avgDurationMs))
   );
   return stats;
+}
+
+function buildRouteActivitySummary(total, liveCount, pendingCount, avgDurationMs) {
+  const parts = [`${total} captured request${total === 1 ? '' : 's'}`];
+  if (liveCount > 0) parts.push(`${liveCount} live session${liveCount === 1 ? '' : 's'}`);
+  if (pendingCount > 0) parts.push(`${pendingCount} intercepted payload${pendingCount === 1 ? '' : 's'}`);
+  if (avgDurationMs != null && !Number.isNaN(Number(avgDurationMs))) {
+    parts.push(`${formatMetricDuration(avgDurationMs)} avg`);
+  }
+  return parts.join(' · ');
 }
 
 function buildRouteStatBlock(value, label, extraClass = '') {

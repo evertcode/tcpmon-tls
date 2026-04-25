@@ -138,9 +138,18 @@ function renderRequestTable() {
       clearBtn.className = 'utility';
       clearBtn.textContent = 'Clear filters';
       clearBtn.dataset.action = 'clear-request-filters';
-      container.replaceChildren(buildEmptyState('No requests match the current filters.', 'Clear filters or broaden the search query.', clearBtn));
+      const filterSummary = activeFilterSummary();
+      container.replaceChildren(buildEmptyState(
+        filterSummary ? `No requests match ${filterSummary}.` : 'No requests match the current filters.',
+        'Clear filters or broaden the search query.',
+        clearBtn
+      ));
     } else {
-      container.replaceChildren(buildEmptyState('No HTTP requests captured for this route yet.', 'Send traffic through the selected listener to populate this table.'));
+      const listener = routeEndpointLabel(getState('activeRoute'), 'listener');
+      container.replaceChildren(buildEmptyState(
+        listener ? `No traffic captured on ${listener}.` : 'No traffic captured for this route yet.',
+        activeRouteCaptureHint()
+      ));
     }
     return;
   }
@@ -154,7 +163,7 @@ function renderRequestTable() {
   searchInput.id = 'request-search';
   searchInput.type = 'search';
   searchInput.value = searchVal;
-  searchInput.placeholder = 'Filter requests in this route';
+  searchInput.placeholder = 'Filter path, host, header, or client';
   toolbar.appendChild(searchInput);
 
   const methodFilter = buildSelectElement('request-method-filter', renderMethodOptions());
