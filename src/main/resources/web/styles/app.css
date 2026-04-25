@@ -1521,13 +1521,21 @@ pre {
   position: sticky;
   top: 65px;
   height: calc(100vh - 65px);
+  z-index: 1;
 }
 
 .content {
+  position: relative;
+  z-index: 2;
   grid-template-rows: auto auto minmax(220px, auto) minmax(420px, 1fr) auto;
   max-width: 1680px;
   width: 100%;
   overflow-x: clip;
+}
+
+.layout:has(.payload-actions-menu[open]),
+.content:has(.payload-actions-menu[open]) {
+  overflow: visible;
 }
 
 .route-list {
