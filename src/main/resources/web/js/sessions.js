@@ -133,26 +133,15 @@ function renderRequestTable() {
   if (!requestRows.length) {
     const facets = getState('requestFacets');
     const total = facets ? Number(facets.totalRequests || 0) : 0;
-    const empty = document.createElement('div');
-    empty.className = 'empty';
     if (total > 0) {
-      const inner = document.createElement('div');
-      inner.style.display = 'flex';
-      inner.style.flexDirection = 'column';
-      inner.style.alignItems = 'center';
-      inner.style.gap = '10px';
-      const msg = document.createElement('span');
-      msg.textContent = 'No requests match the current filters.';
       const clearBtn = document.createElement('button');
       clearBtn.className = 'utility';
       clearBtn.textContent = 'Clear filters';
       clearBtn.dataset.action = 'clear-request-filters';
-      inner.append(msg, clearBtn);
-      empty.appendChild(inner);
+      container.replaceChildren(buildEmptyState('No requests match the current filters.', 'Clear filters or broaden the search query.', clearBtn));
     } else {
-      empty.textContent = 'No HTTP requests captured for this route yet.';
+      container.replaceChildren(buildEmptyState('No HTTP requests captured for this route yet.', 'Send traffic through the selected listener to populate this table.'));
     }
-    container.replaceChildren(empty);
     return;
   }
   const card = document.createElement('section');
@@ -211,7 +200,10 @@ function renderRequestTableContent(requestRows) {
   const activeSession = getState('activeSession');
   const activeExchangeIndex = getState('activeExchangeIndex');
   const fragment = document.createDocumentFragment();
-  fragment.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex));
+  const scroller = document.createElement('div');
+  scroller.className = 'request-table-scroll';
+  scroller.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex));
+  fragment.appendChild(scroller);
   fragment.appendChild(buildRequestTableFooter(rangeStart, rangeEnd, totalRequests, hasPrev, hasMore));
   return fragment;
 }
@@ -295,6 +287,7 @@ async function changeRequestPage(delta) {
 
 function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex) {
   const table = document.createElement('table');
+  table.className = 'request-table';
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   for (const label of ['Method', 'Path', 'Response', 'Duration', 'Size', 'Client', 'Started']) {
@@ -312,6 +305,8 @@ function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex)
     row.dataset.action = 'select-session';
     row.dataset.sessionId = request.sessionId;
     row.dataset.exchangeIndex = String(exchangeIndex);
+    row.tabIndex = 0;
+    row.setAttribute('aria-selected', String(request.sessionId === activeSession && exchangeIndex === activeExchangeIndex));
 
     row.appendChild(buildTextCell(request.requestMethod || ''));
     row.appendChild(buildPathCell(request));

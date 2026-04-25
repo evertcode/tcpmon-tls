@@ -56,29 +56,19 @@ function renderRouteList() {
   const routes = filteredRoutes();
   const selectedRouteId = getState('activeRoute');
   const container = document.getElementById('routes');
+  container.setAttribute('role', 'listbox');
+  container.setAttribute('aria-label', 'Routes');
   if (!routes.length) {
     const query = document.getElementById('route-search').value.trim();
-    const empty = document.createElement('div');
-    empty.className = 'empty';
     if (query) {
-      empty.textContent = 'No routes match your search.';
+      container.replaceChildren(buildEmptyState('No routes match your search.', 'Try a different route ID, host, or client address.'));
     } else {
-      const inner = document.createElement('div');
-      inner.style.display = 'flex';
-      inner.style.flexDirection = 'column';
-      inner.style.alignItems = 'center';
-      inner.style.gap = '10px';
-      const msg = document.createElement('span');
-      msg.textContent = 'No routes configured yet.';
       const addBtn = document.createElement('button');
       addBtn.className = 'primary';
-      addBtn.style.fontSize = '13px';
       addBtn.textContent = '+ Add route';
       addBtn.addEventListener('click', () => openAddRouteModal());
-      inner.append(msg, addBtn);
-      empty.appendChild(inner);
+      container.replaceChildren(buildEmptyState('No routes configured yet.', 'Create a listener and target to start capturing traffic.', addBtn));
     }
-    container.replaceChildren(empty);
     return;
   }
   const items = routes.map(route => buildRouteListItem(route, selectedRouteId));
@@ -340,9 +330,9 @@ function buildRouteListItem(route, selectedRouteId) {
   row.className = `route-row${route.routeId === selectedRouteId ? ' active' : ''}${isOpen ? ' status-open' : isError ? ' status-error' : ''}`;
   row.dataset.action = 'select-route';
   row.dataset.routeId = route.routeId;
-  row.setAttribute('role', 'button');
+  row.setAttribute('role', 'option');
   row.setAttribute('tabindex', '0');
-  row.setAttribute('aria-pressed', String(route.routeId === selectedRouteId));
+  row.setAttribute('aria-selected', String(route.routeId === selectedRouteId));
   if (route.routeId === selectedRouteId) {
     row.setAttribute('aria-current', 'true');
   }
@@ -351,14 +341,11 @@ function buildRouteListItem(route, selectedRouteId) {
   top.className = 'row-top';
 
   const title = document.createElement('strong');
-  title.style.fontSize = '13px';
+  title.className = 'route-row-title';
   title.textContent = route.routeId;
 
   const actionsWrap = document.createElement('div');
-  actionsWrap.style.display = 'flex';
-  actionsWrap.style.gap = '4px';
-  actionsWrap.style.alignItems = 'center';
-  actionsWrap.style.flexShrink = '0';
+  actionsWrap.className = 'route-row-actions';
 
   if (pending > 0) {
     const pendingPill = document.createElement('span');
@@ -384,7 +371,6 @@ function buildRouteListItem(route, selectedRouteId) {
 
   const reqPill = document.createElement('span');
   reqPill.className = 'pill route';
-  reqPill.style.flexShrink = '0';
   reqPill.textContent = `${route.requestCount || 0} req`;
   bottom.append(targetLine, reqPill);
 
@@ -406,8 +392,8 @@ function buildRouteActions(routeId) {
   const actions = document.createElement('span');
   actions.className = 'route-actions';
   actions.append(
-    buildRouteActionButton('edit-route', routeId, 'Edit', '✏'),
-    buildRouteActionButton('delete-route', routeId, 'Delete', '🗑')
+    buildRouteActionButton('edit-route', routeId, 'Edit', 'Edit'),
+    buildRouteActionButton('delete-route', routeId, 'Delete', 'Delete')
   );
   return actions;
 }
@@ -440,8 +426,7 @@ function buildRoutePerfLine(avgDuration, errors) {
     return null;
   }
   const line = document.createElement('div');
-  line.className = 'route-preview';
-  line.style.fontFamily = 'var(--sans)';
+  line.className = 'route-preview route-perf-line';
 
   const parts = [];
   if (avgDuration != null) {
@@ -744,18 +729,12 @@ function buildSelectionStatusItem(statusCode) {
 
 function buildConfigPanel(config) {
   const panelWrap = document.createElement('div');
-  panelWrap.style.background = 'var(--surface)';
-  panelWrap.style.borderBottom = '1px solid var(--border)';
-  panelWrap.style.padding = '12px 16px';
+  panelWrap.className = 'config-panel-wrap';
 
   const header = document.createElement('div');
-  header.style.display = 'flex';
-  header.style.justifyContent = 'space-between';
-  header.style.alignItems = 'center';
-  header.style.marginBottom = '8px';
+  header.className = 'config-panel-header';
 
   const title = document.createElement('strong');
-  title.style.fontSize = '13px';
   title.textContent = 'Proxy Configuration';
 
   const closeButton = document.createElement('button');
@@ -781,7 +760,7 @@ function buildConfigPanel(config) {
 
 function buildConfigRouteBlock(route) {
   const block = document.createElement('div');
-  block.style.marginBottom = '10px';
+  block.className = 'config-route-block';
   block.append(
     buildConfigRow('Route', route.id || ''),
     buildConfigRow('Listener', `${route.listener.host}:${route.listener.port} (${route.listener.transport})`),

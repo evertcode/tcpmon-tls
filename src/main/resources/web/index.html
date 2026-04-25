@@ -27,7 +27,7 @@
     <header class="topbar">
       <div class="topbar-title">
         <h1 class="sr-only">tcpmon-tls control plane</h1>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div class="brand-line">
           <span id="connection-status" class="connection-dot" aria-label="Connecting…" title="Connecting…"></span>
           <strong aria-hidden="true">tcpmon-tls control plane</strong>
         </div>
@@ -74,23 +74,23 @@
         <div id="route-modal-error" class="modal-error" role="alert"></div>
 
         <div class="form-group" style="margin-top:4px;">
-          <label>Route ID</label>
+          <label for="rm-id">Route ID</label>
           <input type="text" id="rm-id" placeholder="e.g. my-route" autocomplete="off">
         </div>
 
         <div class="form-section-hdr">Listener</div>
         <div class="form-row">
           <div class="form-group">
-            <label>Host</label>
-            <input type="text" id="rm-listener-host" value="0.0.0.0">
+              <label for="rm-listener-host">Host</label>
+              <input type="text" id="rm-listener-host" value="0.0.0.0">
           </div>
           <div class="form-group">
-            <label>Port</label>
-            <input type="number" id="rm-listener-port" placeholder="9001" min="1" max="65535">
+              <label for="rm-listener-port">Port</label>
+              <input type="number" id="rm-listener-port" placeholder="9001" min="1" max="65535">
           </div>
         </div>
         <div class="form-group">
-          <label>Transport</label>
+          <label for="rm-listener-transport">Transport</label>
           <select id="rm-listener-transport">
             <option value="PLAIN">PLAIN</option>
             <option value="TLS">TLS</option>
@@ -100,26 +100,26 @@
           <div class="tls-subsection-label">Server Certificate</div>
           <div class="form-row">
             <div class="form-group">
-              <label>Certificate file</label>
+              <label for="rm-listener-tls-cert">Certificate file</label>
               <input type="text" id="rm-listener-tls-cert" placeholder="/path/to/cert.pem">
             </div>
             <div class="form-group">
-              <label>Private key file</label>
+              <label for="rm-listener-tls-key">Private key file</label>
               <input type="text" id="rm-listener-tls-key" placeholder="/path/to/key.pem">
             </div>
           </div>
           <div class="tls-alt-or">- or keystore -</div>
           <div class="form-row-3">
             <div class="form-group">
-              <label>Keystore file</label>
+              <label for="rm-listener-tls-keystore">Keystore file</label>
               <input type="text" id="rm-listener-tls-keystore" placeholder="/path/to/keystore.p12">
             </div>
             <div class="form-group">
-              <label>Password</label>
+              <label for="rm-listener-tls-keystore-pwd">Password</label>
               <input type="password" id="rm-listener-tls-keystore-pwd" autocomplete="off">
             </div>
             <div class="form-group">
-              <label>Type</label>
+              <label for="rm-listener-tls-keystore-type">Type</label>
               <select id="rm-listener-tls-keystore-type">
                 <option value="PKCS12">PKCS12</option>
                 <option value="JKS">JKS</option>
@@ -129,15 +129,15 @@
           <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
           <div class="form-row-3">
             <div class="form-group">
-              <label>Truststore file</label>
+              <label for="rm-listener-tls-truststore">Truststore file</label>
               <input type="text" id="rm-listener-tls-truststore" placeholder="/path/to/truststore.p12">
             </div>
             <div class="form-group">
-              <label>Password</label>
+              <label for="rm-listener-tls-truststore-pwd">Password</label>
               <input type="password" id="rm-listener-tls-truststore-pwd" autocomplete="off">
             </div>
             <div class="form-group">
-              <label>Type</label>
+              <label for="rm-listener-tls-truststore-type">Type</label>
               <select id="rm-listener-tls-truststore-type">
                 <option value="PKCS12">PKCS12</option>
                 <option value="JKS">JKS</option>
@@ -145,7 +145,7 @@
             </div>
           </div>
           <div class="form-group" style="margin-top:8px;">
-            <label>Client Authentication</label>
+            <label for="rm-listener-client-auth">Client Authentication</label>
             <select id="rm-listener-client-auth">
               <option value="NONE">None</option>
               <option value="OPTIONAL">Optional</option>
@@ -157,16 +157,16 @@
         <div class="form-section-hdr">Target</div>
         <div class="form-row">
           <div class="form-group">
-            <label>Host</label>
+              <label for="rm-target-host">Host</label>
             <input type="text" id="rm-target-host" placeholder="localhost">
           </div>
           <div class="form-group">
-            <label>Port</label>
+              <label for="rm-target-port">Port</label>
             <input type="number" id="rm-target-port" placeholder="8080" min="1" max="65535">
           </div>
         </div>
         <div class="form-group">
-          <label>Transport</label>
+          <label for="rm-target-transport">Transport</label>
           <select id="rm-target-transport">
             <option value="PLAIN">PLAIN</option>
             <option value="TLS">TLS</option>
@@ -178,7 +178,7 @@
         </div>
         <div id="target-tls-fields" class="tls-subsection" style="display:none;">
           <div class="form-group">
-            <label>SNI Host <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;">(overrides target host)</span></label>
+            <label for="rm-target-sni">SNI Host <span class="label-hint">(overrides target host)</span></label>
             <input type="text" id="rm-target-sni" placeholder="defaults to target host">
           </div>
           <div class="form-check">
@@ -192,26 +192,26 @@
           <div class="tls-subsection-label">Client Certificate</div>
           <div class="form-row">
             <div class="form-group">
-              <label>Certificate file</label>
+              <label for="rm-target-tls-cert">Certificate file</label>
               <input type="text" id="rm-target-tls-cert" placeholder="/path/to/cert.pem">
             </div>
             <div class="form-group">
-              <label>Private key file</label>
+              <label for="rm-target-tls-key">Private key file</label>
               <input type="text" id="rm-target-tls-key" placeholder="/path/to/key.pem">
             </div>
           </div>
           <div class="tls-alt-or">- or keystore -</div>
           <div class="form-row-3">
             <div class="form-group">
-              <label>Keystore file</label>
+              <label for="rm-target-tls-keystore">Keystore file</label>
               <input type="text" id="rm-target-tls-keystore" placeholder="/path/to/keystore.p12">
             </div>
             <div class="form-group">
-              <label>Password</label>
+              <label for="rm-target-tls-keystore-pwd">Password</label>
               <input type="password" id="rm-target-tls-keystore-pwd" autocomplete="off">
             </div>
             <div class="form-group">
-              <label>Type</label>
+              <label for="rm-target-tls-keystore-type">Type</label>
               <select id="rm-target-tls-keystore-type">
                 <option value="PKCS12">PKCS12</option>
                 <option value="JKS">JKS</option>
@@ -221,15 +221,15 @@
           <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
           <div class="form-row-3">
             <div class="form-group">
-              <label>Truststore file</label>
+              <label for="rm-target-tls-truststore">Truststore file</label>
               <input type="text" id="rm-target-tls-truststore" placeholder="/path/to/truststore.p12">
             </div>
             <div class="form-group">
-              <label>Password</label>
+              <label for="rm-target-tls-truststore-pwd">Password</label>
               <input type="password" id="rm-target-tls-truststore-pwd" autocomplete="off">
             </div>
             <div class="form-group">
-              <label>Type</label>
+              <label for="rm-target-tls-truststore-type">Type</label>
               <select id="rm-target-tls-truststore-type">
                 <option value="PKCS12">PKCS12</option>
                 <option value="JKS">JKS</option>

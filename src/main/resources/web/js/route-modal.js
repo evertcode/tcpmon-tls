@@ -45,9 +45,9 @@ function openAddRouteModal() {
   document.getElementById('rm-target-insecure').checked = false;
   document.getElementById('rm-target-verify').checked = true;
   document.getElementById('rm-target-rewrite').checked = false;
-  document.getElementById('route-modal-error').style.display = 'none';
+  clearRouteModalErrors();
   routeModalOpenerEl = document.activeElement;
-  document.getElementById('route-modal').style.display = 'flex';
+  showRouteModal();
   setTimeout(() => document.getElementById('rm-id').focus(), 50);
 }
 
@@ -98,17 +98,46 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-target-insecure').checked = !!route.target.insecureTrustAll;
   document.getElementById('rm-target-verify').checked = route.target.verifyHostname !== false;
   document.getElementById('rm-target-rewrite').checked = !!route.target.rewriteHostHeader;
-  document.getElementById('route-modal-error').style.display = 'none';
+  clearRouteModalErrors();
   routeModalOpenerEl = document.activeElement;
-  document.getElementById('route-modal').style.display = 'flex';
+  showRouteModal();
   setTimeout(() => document.getElementById('rm-id').focus(), 50);
 }
 
+function showRouteModal() {
+  const modal = document.getElementById('route-modal');
+  modal.style.display = 'flex';
+  modal.removeAttribute('aria-hidden');
+}
+
 function closeRouteModal() {
-  document.getElementById('route-modal').style.display = 'none';
+  const modal = document.getElementById('route-modal');
+  modal.style.display = 'none';
+  modal.setAttribute('aria-hidden', 'true');
   if (routeModalOpenerEl && typeof routeModalOpenerEl.focus === 'function') {
     routeModalOpenerEl.focus();
     routeModalOpenerEl = null;
+  }
+}
+
+function clearRouteModalErrors() {
+  const error = document.getElementById('route-modal-error');
+  error.textContent = '';
+  error.style.display = 'none';
+  for (const id of [
+    'rm-id',
+    'rm-listener-host',
+    'rm-listener-port',
+    'rm-target-host',
+    'rm-target-port',
+    'rm-listener-tls-cert',
+    'rm-listener-tls-key',
+    'rm-listener-tls-keystore',
+    'rm-target-tls-cert',
+    'rm-target-tls-key',
+    'rm-target-tls-keystore'
+  ]) {
+    clearFieldInvalid(document.getElementById(id));
   }
 }
 
@@ -196,9 +225,67 @@ function showRouteModalError(msg) {
   el.style.display = 'block';
 }
 
+function validateRouteForm(payload) {
+  clearRouteModalErrors();
+  const errors = [];
+  function requireField(id, message) {
+    const field = document.getElementById(id);
+    if (!String(field.value || '').trim()) {
+      setFieldInvalid(field, message);
+      errors.push(field);
+    }
+  }
+  function requirePort(id, message) {
+    const field = document.getElementById(id);
+    const value = Number(field.value);
+    if (!Number.isInteger(value) || value < 1 || value > 65535) {
+      setFieldInvalid(field, message);
+      errors.push(field);
+    }
+  }
+
+  requireField('rm-id', 'Route ID is required.');
+  requireField('rm-listener-host', 'Listener host is required.');
+  requirePort('rm-listener-port', 'Use a port from 1 to 65535.');
+  requireField('rm-target-host', 'Target host is required.');
+  requirePort('rm-target-port', 'Use a port from 1 to 65535.');
+
+  if (payload.listener.transport === 'TLS') {
+    const hasCertPair = payload.listener.tlsCert && payload.listener.tlsKey;
+    const hasKeystore = payload.listener.tlsKeystore;
+    if (!hasCertPair && !hasKeystore) {
+      setFieldInvalid(document.getElementById('rm-listener-tls-cert'), 'Provide certificate plus key, or a keystore.');
+      setFieldInvalid(document.getElementById('rm-listener-tls-keystore'), 'Provide a keystore, or certificate plus key.');
+      errors.push(document.getElementById('rm-listener-tls-cert'));
+    }
+    if ((payload.listener.tlsCert && !payload.listener.tlsKey) || (!payload.listener.tlsCert && payload.listener.tlsKey)) {
+      setFieldInvalid(document.getElementById('rm-listener-tls-key'), 'Certificate and private key must be provided together.');
+      errors.push(document.getElementById('rm-listener-tls-key'));
+    }
+  }
+
+  if (payload.target.transport === 'TLS') {
+    if ((payload.target.tlsCert && !payload.target.tlsKey) || (!payload.target.tlsCert && payload.target.tlsKey)) {
+      setFieldInvalid(document.getElementById('rm-target-tls-key'), 'Certificate and private key must be provided together.');
+      errors.push(document.getElementById('rm-target-tls-key'));
+    }
+  }
+
+  if (errors.length) {
+    showRouteModalError('Review the highlighted fields before saving.');
+    errors[0].focus();
+    return false;
+  }
+  return true;
+}
+
 async function submitRouteForm() {
-  document.getElementById('route-modal-error').style.display = 'none';
+  clearRouteModalErrors();
   const payload = buildRoutePayload();
+  if (!validateRouteForm(payload)) return;
+  const saveBtn = document.getElementById('route-modal-save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
   try {
     if (routeModalMode === 'add') {
       await fetchJson('/api/routes', {
@@ -222,6 +309,9 @@ async function submitRouteForm() {
     setStatus('success', routeModalMode === 'add' ? 'Route created.' : 'Route updated.');
   } catch (err) {
     showRouteModalError(err.message || 'Error saving route.');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
   }
 }
 

@@ -662,11 +662,7 @@ function renderEventsAndEditor(data) {
   details.open = eventsExpanded;
 
   const summary = document.createElement('summary');
-  summary.style.display = 'flex';
-  summary.style.justifyContent = 'space-between';
-  summary.style.alignItems = 'center';
-  summary.style.gap = '12px';
-  summary.style.cursor = 'pointer';
+  summary.className = 'events-summary';
 
   const summaryTitle = document.createElement('span');
   const titleStrong = document.createElement('strong');
@@ -686,7 +682,7 @@ function renderEventsAndEditor(data) {
   summary.append(summaryTitle, summaryMeta);
 
   const body = document.createElement('div');
-  body.style.marginTop = '12px';
+  body.className = 'events-body';
   body.appendChild(buildExchangeButtons(exchanges));
   if (pendingEvents.length) {
     body.appendChild(buildInterceptPanel(pendingEvents));
@@ -709,8 +705,8 @@ function buildInterceptPanel(pendingEvents) {
   header.className = 'intercept-panel-header';
 
   const title = document.createElement('strong');
-  title.style.color = 'var(--warn)';
-  title.textContent = `⚠ ${count} payload${count !== 1 ? 's' : ''} intercepted`;
+  title.className = 'intercept-title';
+  title.textContent = `${count} payload${count !== 1 ? 's' : ''} intercepted`;
 
   const subtitle = document.createElement('span');
   subtitle.className = 'muted';
@@ -736,7 +732,7 @@ function renderTimelineItem(event) {
     ? `<div class="tl-detail">${escapeHtml(cfg.detail)}</div>`
     : '';
   const pendingActions = event.pendingId ? `
-    <div style="display:flex;gap:8px;margin-top:8px;">
+    <div class="timeline-actions">
       <button class="secondary" data-action="release-pending" data-pending-id="${escapeAttr(event.pendingId)}">Forward original</button>
       <button class="primary" data-action="show-edit-pending" data-pending-id="${escapeAttr(event.pendingId)}" data-decoded-payload='${escapeAttr(JSON.stringify(event.decoded || null))}' data-base64-value="${escapeAttr(event.details?.base64 || '')}">Edit and forward</button>
     </div>` : '';
@@ -746,7 +742,7 @@ function renderTimelineItem(event) {
       <div class="tl-body">
         <div class="tl-label">
           <strong>${escapeHtml(cfg.label)}</strong>
-          <span class="muted" style="font-size:11px;white-space:nowrap;">${escapeHtml(time)}</span>
+          <span class="muted timeline-time">${escapeHtml(time)}</span>
         </div>
         ${detail}
         ${pendingActions}
@@ -760,32 +756,22 @@ function buildInterceptItem(event, preview) {
   item.className = 'intercept-item';
 
   const top = document.createElement('div');
-  top.style.display = 'flex';
-  top.style.justifyContent = 'space-between';
-  top.style.alignItems = 'center';
-  top.style.gap = '8px';
-  top.style.marginBottom = '10px';
+  top.className = 'intercept-item-top';
 
   const previewEl = document.createElement('span');
-  previewEl.className = 'mono';
-  previewEl.style.fontSize = '12px';
-  previewEl.style.overflow = 'hidden';
-  previewEl.style.textOverflow = 'ellipsis';
-  previewEl.style.whiteSpace = 'nowrap';
+  previewEl.className = 'mono intercept-preview';
   previewEl.textContent = preview;
   top.appendChild(previewEl);
 
   if (event.size) {
     const size = document.createElement('span');
     size.className = 'muted';
-    size.style.flexShrink = '0';
     size.textContent = `${event.size} B`;
     top.appendChild(size);
   }
 
   const actions = document.createElement('div');
-  actions.style.display = 'flex';
-  actions.style.gap = '8px';
+  actions.className = 'intercept-actions';
   actions.append(
     buildPendingActionButton('secondary', 'release-pending', event.pendingId, 'Forward original'),
     buildEditPendingButton(event)
@@ -865,7 +851,6 @@ function buildExchangeButtons(exchanges) {
   const fragment = document.createDocumentFragment();
   const actions = document.createElement('div');
   actions.className = 'actions';
-  actions.style.margin = '0 0 10px';
 
   for (const exchange of exchanges) {
     const button = document.createElement('button');
@@ -939,19 +924,14 @@ function buildExchangeDiff(exchanges) {
   }
 
   const wrap = document.createElement('div');
-  wrap.style.marginBottom = '12px';
-  wrap.style.border = '1px solid var(--border)';
-  wrap.style.borderRadius = '10px';
-  wrap.style.overflow = 'hidden';
+  wrap.className = 'diff-wrap';
 
   const table = document.createElement('table');
-  table.style.width = '100%';
-  table.style.fontSize = '12px';
-  table.style.borderCollapse = 'collapse';
+  table.className = 'diff-table';
 
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  headerRow.style.background = 'var(--surface-2)';
+  headerRow.className = 'diff-header-row';
   headerRow.append(
     buildDiffHeader('Field', '28%'),
     buildDiffHeader('Exchange 1'),
@@ -968,12 +948,6 @@ function buildExchangeDiff(exchanges) {
 
 function buildDiffHeader(label, width = null) {
   const th = document.createElement('th');
-  th.style.padding = '8px 10px';
-  th.style.textAlign = 'left';
-  th.style.color = 'var(--text-muted)';
-  th.style.fontSize = '11px';
-  th.style.textTransform = 'uppercase';
-  th.style.letterSpacing = '.04em';
   if (width) {
     th.style.width = width;
   }
@@ -985,9 +959,8 @@ function buildDiffRow(label, v0, v1) {
   const changed = v0 !== v1;
   const row = document.createElement('tr');
   if (changed) {
-    row.style.background = 'rgba(161,92,7,0.05)';
+    row.className = 'diff-row-changed';
   }
-  row.style.borderBottom = '1px solid var(--border)';
   row.append(
     buildDiffLabelCell(label),
     buildDiffValueCell(v0, v1, changed),
@@ -998,26 +971,23 @@ function buildDiffRow(label, v0, v1) {
 
 function buildDiffLabelCell(label) {
   const td = document.createElement('td');
-  td.style.padding = '7px 10px';
-  td.style.color = 'var(--text-muted)';
+  td.className = 'diff-label-cell';
   td.textContent = label;
   return td;
 }
 
 function buildDiffValueCell(value, otherValue, changed) {
   const td = document.createElement('td');
-  td.style.padding = '7px 10px';
   const span = document.createElement('span');
   if (!value && otherValue) {
-    span.style.color = 'var(--text-muted)';
+    span.className = 'muted';
     span.textContent = '—';
   } else {
-    span.style.fontFamily = 'var(--mono)';
-    span.style.wordBreak = 'break-all';
+    span.className = 'mono diff-value';
     if (value && !otherValue) {
-      span.style.color = 'var(--ok)';
+      span.classList.add('diff-added');
     } else if (!changed) {
-      span.style.color = 'var(--text-muted)';
+      span.classList.add('muted');
     }
     span.textContent = value;
   }
@@ -1070,29 +1040,16 @@ function restoreEventsScroll() {
 }
 
 function renderDetailEmpty(message) {
-  const empty = document.createElement('div');
-  empty.className = 'empty';
-  empty.textContent = message;
-  document.getElementById('payloads').replaceChildren(empty);
+  document.getElementById('payloads').replaceChildren(buildEmptyState(message, 'Select a route and captured request to inspect payloads.'));
   document.getElementById('events-and-editor').replaceChildren();
 }
 
 function renderEmptyState(message) {
   document.getElementById('status-banner').replaceChildren();
 
-  const headerEmpty = document.createElement('div');
-  headerEmpty.className = 'empty';
-  const inner = document.createElement('div');
-  inner.style.display = 'flex';
-  inner.style.flexDirection = 'column';
-  inner.style.alignItems = 'center';
-  inner.style.gap = '6px';
-  inner.append(
-    document.createTextNode(message),
-    buildEmptyStateHint('Proxy traffic through the configured listener to begin capturing.')
+  document.getElementById('route-header').replaceChildren(
+    buildEmptyState(message, 'Proxy traffic through the configured listener to begin capturing.')
   );
-  headerEmpty.appendChild(inner);
-  document.getElementById('route-header').replaceChildren(headerEmpty);
 
   document.getElementById('request-table').replaceChildren();
   document.getElementById('payloads').replaceChildren();

@@ -269,11 +269,14 @@ function bindUiEvents() {
   });
 
   document.addEventListener('keydown', event => {
+    const modal = document.getElementById('route-modal');
     if (event.key === 'Escape') {
-      const modal = document.getElementById('route-modal');
       if (modal && modal.style.display !== 'none') {
         closeRouteModal();
       }
+    }
+    if (event.key === 'Tab' && modal && modal.style.display !== 'none') {
+      trapModalFocus(event, modal);
     }
     if (event.key === 'Enter' || event.key === ' ') {
       const el = event.target.closest('[data-action]:not(button):not(a)');
@@ -306,6 +309,21 @@ function bindUiEvents() {
       setEventsExpanded(detailsEl.open);
     }
   }, true);
+}
+
+function trapModalFocus(event, modal) {
+  const focusable = [...modal.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function setStatus(type, text) {

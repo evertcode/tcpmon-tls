@@ -147,3 +147,59 @@ function escapeAttr(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
 }
+
+function buildEmptyState(message, hint = '', action = null) {
+  const empty = document.createElement('div');
+  empty.className = 'empty empty-state';
+
+  const body = document.createElement('div');
+  body.className = 'empty-state-body';
+
+  const title = document.createElement('strong');
+  title.textContent = message;
+  body.appendChild(title);
+
+  if (hint) {
+    const hintEl = document.createElement('span');
+    hintEl.className = 'muted empty-state-hint';
+    hintEl.textContent = hint;
+    body.appendChild(hintEl);
+  }
+
+  if (action) {
+    body.appendChild(action);
+  }
+
+  empty.appendChild(body);
+  return empty;
+}
+
+function setFieldInvalid(field, message) {
+  if (!field) return;
+  field.setAttribute('aria-invalid', 'true');
+  const group = field.closest ? field.closest('.form-group') : null;
+  if (!group) return;
+  const existing = group.querySelector ? group.querySelector('.field-error') : null;
+  if (existing) {
+    existing.textContent = message;
+    return;
+  }
+  const error = document.createElement('div');
+  error.className = 'field-error';
+  error.textContent = message;
+  const id = field.id ? `${field.id}-error` : '';
+  if (id) {
+    error.id = id;
+    field.setAttribute('aria-describedby', id);
+  }
+  group.appendChild(error);
+}
+
+function clearFieldInvalid(field) {
+  if (!field) return;
+  field.removeAttribute('aria-invalid');
+  field.removeAttribute('aria-describedby');
+  const group = field.closest ? field.closest('.form-group') : null;
+  const error = group && group.querySelector ? group.querySelector('.field-error') : null;
+  if (error) error.remove();
+}
