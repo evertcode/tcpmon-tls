@@ -617,27 +617,27 @@ button.action-edit {
   margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   background: var(--surface);
   font-size: 13px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 10px 30px rgba(24, 33, 47, 0.16);
   animation: banner-fade-in 150ms ease;
   transition: var(--theme-transition);
   pointer-events: auto;
 }
 .banner.success {
   color: var(--ok);
-  border-color: rgba(19, 121, 91, 0.2);
-  background: rgba(19, 121, 91, 0.06);
+  border-color: rgba(19, 121, 91, 0.42);
+  background: color-mix(in srgb, var(--surface) 88%, var(--ok) 12%);
 }
 .banner.error {
   color: var(--danger);
-  border-color: rgba(180, 35, 24, 0.2);
-  background: rgba(180, 35, 24, 0.06);
+  border-color: rgba(180, 35, 24, 0.42);
+  background: color-mix(in srgb, var(--surface) 88%, var(--danger) 12%);
 }
 .banner.info {
-  color: var(--text-muted);
-  border-color: rgba(102, 102, 102, 0.18);
+  color: var(--text);
+  border-color: var(--border-strong);
   background: var(--surface);
 }
 .banner-close {
