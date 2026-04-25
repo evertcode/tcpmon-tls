@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.9] - 2026-04-25
+
+### UI improvements
+
+- **Product-oriented control plane polish** — refined route, request, and payload surfaces to feel more like a focused debugging tool: reduced decorative card treatment, simplified the active route header, tightened route metrics, and replaced generic copy with route/listener/target-aware messages
+- **Responsive and visual validation pass** — fixed mobile horizontal overflow, improved table containment, corrected form checkbox sizing, and validated the main UI, route modal, payload inspector, and dark mode across desktop/mobile scenarios
+- **Route modal context summary** — added a live route draft summary showing route ID, listener, target, and transport while adding or editing routes, with contextual helper text for route, listener, and target fields
+- **Payload action toolbar refinements** — grouped secondary payload actions under a `More` menu, added copy/download/body toolbar actions, and fixed menu stacking so contextual actions render above neighboring payload cards and the route sidebar
+- **Inline SVG control icons** — added a shared inline SVG icon helper and applied icons to route, refresh, config, export, replay, copy, download, close, edit, delete, and menu controls without adding a frontend icon dependency
+- **Less generic theme control** — replaced the segmented `Light / Auto / Dark` pill control with a compact native theme selector that is quieter and better aligned with the operational UI
+- **Notification behavior polish** — moved notifications out of the layout flow to prevent section jumps, increased banner opacity/readability, and softened transitions between notification messages
+
+### Bug fixes
+
+- **Route names stay visible in the sidebar** — route edit/delete controls now render as icon-only actions so route names retain enough horizontal space in narrow sidebars
+- **Route modal initialization order** — fixed a startup `ReferenceError` by loading route modal helpers before app initialization and guarding route modal summary bindings
+- **Duplicate route status removed from detail header** — route status is now shown in the route list only; the detail header keeps only actionable pending state when present
+
 ## [0.6.8] - 2026-04-24
 
 ### Features
