@@ -192,7 +192,7 @@ function bindUiEvents() {
     'rm-target-transport'
   ]) {
     const field = document.getElementById(fieldId);
-    if (field) {
+    if (field && typeof updateRouteModalSummary === 'function') {
       field.addEventListener('input', updateRouteModalSummary);
       field.addEventListener('change', updateRouteModalSummary);
     }
