@@ -373,18 +373,18 @@ function buildRouteActions(routeId) {
   const actions = document.createElement('span');
   actions.className = 'route-actions';
   actions.append(
-    buildRouteActionButton('edit-route', routeId, 'Edit', 'Edit'),
-    buildRouteActionButton('delete-route', routeId, 'Delete', 'Delete')
+    buildRouteActionButton('edit-route', routeId, 'Edit'),
+    buildRouteActionButton('delete-route', routeId, 'Delete')
   );
   return actions;
 }
 
-function buildRouteActionButton(action, routeId, title, label) {
+function buildRouteActionButton(action, routeId, title) {
   const button = document.createElement('button');
-  button.className = 'utility route-action-btn';
+  button.className = 'utility route-action-btn icon-only';
   button.dataset.action = action;
   button.dataset.routeId = routeId;
-  setButtonContent(button, label, action === 'delete-route' ? 'trash' : 'edit', {
+  setButtonContent(button, '', action === 'delete-route' ? 'trash' : 'edit', {
     title,
     ariaLabel: `${title} route "${routeId}"`
   });

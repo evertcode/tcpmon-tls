@@ -368,6 +368,7 @@ button.action-edit {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .row-top {
   margin-bottom: 4px;
@@ -1543,11 +1544,15 @@ tr.session-entry:focus-visible {
 }
 
 .route-row-title {
+  display: block;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+  color: var(--text);
+  font-weight: 650;
 }
 
 .route-row-actions {
@@ -1563,8 +1568,9 @@ tr.session-entry:focus-visible {
 }
 
 .route-action-btn {
+  width: 26px;
   min-height: 24px;
-  padding: 3px 7px;
+  padding: 0;
   border-radius: 6px;
   font-size: 11px;
 }
