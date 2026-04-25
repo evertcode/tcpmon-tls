@@ -182,6 +182,13 @@ function bindUiEvents() {
   const targetTransport = document.getElementById('rm-target-transport');
   if (targetTransport) targetTransport.addEventListener('change', event => toggleTargetTls(event.target.value));
 
+  document.addEventListener('change', event => {
+    if (event.target && event.target.id === 'theme-select') {
+      applyThemePreference(event.target.value);
+      renderConfigButton();
+    }
+  });
+
   for (const fieldId of [
     'rm-id',
     'rm-listener-host',
