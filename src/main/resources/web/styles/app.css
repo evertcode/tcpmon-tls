@@ -773,7 +773,6 @@ button.action-edit {
   justify-content: flex-end;
   opacity: 0.92;
 }
-.route-state-badge,
 .route-pending-badge {
   display: inline-flex;
   align-items: center;
@@ -784,12 +783,10 @@ button.action-edit {
   border: 1px solid var(--border);
   background: transparent;
 }
-.route-state-label,
 .route-pending-label {
   font-size: 10px;
   color: var(--text-muted);
 }
-.route-state-value,
 .route-pending-value {
   font-size: 12px;
   line-height: 1.1;
@@ -801,18 +798,6 @@ button.action-edit {
 }
 .route-pending-badge .route-pending-value {
   color: var(--warn);
-}
-.route-state-badge.state-live {
-  border-color: rgba(16, 108, 90, 0.24);
-}
-.route-state-badge.state-live .route-state-value {
-  color: var(--ok);
-}
-.route-state-badge.state-closed {
-  color: var(--text-muted);
-}
-.route-state-badge.state-idle {
-  border-color: rgba(161, 92, 7, 0.22);
 }
 .route-pending-badge.high {
   border-color: rgba(194, 65, 12, 0.28);

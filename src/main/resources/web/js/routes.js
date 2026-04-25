@@ -151,8 +151,6 @@ function buildRouteHeaderViewModel(routeId, sessions, requestRows, selectedSessi
     pendingCount,
     avgDurationMs,
     pendingStatClass: pendingCount >= 3 ? 'stat-danger' : pendingCount > 0 ? 'stat-warn' : '',
-    stateLabel: liveCount > 0 ? 'Live' : 'Closed',
-    stateClass: liveCount > 0 ? 'state-live' : 'state-closed',
     summary: buildRouteActivitySummary(total, liveCount, pendingCount, avgDurationMs),
     activeSelection: buildActiveSelectionViewModel(activeSession, selectedSessionId)
   };
@@ -458,8 +456,6 @@ function buildRouteHeaderEmptyCard(routeId, listenerAddr, targetAddr) {
       routeId,
       listenerAddress: listenerAddr,
       targetAddress: targetAddr,
-      stateLabel: 'No traffic',
-      stateClass: 'state-idle',
       showExport: false
     }),
     buildRouteHeaderEmptyHint(listenerAddr
@@ -477,8 +473,6 @@ function buildRouteHeaderCard(data) {
       routeId: data.routeId,
       listenerAddress: data.listenerAddress,
       targetAddress: data.targetAddress,
-      stateLabel: data.stateLabel,
-      stateClass: data.stateClass,
       pending: data.pendingCount,
       showExport: true
     }),
@@ -493,7 +487,7 @@ function buildRouteHeaderTop(data) {
   top.className = 'route-header-top';
   top.append(
     buildRouteHeaderIdentity(data.routeId, data.listenerAddress, data.targetAddress),
-    buildRouteHeaderActions(data.stateLabel, data.stateClass, data.pending || 0, data.showExport)
+    buildRouteHeaderActions(data.pending || 0, data.showExport)
   );
   return top;
 }
@@ -530,18 +524,19 @@ function buildRouteHeaderIdentity(routeId, listenerAddress, targetAddress) {
   return identity;
 }
 
-function buildRouteHeaderActions(stateLabel, stateClass, pending, showExport) {
+function buildRouteHeaderActions(pending, showExport) {
   const actions = document.createElement('div');
   actions.className = 'route-header-actions';
 
   const statusCluster = document.createElement('div');
   statusCluster.className = 'route-status-cluster';
-  statusCluster.appendChild(buildRouteStateBadge(stateLabel, stateClass));
   if (pending > 0) {
     statusCluster.appendChild(buildRoutePendingBadge(pending));
   }
 
-  actions.appendChild(statusCluster);
+  if (statusCluster.children.length) {
+    actions.appendChild(statusCluster);
+  }
 
   if (showExport) {
     const exportButton = document.createElement('button');
@@ -552,18 +547,6 @@ function buildRouteHeaderActions(stateLabel, stateClass, pending, showExport) {
   }
 
   return actions;
-}
-
-function buildRouteStateBadge(label, stateClass) {
-  const badge = document.createElement('div');
-  badge.className = `route-state-badge ${stateClass}`;
-
-  const valueEl = document.createElement('strong');
-  valueEl.className = 'route-state-value';
-  valueEl.textContent = label;
-
-  badge.append(valueEl);
-  return badge;
 }
 
 function buildRoutePendingBadge(pending) {
