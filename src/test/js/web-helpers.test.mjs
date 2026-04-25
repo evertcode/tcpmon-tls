@@ -169,6 +169,7 @@ function loadWebHelpers() {
   loadScript(context, 'state.js');
   loadScript(context, 'utils.js');
   loadScript(context, 'routes.js');
+  loadScript(context, 'sessions.js');
   loadScript(context, 'details.js');
   loadScript(context, 'actions.js');
   return context;
@@ -343,6 +344,18 @@ test('buildPayloadActionButton creates a button with dataset and label', () => {
   assert.equal(button.dataset.routeId, 'route-a');
   assert.equal(button.dataset.destination, 'listener');
   assert.equal(button.textContent, 'Recapture request');
+});
+
+test('buildEmptyState renders message, hint and optional action', () => {
+  const ctx = loadWebHelpers();
+  const action = ctx.document.createElement('button');
+  action.textContent = 'Create route';
+
+  const empty = ctx.buildEmptyState('No routes configured yet.', 'Create a listener and target.', action);
+
+  assert.equal(empty.className, 'empty empty-state');
+  assert.equal(empty.textContent, 'No routes configured yet.Create a listener and target.Create route');
+  assert.equal(findFirst(empty, node => node.tagName === 'button').textContent, 'Create route');
 });
 
 test('renderRequestActions keeps primary actions visible and secondary actions in menu', () => {
@@ -528,6 +541,29 @@ test('buildExchangeButtons creates exchange selectors and compare action', () =>
   assert.equal(actions.children[1].className, 'primary');
   assert.equal(actions.children[3].dataset.action, 'toggle-diff-mode');
   assert.equal(actions.children[3].textContent, 'Compare');
+});
+
+test('buildRequestTableElement marks selectable request rows for keyboard and aria', () => {
+  const ctx = loadWebHelpers();
+
+  const table = ctx.buildRequestTableElement([
+    {
+      sessionId: 'session-1',
+      exchangeIndex: 0,
+      requestMethod: 'GET',
+      requestPath: '/health',
+      responseStatusCode: 200,
+      durationMs: 12,
+      responseSizeBytes: 20,
+      clientAddress: '127.0.0.1:5000',
+      startedAt: '2026-04-23T12:00:00.000Z'
+    }
+  ], 'session-1', 0);
+
+  const row = findFirst(table, node => node.tagName === 'tr' && node.dataset.sessionId === 'session-1');
+  assert.equal(table.className, 'request-table');
+  assert.equal(row.tabIndex, 0);
+  assert.equal(row.attributes['aria-selected'], 'true');
 });
 
 test('buildSelectedSessionLabel prefers loaded session details for active selection', () => {
