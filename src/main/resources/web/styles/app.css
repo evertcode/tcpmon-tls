@@ -596,10 +596,13 @@ button.action-edit {
   min-height: 0;
 }
 #status-banner {
-  position: sticky;
+  position: fixed;
   top: 76px;
-  z-index: 30;
-  min-height: 0;
+  left: calc(280px + 12px);
+  right: 12px;
+  z-index: 90;
+  display: flex;
+  justify-content: center;
   pointer-events: none;
 }
 #status-banner:empty {
@@ -611,7 +614,7 @@ button.action-edit {
 }
 .banner {
   width: min(680px, 100%);
-  margin: 0 auto -46px;
+  margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -1944,9 +1947,11 @@ textarea[aria-invalid="true"] {
   }
   #status-banner {
     top: 8px;
+    left: 10px;
+    right: 10px;
   }
   .banner {
-    margin-bottom: -44px;
+    width: 100%;
   }
 
   .route-title,
