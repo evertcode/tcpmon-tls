@@ -480,7 +480,7 @@ function tokenizeXmlLine(text) {
   return tokens;
 }
 
-function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex, decoded) {
+function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex, decoded, hasHeaders = false) {
   const body = document.createElement('div');
   body.className = 'payload-body';
   const viewerMode = detectBodyViewerMode(decoded || {});
@@ -492,13 +492,16 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
   label.textContent = 'Body';
   head.appendChild(label);
 
+  const toolbar = document.createElement('div');
+  toolbar.className = 'payload-body-toolbar';
+  if (hasHeaders) {
+    toolbar.appendChild(buildPayloadToolbarButton('copy-current-headers', { isRequest: String(isRequest) }, 'Copy headers'));
+  }
   if (hasBody && !bodyTruncated) {
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'utility';
-    copyBtn.dataset.action = 'copy-current-body';
-    copyBtn.dataset.isRequest = String(isRequest);
-    copyBtn.textContent = 'Copy body';
-    head.appendChild(copyBtn);
+    toolbar.appendChild(buildPayloadToolbarButton('copy-current-body', { isRequest: String(isRequest) }, 'Copy body'));
+  }
+  if (toolbar.children.length) {
+    head.appendChild(toolbar);
   }
 
   const viewer = buildBodyViewer(bodyText, viewerMode);
@@ -506,7 +509,6 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
   if (bodyTruncated) {
     const expandBtn = document.createElement('button');
     expandBtn.className = 'utility';
-    expandBtn.style.marginTop = '6px';
     expandBtn.textContent = 'Load full body';
     expandBtn.addEventListener('click', async () => {
       expandBtn.disabled = true;
@@ -518,24 +520,34 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
         );
         const fullBodyText = formatBody({ ...(decoded || {}), bodyText: data.bodyText || '' });
         viewer.setValue(fullBodyText);
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'utility';
-        copyBtn.dataset.action = 'copy-current-body';
-        copyBtn.dataset.isRequest = String(isRequest);
-        copyBtn.textContent = 'Copy body';
-        head.appendChild(copyBtn);
+        toolbar.appendChild(buildPayloadToolbarButton('copy-current-body', { isRequest: String(isRequest) }, 'Copy body'));
         expandBtn.remove();
       } catch {
         expandBtn.textContent = 'Load failed — retry?';
         expandBtn.disabled = false;
       }
     });
-    body.append(head, viewer, expandBtn);
+    toolbar.appendChild(expandBtn);
+    if (!toolbar.parentNode) {
+      head.appendChild(toolbar);
+    }
+    body.append(head, viewer);
   } else {
     body.append(head, viewer);
   }
 
   return body;
+}
+
+function buildPayloadToolbarButton(action, dataset, label) {
+  const button = document.createElement('button');
+  button.className = 'utility';
+  button.dataset.action = action;
+  for (const [key, value] of Object.entries(dataset || {})) {
+    button.dataset[key] = value;
+  }
+  button.textContent = label;
+  return button;
 }
 
 function buildPayloadCard(title, payload, expectedDirection, data) {
@@ -569,7 +581,7 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
   );
   article.append(
     buildPayloadHeadersDetails(title, headers, decoded, isRequest, payloadHeadersExpanded),
-    buildPayloadBodySection(bodyText || 'No body captured', hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex, decoded)
+    buildPayloadBodySection(bodyText || 'No body captured', hasBody, isRequest, bodyTruncated, sessionId, exchangeIndex, decoded, headers.length > 0)
   );
   if (actions) {
     article.appendChild(actions);

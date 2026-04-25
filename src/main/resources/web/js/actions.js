@@ -347,12 +347,6 @@ function renderHeadersTable(headers, decoded, isRequest) {
   }
   const fragment = document.createDocumentFragment();
 
-  const toolbar = document.createElement('div');
-  toolbar.style.display = 'flex';
-  toolbar.style.justifyContent = 'flex-end';
-  toolbar.style.marginBottom = '6px';
-  toolbar.appendChild(buildPayloadActionButton('utility', 'copy-current-headers', { isRequest: String(isRequest) }, 'Copy headers'));
-
   const table = document.createElement('table');
   table.className = 'headers-table';
   const tbody = document.createElement('tbody');
@@ -363,7 +357,7 @@ function renderHeadersTable(headers, decoded, isRequest) {
   }
   table.appendChild(tbody);
 
-  fragment.append(toolbar, table);
+  fragment.appendChild(table);
   return fragment;
 }
 

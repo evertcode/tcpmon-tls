@@ -1,6 +1,8 @@
 let routeModalMode = 'add';
 let routeModalEditId = null;
 let routeModalOpenerEl = null;
+let confirmModalOpenerEl = null;
+let pendingDeleteRouteId = null;
 
 function toggleListenerTls(val) {
   document.getElementById('listener-tls-fields').style.display = val === 'TLS' ? '' : 'none';
@@ -316,9 +318,40 @@ async function submitRouteForm() {
 }
 
 async function confirmDeleteRoute(routeId) {
-  if (!confirm('Delete route "' + routeId + '"? This will stop the listener immediately.')) return;
+  pendingDeleteRouteId = routeId;
+  confirmModalOpenerEl = document.activeElement;
+  document.getElementById('confirm-modal-title').textContent = 'Delete route';
+  document.getElementById('confirm-modal-message').textContent =
+    `Delete route "${routeId}"? This stops the listener immediately. Captured sessions remain available.`;
+  const confirmBtn = document.getElementById('confirm-modal-confirm-btn');
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = 'Delete route';
+  const modal = document.getElementById('confirm-modal');
+  modal.style.display = 'flex';
+  modal.removeAttribute('aria-hidden');
+  setTimeout(() => confirmBtn.focus(), 50);
+}
+
+function closeConfirmModal() {
+  const modal = document.getElementById('confirm-modal');
+  modal.style.display = 'none';
+  modal.setAttribute('aria-hidden', 'true');
+  pendingDeleteRouteId = null;
+  if (confirmModalOpenerEl && typeof confirmModalOpenerEl.focus === 'function') {
+    confirmModalOpenerEl.focus();
+    confirmModalOpenerEl = null;
+  }
+}
+
+async function deleteConfirmedRoute() {
+  const routeId = pendingDeleteRouteId;
+  if (!routeId) return;
+  const confirmBtn = document.getElementById('confirm-modal-confirm-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Deleting...';
   try {
     await fetchJson('/api/routes/' + encodeURIComponent(routeId), { method: 'DELETE' });
+    closeConfirmModal();
     await loadConfig();
     const activeRoute = getState('activeRoute');
     if (activeRoute === routeId) {
@@ -337,6 +370,8 @@ async function confirmDeleteRoute(routeId) {
     }
     setStatus('success', 'Route "' + routeId + '" deleted.');
   } catch (err) {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Delete route';
     setStatus('error', err.message || 'Failed to delete route.');
   }
 }

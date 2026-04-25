@@ -398,6 +398,30 @@ test('buildPayloadBodySection renders a body viewer for formatted json bodies', 
   assert.equal(findFirst(body, node => node.className === 'body-viewer-code').textContent, '{  "ok": true}');
 });
 
+test('buildPayloadBodySection groups body and header copy actions in toolbar', () => {
+  const ctx = loadWebHelpers();
+
+  const body = ctx.buildPayloadBodySection(
+    '{"ok":true}',
+    true,
+    true,
+    false,
+    'session-1',
+    0,
+    {
+      isHttp: true,
+      bodyText: '{"ok":true}',
+      headers: [{ name: 'Content-Type', value: 'application/json' }]
+    },
+    true
+  );
+
+  const toolbar = findFirst(body, node => node.className === 'payload-body-toolbar');
+  assert.ok(toolbar);
+  assert.equal(findFirst(toolbar, node => node.textContent === 'Copy headers').dataset.action, 'copy-current-headers');
+  assert.equal(findFirst(toolbar, node => node.textContent === 'Copy body').dataset.action, 'copy-current-body');
+});
+
 test('body viewer folds and expands JSON object blocks', () => {
   const ctx = loadWebHelpers();
 

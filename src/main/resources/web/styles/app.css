@@ -1080,6 +1080,13 @@ tr.session-entry.active {
   margin-bottom: 4px;
   min-width: 0;
 }
+.payload-body-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
 .payload-actions {
   display: flex;
   gap: 10px;
@@ -1798,6 +1805,27 @@ tr.session-entry:focus-visible {
   margin: auto;
 }
 
+.modal-close-btn {
+  min-height: 0;
+  padding: 2px 8px;
+}
+
+.confirm-modal-overlay {
+  z-index: 1100;
+}
+
+.confirm-modal-box {
+  width: min(440px, 100%);
+  max-width: 440px;
+}
+
+.confirm-modal-message {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .modal-body {
   display: grid;
   gap: 2px;
@@ -1900,6 +1928,8 @@ textarea[aria-invalid="true"] {
   .payload-actions > button,
   .payload-actions-menu,
   .payload-actions-menu-trigger,
+  .payload-body-toolbar,
+  .payload-body-toolbar button,
   .actions button,
   .intercept-actions button {
     width: 100%;

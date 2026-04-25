@@ -170,6 +170,12 @@ function bindUiEvents() {
   const routeModalSaveBtn = document.getElementById('route-modal-save-btn');
   if (routeModalSaveBtn) routeModalSaveBtn.addEventListener('click', () => submitRouteForm());
 
+  const confirmModalCloseBtn = document.getElementById('confirm-modal-close-btn');
+  if (confirmModalCloseBtn) confirmModalCloseBtn.addEventListener('click', () => closeConfirmModal());
+
+  const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
+  if (confirmModalCancelBtn) confirmModalCancelBtn.addEventListener('click', () => closeConfirmModal());
+
   const listenerTransport = document.getElementById('rm-listener-transport');
   if (listenerTransport) listenerTransport.addEventListener('change', event => toggleListenerTls(event.target.value));
 
@@ -193,6 +199,10 @@ function bindUiEvents() {
       case 'delete-route':
         event.stopPropagation();
         await confirmDeleteRoute(actionEl.dataset.routeId);
+        break;
+      case 'confirm-delete-route':
+        event.stopPropagation();
+        await deleteConfirmedRoute();
         break;
       case 'export-har':
         await exportHar();
@@ -269,13 +279,17 @@ function bindUiEvents() {
   });
 
   document.addEventListener('keydown', event => {
-    const modal = document.getElementById('route-modal');
+    const modal = getOpenModal();
     if (event.key === 'Escape') {
-      if (modal && modal.style.display !== 'none') {
-        closeRouteModal();
+      if (modal) {
+        if (modal.id === 'route-modal') {
+          closeRouteModal();
+        } else if (modal.id === 'confirm-modal') {
+          closeConfirmModal();
+        }
       }
     }
-    if (event.key === 'Tab' && modal && modal.style.display !== 'none') {
+    if (event.key === 'Tab' && modal) {
       trapModalFocus(event, modal);
     }
     if (event.key === 'Enter' || event.key === ' ') {
@@ -309,6 +323,11 @@ function bindUiEvents() {
       setEventsExpanded(detailsEl.open);
     }
   }, true);
+}
+
+function getOpenModal() {
+  return [...document.querySelectorAll('.modal-overlay')]
+    .find(modal => modal.style.display !== 'none') || null;
 }
 
 function trapModalFocus(event, modal) {
