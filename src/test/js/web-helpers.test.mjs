@@ -169,6 +169,7 @@ function loadWebHelpers() {
   loadScript(context, 'state.js');
   loadScript(context, 'utils.js');
   loadScript(context, 'routes.js');
+  loadScript(context, 'route-modal.js');
   loadScript(context, 'sessions.js');
   loadScript(context, 'details.js');
   loadScript(context, 'actions.js');
@@ -375,6 +376,26 @@ test('activeRouteCaptureHint uses configured listener and target', () => {
     ctx.activeRouteCaptureHint(),
     'Send client traffic to 127.0.0.1:9000; tcpmon will forward it to api.example.test:443.'
   );
+});
+
+test('updateRouteModalSummary renders route draft context', () => {
+  const ctx = loadWebHelpers();
+  ctx.document.getElementById('rm-id').value = 'orders-proxy';
+  ctx.document.getElementById('rm-listener-host').value = '0.0.0.0';
+  ctx.document.getElementById('rm-listener-port').value = '9001';
+  ctx.document.getElementById('rm-listener-transport').value = 'TLS';
+  ctx.document.getElementById('rm-target-host').value = 'api.internal.test';
+  ctx.document.getElementById('rm-target-port').value = '443';
+  ctx.document.getElementById('rm-target-transport').value = 'PLAIN';
+
+  ctx.updateRouteModalSummary();
+
+  const summary = ctx.document.getElementById('route-modal-summary');
+  assert.equal(summary.children.length, 4);
+  assert.equal(summary.children[0].textContent, 'orders-proxy');
+  assert.equal(summary.children[1].textContent, 'Listener 0.0.0.0:9001');
+  assert.equal(summary.children[2].textContent, 'Target api.internal.test:443');
+  assert.equal(summary.children[3].textContent, 'TLS → PLAIN');
 });
 
 test('renderRequestActions keeps primary actions visible and secondary actions in menu', () => {

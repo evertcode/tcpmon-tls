@@ -67,7 +67,10 @@
   <div id="route-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="route-modal-title">
     <div class="modal-box">
       <div class="modal-hdr">
-        <strong id="route-modal-title" style="font-size:15px;">Add Route</strong>
+        <div class="modal-hdr-main">
+          <strong id="route-modal-title" style="font-size:15px;">Add Route</strong>
+          <div id="route-modal-summary" class="route-modal-summary" aria-live="polite"></div>
+        </div>
         <button id="route-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
       </div>
       <div class="modal-body">
@@ -76,9 +79,11 @@
         <div class="form-group" style="margin-top:4px;">
           <label for="rm-id">Route ID</label>
           <input type="text" id="rm-id" placeholder="e.g. my-route" autocomplete="off">
+          <span class="field-help">Used to pick the active route in the sidebar and API responses.</span>
         </div>
 
         <div class="form-section-hdr">Listener</div>
+        <div class="section-note">What tcpmon binds to on the local side.</div>
         <div class="form-row">
           <div class="form-group">
               <label for="rm-listener-host">Host</label>
@@ -155,6 +160,7 @@
         </div>
 
         <div class="form-section-hdr">Target</div>
+        <div class="section-note">Where traffic is forwarded after capture.</div>
         <div class="form-row">
           <div class="form-group">
               <label for="rm-target-host">Host</label>

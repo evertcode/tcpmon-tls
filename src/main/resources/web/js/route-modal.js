@@ -12,6 +12,43 @@ function toggleTargetTls(val) {
   document.getElementById('target-tls-fields').style.display = val === 'TLS' ? '' : 'none';
 }
 
+function routeModalFieldValue(id, fallback = '') {
+  const field = document.getElementById(id);
+  if (!field) return fallback;
+  return String(field.value || '').trim() || fallback;
+}
+
+function buildRouteEndpointSummary(hostId, portId, fallbackHost, fallbackPort) {
+  const host = routeModalFieldValue(hostId, fallbackHost);
+  const port = routeModalFieldValue(portId, fallbackPort);
+  return host && port ? `${host}:${port}` : host || port || '';
+}
+
+function updateRouteModalSummary() {
+  const summary = document.getElementById('route-modal-summary');
+  if (!summary) return;
+
+  const routeId = routeModalFieldValue('rm-id');
+  const listener = buildRouteEndpointSummary('rm-listener-host', 'rm-listener-port', '0.0.0.0', '...');
+  const target = buildRouteEndpointSummary('rm-target-host', 'rm-target-port', 'target host', '...');
+  const listenerTransport = routeModalFieldValue('rm-listener-transport', 'PLAIN');
+  const targetTransport = routeModalFieldValue('rm-target-transport', 'PLAIN');
+
+  const pills = [];
+  if (routeId) pills.push(routeId);
+  pills.push(`Listener ${listener}`);
+  pills.push(`Target ${target}`);
+  pills.push(`${listenerTransport} → ${targetTransport}`);
+
+  summary.replaceChildren();
+  for (const label of pills) {
+    const pill = document.createElement('span');
+    pill.className = 'pill route';
+    pill.textContent = label;
+    summary.appendChild(pill);
+  }
+}
+
 function openAddRouteModal() {
   routeModalMode = 'add';
   routeModalEditId = null;
@@ -48,6 +85,7 @@ function openAddRouteModal() {
   document.getElementById('rm-target-verify').checked = true;
   document.getElementById('rm-target-rewrite').checked = false;
   clearRouteModalErrors();
+  updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
   showRouteModal();
   setTimeout(() => document.getElementById('rm-id').focus(), 50);
@@ -101,6 +139,7 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-target-verify').checked = route.target.verifyHostname !== false;
   document.getElementById('rm-target-rewrite').checked = !!route.target.rewriteHostHeader;
   clearRouteModalErrors();
+  updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
   showRouteModal();
   setTimeout(() => document.getElementById('rm-id').focus(), 50);

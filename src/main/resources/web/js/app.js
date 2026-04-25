@@ -182,6 +182,22 @@ function bindUiEvents() {
   const targetTransport = document.getElementById('rm-target-transport');
   if (targetTransport) targetTransport.addEventListener('change', event => toggleTargetTls(event.target.value));
 
+  for (const fieldId of [
+    'rm-id',
+    'rm-listener-host',
+    'rm-listener-port',
+    'rm-listener-transport',
+    'rm-target-host',
+    'rm-target-port',
+    'rm-target-transport'
+  ]) {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      field.addEventListener('input', updateRouteModalSummary);
+      field.addEventListener('change', updateRouteModalSummary);
+    }
+  }
+
   document.addEventListener('click', async event => {
     const actionEl = event.target.closest('[data-action]');
     if (!actionEl) return;
