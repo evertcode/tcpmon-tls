@@ -524,10 +524,6 @@ function buildRouteHeaderIdentity(routeId, listenerAddress, targetAddress) {
   const titleRow = document.createElement('div');
   titleRow.className = 'route-header-title-row';
 
-  const eyebrow = document.createElement('span');
-  eyebrow.className = 'route-header-eyebrow';
-  eyebrow.textContent = 'Active route';
-
   const title = document.createElement('strong');
   title.className = 'route-header-name';
   title.textContent = routeId;
@@ -548,7 +544,7 @@ function buildRouteHeaderIdentity(routeId, listenerAddress, targetAddress) {
   target.textContent = targetAddress || 'Target unavailable';
 
   flow.append(listener, arrow, target);
-  titleRow.append(eyebrow, title);
+  titleRow.append(title);
   identity.append(titleRow, flow);
   return identity;
 }
@@ -581,15 +577,11 @@ function buildRouteStateBadge(label, stateClass) {
   const badge = document.createElement('div');
   badge.className = `route-state-badge ${stateClass}`;
 
-  const labelEl = document.createElement('span');
-  labelEl.className = 'route-state-label';
-  labelEl.textContent = 'State';
-
   const valueEl = document.createElement('strong');
   valueEl.className = 'route-state-value';
   valueEl.textContent = label;
 
-  badge.append(labelEl, valueEl);
+  badge.append(valueEl);
   return badge;
 }
 
