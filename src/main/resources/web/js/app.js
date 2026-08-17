@@ -228,9 +228,7 @@ function bindUiEvents() {
     const { action } = actionEl.dataset;
     switch (action) {
       case 'select-route':
-        if (!event.target.closest('.route-actions')) {
-          selectRoute(actionEl.dataset.routeId);
-        }
+        selectRoute(actionEl.dataset.routeId);
         break;
       case 'edit-route':
         event.stopPropagation();
@@ -339,6 +337,9 @@ function bindUiEvents() {
         el.click();
       }
     }
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !modal) {
+      moveListFocus(event, '.route-row-select') || moveListFocus(event, 'tr.session-entry');
+    }
   });
 
   document.addEventListener('input', event => {
@@ -363,6 +364,19 @@ function bindUiEvents() {
       setEventsExpanded(detailsEl.open);
     }
   }, true);
+}
+
+function moveListFocus(event, selector) {
+  const current = event.target.closest(selector);
+  if (!current) return false;
+  const items = [...document.querySelectorAll(selector)];
+  const next = items[items.indexOf(current) + (event.key === 'ArrowDown' ? 1 : -1)];
+  event.preventDefault();
+  if (next) {
+    next.focus();
+    next.scrollIntoView({ block: 'nearest' });
+  }
+  return true;
 }
 
 function getOpenModal() {

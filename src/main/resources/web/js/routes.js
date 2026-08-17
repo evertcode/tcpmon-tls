@@ -8,11 +8,13 @@ function groupedRoutes() {
       routeId,
       sessions: [],
       targetAddress: session.targetAddress || '',
+      listenerAddress: session.listenerAddress || '',
       clientAddress: session.clientAddress || '',
       status: 'CLOSED'
     };
     current.sessions.push(session);
     if (!current.targetAddress && session.targetAddress) current.targetAddress = session.targetAddress;
+    if (!current.listenerAddress && session.listenerAddress) current.listenerAddress = session.listenerAddress;
     if (!current.clientAddress && session.clientAddress) current.clientAddress = session.clientAddress;
     if (isSessionLive(session)) current.status = 'OPEN';
     if (String(session.status || '').toUpperCase() === 'ERROR') current.status = 'ERROR';
@@ -39,6 +41,7 @@ function filteredRoutes() {
       routeId: cr.id,
       sessions: [],
       targetAddress: cr.target.host + ':' + cr.target.port,
+      listenerAddress: cr.listener.host + ':' + cr.listener.port,
       clientAddress: '',
       status: 'CLOSED',
       requestCount: 0,
@@ -56,7 +59,7 @@ function renderRouteList() {
   const routes = filteredRoutes();
   const selectedRouteId = getState('activeRoute');
   const container = document.getElementById('routes');
-  container.setAttribute('role', 'listbox');
+  container.setAttribute('role', 'list');
   container.setAttribute('aria-label', 'Routes');
   if (!routes.length) {
     const query = document.getElementById('route-search').value.trim();
@@ -305,65 +308,78 @@ function buildRouteListItem(route, selectedRouteId) {
   const avgDuration = route.avgDurationMs;
   const errors = route.errorCount || 0;
 
+  const isActive = route.routeId === selectedRouteId;
+
   const row = document.createElement('div');
-  row.className = `route-row${route.routeId === selectedRouteId ? ' active' : ''}${isOpen ? ' status-open' : isError ? ' status-error' : ''}`;
+  row.className = `route-row${isActive ? ' active' : ''}${isOpen ? ' status-open' : isError ? ' status-error' : ''}`;
   row.dataset.action = 'select-route';
   row.dataset.routeId = route.routeId;
-  row.setAttribute('role', 'option');
-  row.setAttribute('tabindex', '0');
-  row.setAttribute('aria-selected', String(route.routeId === selectedRouteId));
-  if (route.routeId === selectedRouteId) {
-    row.setAttribute('aria-current', 'true');
-  }
+  row.setAttribute('role', 'listitem');
 
-  const top = document.createElement('div');
-  top.className = 'row-top';
+  const select = document.createElement('button');
+  select.type = 'button';
+  select.className = 'route-row-select';
+  select.dataset.action = 'select-route';
+  select.dataset.routeId = route.routeId;
+  if (isActive) {
+    select.setAttribute('aria-current', 'true');
+  }
 
   const title = document.createElement('strong');
   title.className = 'route-row-title';
   title.textContent = route.routeId;
 
-  const actionsWrap = document.createElement('div');
-  actionsWrap.className = 'route-row-actions';
+  const bottom = document.createElement('div');
+  bottom.className = 'row-bottom';
+
+  const flowLine = document.createElement('span');
+  flowLine.className = 'route-line';
+  const listenerAddress = route.listenerAddress || routeEndpointLabel(route.routeId, 'listener');
+  const flowText = listenerAddress && route.targetAddress
+    ? `${listenerAddress} → ${route.targetAddress}`
+    : (route.targetAddress || listenerAddress || '');
+  flowLine.textContent = flowText;
+  if (flowText) flowLine.title = flowText;
+
+  const reqCount = document.createElement('span');
+  reqCount.className = 'route-line route-req-count';
+  reqCount.textContent = `${route.requestCount || 0} req`;
+  bottom.append(flowLine, reqCount);
+
+  select.append(title, bottom);
+
+  if (latest && (latest.requestMethod || latest.requestPath)) {
+    select.appendChild(buildLatestPreview(latest));
+  }
+
+  const perfLine = buildRoutePerfLine(avgDuration, errors);
+  if (perfLine) {
+    select.appendChild(perfLine);
+  }
+
+  const side = document.createElement('div');
+  side.className = 'route-row-side';
 
   if (pending > 0) {
     const pendingPill = document.createElement('span');
     pendingPill.className = `pill ${pending >= 3 ? 'pending-alarm' : 'pending'}`;
     pendingPill.textContent = String(pending);
-    actionsWrap.appendChild(pendingPill);
+    const pendingLabel = `${pending} intercepted payload${pending === 1 ? '' : 's'} pending`;
+    pendingPill.title = pendingLabel;
+    pendingPill.setAttribute('aria-label', pendingLabel);
+    side.appendChild(pendingPill);
   }
 
-  const statusPill = document.createElement('span');
-  statusPill.className = `pill ${statusClass}`;
-  statusPill.textContent = isOpen ? 'Live' : String(route.status || '');
-  actionsWrap.appendChild(statusPill);
-
-  actionsWrap.appendChild(buildRouteActions(route.routeId));
-  top.append(title, actionsWrap);
-
-  const bottom = document.createElement('div');
-  bottom.className = 'row-bottom';
-
-  const targetLine = document.createElement('span');
-  targetLine.className = 'route-line';
-  targetLine.textContent = route.targetAddress || '';
-
-  const reqPill = document.createElement('span');
-  reqPill.className = 'pill route';
-  reqPill.textContent = `${route.requestCount || 0} req`;
-  bottom.append(targetLine, reqPill);
-
-  row.append(top, bottom);
-
-  if (latest && (latest.requestMethod || latest.requestPath)) {
-    row.appendChild(buildLatestPreview(latest));
+  if (isOpen || isError) {
+    const statusPill = document.createElement('span');
+    statusPill.className = `pill ${statusClass}`;
+    statusPill.textContent = isOpen ? 'Live' : 'Error';
+    side.appendChild(statusPill);
   }
 
-  const perfLine = buildRoutePerfLine(avgDuration, errors);
-  if (perfLine) {
-    row.appendChild(perfLine);
-  }
+  side.appendChild(buildRouteActions(route.routeId));
 
+  row.append(select, side);
   return row;
 }
 
@@ -379,7 +395,7 @@ function buildRouteActions(routeId) {
 
 function buildRouteActionButton(action, routeId, title) {
   const button = document.createElement('button');
-  button.className = 'utility route-action-btn icon-only';
+  button.className = `utility route-action-btn icon-only${action === 'delete-route' ? ' route-action-delete' : ''}`;
   button.dataset.action = action;
   button.dataset.routeId = routeId;
   setButtonContent(button, '', action === 'delete-route' ? 'trash' : 'edit', {
@@ -394,10 +410,13 @@ function buildLatestPreview(latest) {
   preview.className = 'route-preview';
 
   const method = document.createElement('span');
-  method.className = 'method-tag';
+  const methodLower = (latest.requestMethod || '').toLowerCase();
+  method.className = `method-tag${methodLower ? ' method-' + methodLower : ''}`;
   method.textContent = latest.requestMethod || '';
 
-  preview.append(method, document.createTextNode(latest.requestPath || latest.sessionId.slice(0, 12) + '\u2026'));
+  const pathText = latest.requestPath || latest.sessionId.slice(0, 12) + '\u2026';
+  preview.title = `${latest.requestMethod ? latest.requestMethod + ' ' : ''}${pathText}`;
+  preview.append(method, document.createTextNode(pathText));
   return preview;
 }
 
@@ -417,7 +436,7 @@ function buildRoutePerfLine(avgDuration, errors) {
   }
   if (errors > 0) {
     const errorPart = document.createElement('span');
-    errorPart.style.color = 'var(--danger)';
+    errorPart.className = 'route-perf-errors';
     errorPart.textContent = `${errors} error${errors !== 1 ? 's' : ''}`;
     parts.push(errorPart);
   }

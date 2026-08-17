@@ -317,7 +317,7 @@ function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex)
     row.tabIndex = 0;
     row.setAttribute('aria-selected', String(request.sessionId === activeSession && exchangeIndex === activeExchangeIndex));
 
-    row.appendChild(buildTextCell(request.requestMethod || ''));
+    row.appendChild(buildMethodCell(request.requestMethod || ''));
     row.appendChild(buildPathCell(request));
     row.appendChild(buildStatusCell(request.responseStatusCode));
     row.appendChild(buildDurationCell(request.durationMs));
@@ -375,6 +375,29 @@ function buildTextCell(text, className = '') {
     cell.className = className;
   }
   cell.textContent = text;
+  return cell;
+}
+
+function methodBadgeClass(method) {
+  switch ((method || '').toUpperCase()) {
+    case 'GET':     return 'method-get';
+    case 'POST':    return 'method-post';
+    case 'PUT':     return 'method-put';
+    case 'DELETE':  return 'method-delete';
+    case 'PATCH':   return 'method-patch';
+    case 'HEAD':    return 'method-head';
+    case 'OPTIONS': return 'method-options';
+    default:        return 'method-other';
+  }
+}
+
+function buildMethodCell(method) {
+  const cell = document.createElement('td');
+  if (!method) return cell;
+  const badge = document.createElement('span');
+  badge.className = `method-badge ${methodBadgeClass(method)}`;
+  badge.textContent = method;
+  cell.appendChild(badge);
   return cell;
 }
 
