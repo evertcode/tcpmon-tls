@@ -1,9 +1,12 @@
 function groupedRoutes() {
   const sessions = getState('allSessions');
   const routeStats = getState('routeStats') || {};
+  const config = getState('proxyConfig');
+  const configRouteIds = config ? new Set((config.routes || []).map(r => r.id)) : null;
   const map = new Map();
   for (const session of sessions) {
     const routeId = session.routeId || 'default';
+    if (configRouteIds && !configRouteIds.has(routeId)) continue;
     const current = map.get(routeId) || {
       routeId,
       sessions: [],
