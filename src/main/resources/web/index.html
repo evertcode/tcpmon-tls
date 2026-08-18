@@ -42,7 +42,10 @@
         <div class="sidebar-section">
           <div class="sidebar-header">
             <h2>Routes</h2>
-            <button id="add-route-btn" class="utility add-route-btn" title="Add route" aria-label="Add route">+</button>
+            <div class="sidebar-header-actions">
+              <button id="new-request-btn" class="utility add-route-btn" title="New request" aria-label="New request">✎</button>
+              <button id="add-route-btn" class="utility add-route-btn" title="Add route" aria-label="Add route">+</button>
+            </div>
           </div>
         </div>
         <div class="sidebar-section">
@@ -314,6 +317,35 @@
     </div>
   </div>
 
+  <div id="request-builder-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="request-builder-modal-title" aria-hidden="true">
+    <div class="modal-box request-builder-modal-box">
+      <div class="modal-hdr">
+        <div class="modal-hdr-main">
+          <strong id="request-builder-modal-title">New Request</strong>
+        </div>
+        <button id="request-builder-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+      </div>
+      <div class="modal-body request-builder-modal-body">
+        <div class="editor-grid">
+          <select id="rb-route-select" aria-label="Route"></select>
+          <div class="request-grid">
+            <input id="rb-method" placeholder="Method">
+            <input id="rb-path" placeholder="Path">
+            <input id="rb-query" placeholder="Query">
+            <input id="rb-version" placeholder="Version">
+          </div>
+          <textarea id="rb-headers" rows="8" placeholder="Headers"></textarea>
+          <textarea id="rb-body" rows="10" placeholder="Body"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="request-builder-cancel-btn" class="secondary">Cancel</button>
+          <button class="secondary" data-action="submit-request-builder" data-destination="target">Send to target</button>
+          <button class="primary" data-action="submit-request-builder" data-destination="listener">Send to listener</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script defer src="/assets/js/state.js"></script>
   <script defer src="/assets/js/utils.js"></script>
   <script defer src="/assets/js/api.js"></script>
@@ -324,6 +356,7 @@
   <script defer src="/assets/js/route-modal.js"></script>
   <script defer src="/assets/js/body-modal.js"></script>
   <script defer src="/assets/js/replay-edit-modal.js"></script>
+  <script defer src="/assets/js/request-builder-modal.js"></script>
   <script defer src="/assets/js/app.js"></script>
 </body>
 </html>

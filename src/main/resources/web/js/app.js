@@ -118,6 +118,14 @@ function initializeStaticButtonIcons() {
     title: 'Close dialog',
     ariaLabel: 'Close dialog'
   });
+  setButtonContent(document.getElementById('new-request-btn'), '', 'send', {
+    title: 'New request',
+    ariaLabel: 'New request'
+  });
+  setButtonContent(document.getElementById('request-builder-modal-close-btn'), '', 'close', {
+    title: 'Close dialog',
+    ariaLabel: 'Close dialog'
+  });
 }
 
 const THEME_STORAGE_KEY = 'tcpmon-theme-preference';
@@ -172,6 +180,9 @@ function initializeTheme() {
 function bindUiEvents() {
   const addRouteBtn = document.getElementById('add-route-btn');
   if (addRouteBtn) addRouteBtn.addEventListener('click', () => openAddRouteModal());
+
+  const newRequestBtn = document.getElementById('new-request-btn');
+  if (newRequestBtn) newRequestBtn.addEventListener('click', () => openRequestBuilderModal());
 
   const routeSearch = document.getElementById('route-search');
   if (routeSearch) routeSearch.addEventListener('input', () => renderRouteList());
@@ -237,6 +248,21 @@ function bindUiEvents() {
 
   const replayEditCancelBtn = document.getElementById('replay-edit-cancel-btn');
   if (replayEditCancelBtn) replayEditCancelBtn.addEventListener('click', () => closeReplayEditModal());
+
+  const requestBuilderModal = document.getElementById('request-builder-modal');
+  if (requestBuilderModal) {
+    requestBuilderModal.addEventListener('click', event => {
+      if (event.target === requestBuilderModal) {
+        closeRequestBuilderModal();
+      }
+    });
+  }
+
+  const requestBuilderModalCloseBtn = document.getElementById('request-builder-modal-close-btn');
+  if (requestBuilderModalCloseBtn) requestBuilderModalCloseBtn.addEventListener('click', () => closeRequestBuilderModal());
+
+  const requestBuilderCancelBtn = document.getElementById('request-builder-cancel-btn');
+  if (requestBuilderCancelBtn) requestBuilderCancelBtn.addEventListener('click', () => closeRequestBuilderModal());
 
   const listenerTransport = document.getElementById('rm-listener-transport');
   if (listenerTransport) listenerTransport.addEventListener('change', event => toggleListenerTls(event.target.value));
@@ -323,6 +349,9 @@ function bindUiEvents() {
       case 'submit-replay-edit':
         await submitReplayEdit(actionEl.dataset.destination);
         break;
+      case 'submit-request-builder':
+        await submitRequestBuilder(actionEl.dataset.destination);
+        break;
       case 'release-pending':
         await releasePending(actionEl.dataset.pendingId);
         break;
@@ -382,6 +411,8 @@ function bindUiEvents() {
           closeBodyViewModal();
         } else if (modal.id === 'replay-edit-modal') {
           closeReplayEditModal();
+        } else if (modal.id === 'request-builder-modal') {
+          closeRequestBuilderModal();
         }
       }
     }

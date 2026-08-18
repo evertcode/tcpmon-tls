@@ -696,6 +696,10 @@ button.action-edit {
   justify-content: space-between;
   align-items: center;
 }
+.sidebar-header-actions {
+  display: flex;
+  gap: 6px;
+}
 .modal-actions {
   display: flex;
   gap: 8px;
@@ -2041,6 +2045,11 @@ tr.session-entry:focus-visible {
 }
 
 .replay-edit-modal-box {
+  width: min(760px, 100%);
+  max-width: 760px;
+}
+
+.request-builder-modal-box {
   width: min(760px, 100%);
   max-width: 760px;
 }
