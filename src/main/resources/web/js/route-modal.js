@@ -70,6 +70,11 @@ function openAddRouteModal() {
   document.getElementById('rm-listener-client-auth').value = 'NONE';
   document.getElementById('rm-listener-tls-protocols').value = '';
   document.getElementById('rm-listener-tls-ciphers').value = '';
+  document.getElementById('rm-listener-replay-tls-cert').value = '';
+  document.getElementById('rm-listener-replay-tls-key').value = '';
+  document.getElementById('rm-listener-replay-tls-keystore').value = '';
+  document.getElementById('rm-listener-replay-tls-keystore-pwd').value = '';
+  document.getElementById('rm-listener-replay-tls-keystore-type').value = 'PKCS12';
   document.getElementById('rm-target-host').value = '';
   document.getElementById('rm-target-port').value = '';
   document.getElementById('rm-target-transport').value = 'PLAIN';
@@ -125,6 +130,13 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-listener-client-auth').value = route.listener.clientAuth || 'NONE';
   document.getElementById('rm-listener-tls-protocols').value = (route.listener.tlsProtocols || []).join(',');
   document.getElementById('rm-listener-tls-ciphers').value = (route.listener.tlsCiphers || []).join(',');
+  const replayIdentity = route.listener.replayIdentity || {};
+  document.getElementById('rm-listener-replay-tls-cert').value = replayIdentity.tlsCert || '';
+  document.getElementById('rm-listener-replay-tls-key').value = replayIdentity.tlsKey || '';
+  document.getElementById('rm-listener-replay-tls-keystore').value = replayIdentity.tlsKeystore || '';
+  document.getElementById('rm-listener-replay-tls-keystore-pwd').value = '';
+  document.getElementById('rm-listener-replay-tls-keystore-pwd').placeholder = replayIdentity.tlsKeystorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
+  document.getElementById('rm-listener-replay-tls-keystore-type').value = replayIdentity.tlsKeystoreType || 'PKCS12';
   document.getElementById('rm-target-host').value = route.target.host || '';
   document.getElementById('rm-target-port').value = route.target.port || '';
   const targetTransport = route.target.transport || 'PLAIN';
@@ -182,6 +194,9 @@ function clearRouteModalErrors() {
     'rm-listener-tls-cert',
     'rm-listener-tls-key',
     'rm-listener-tls-keystore',
+    'rm-listener-replay-tls-cert',
+    'rm-listener-replay-tls-key',
+    'rm-listener-replay-tls-keystore',
     'rm-target-tls-cert',
     'rm-target-tls-key',
     'rm-target-tls-keystore'
@@ -254,6 +269,21 @@ function buildRoutePayload() {
     if (listenerProtocols.length) payload.listener.tlsProtocols = listenerProtocols;
     const listenerCiphers = parseCsvList(document.getElementById('rm-listener-tls-ciphers').value);
     if (listenerCiphers.length) payload.listener.tlsCiphers = listenerCiphers;
+    const replayCert = tlsFieldVal('rm-listener-replay-tls-cert');
+    const replayKey = tlsFieldVal('rm-listener-replay-tls-key');
+    const replayKs = tlsFieldVal('rm-listener-replay-tls-keystore');
+    const replayKsPwd = secretFieldVal('rm-listener-replay-tls-keystore-pwd',
+        !!(proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeModalEditId)?.listener?.replayIdentity?.tlsKeystorePasswordConfigured));
+    const replayKsType = tlsFieldVal('rm-listener-replay-tls-keystore-type');
+    if (replayCert || replayKey || replayKs || replayKsPwd) {
+      const replayIdentity = {};
+      if (replayCert) replayIdentity.tlsCert = replayCert;
+      if (replayKey) replayIdentity.tlsKey = replayKey;
+      if (replayKs) replayIdentity.tlsKeystore = replayKs;
+      if (replayKsPwd) replayIdentity.tlsKeystorePassword = replayKsPwd;
+      if (replayKsType) replayIdentity.tlsKeystoreType = replayKsType;
+      payload.listener.replayIdentity = replayIdentity;
+    }
   }
   if (targetTransport === 'TLS') {
     const cert = tlsFieldVal('rm-target-tls-cert');
@@ -322,6 +352,12 @@ function validateRouteForm(payload) {
     if ((payload.listener.tlsCert && !payload.listener.tlsKey) || (!payload.listener.tlsCert && payload.listener.tlsKey)) {
       setFieldInvalid(document.getElementById('rm-listener-tls-key'), 'Certificate and private key must be provided together.');
       errors.push(document.getElementById('rm-listener-tls-key'));
+    }
+    const replayCert = payload.listener.replayIdentity?.tlsCert;
+    const replayKey = payload.listener.replayIdentity?.tlsKey;
+    if ((replayCert && !replayKey) || (!replayCert && replayKey)) {
+      setFieldInvalid(document.getElementById('rm-listener-replay-tls-key'), 'Certificate and private key must be provided together.');
+      errors.push(document.getElementById('rm-listener-replay-tls-key'));
     }
   }
 

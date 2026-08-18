@@ -2,6 +2,7 @@ package com.cafeina.tcpmon.replay;
 
 import com.cafeina.tcpmon.ProxyConfig;
 import com.cafeina.tcpmon.RouteConfig;
+import com.cafeina.tcpmon.TlsMaterial;
 import com.cafeina.tcpmon.TransportMode;
 import com.cafeina.tcpmon.proxy.RouteRegistry;
 import com.cafeina.tcpmon.tls.TlsContextFactory;
@@ -126,12 +127,16 @@ public final class ReplayService {
                 if (route.listener().transportMode() != TransportMode.TLS) {
                     yield null;
                 }
-                if (route.listener().clientAuthMode() == com.cafeina.tcpmon.ClientAuthMode.REQUIRE) {
-                    throw new IllegalStateException("Replay to a TLS listener with required client auth is not supported yet");
+                TlsMaterial replayIdentity = route.listener().replayIdentity();
+                if (route.listener().clientAuthMode() == com.cafeina.tcpmon.ClientAuthMode.REQUIRE
+                        && replayIdentity == null) {
+                    throw new IllegalStateException(
+                            "Replay to a TLS listener with required client auth needs a configured replay identity certificate");
                 }
-                yield SslContextBuilder.forClient()
-                        .trustManager(InsecureTrustManagerFactory.INSTANCE)
-                        .build();
+                SslContextBuilder builder = SslContextBuilder.forClient()
+                        .trustManager(InsecureTrustManagerFactory.INSTANCE);
+                TlsContextFactory.applyClientKeyManager(builder, replayIdentity);
+                yield builder.build();
             }
         };
     }

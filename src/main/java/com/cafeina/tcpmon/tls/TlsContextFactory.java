@@ -71,14 +71,7 @@ public final class TlsContextFactory {
         applySharedSettings(builder, target.enabledProtocols(), target.enabledCiphers(),
                 config.enabledProtocols(), config.enabledCiphers());
         if (material != null) {
-            if (material.certificateFile() != null && material.privateKeyFile() != null) {
-                builder.keyManager(material.certificateFile().toFile(), material.privateKeyFile().toFile());
-            } else if (material.keyStoreFile() != null) {
-                builder.keyManager(loadKeyManagerFactory(
-                        material.keyStoreFile(),
-                        material.keyStorePassword(),
-                        material.keyStoreType()));
-            }
+            applyClientKeyManager(builder, material);
             if (material.trustStoreFile() != null) {
                 if (isPem(material.trustStoreFile())) {
                     builder.trustManager(material.trustStoreFile().toFile());
@@ -112,6 +105,19 @@ public final class TlsContextFactory {
             handler.engine().setSSLParameters(parameters);
         }
         return handler;
+    }
+
+    public static void applyClientKeyManager(SslContextBuilder builder, TlsMaterial material)
+            throws GeneralSecurityException, IOException {
+        if (material == null) return;
+        if (material.certificateFile() != null && material.privateKeyFile() != null) {
+            builder.keyManager(material.certificateFile().toFile(), material.privateKeyFile().toFile());
+        } else if (material.keyStoreFile() != null) {
+            builder.keyManager(loadKeyManagerFactory(
+                    material.keyStoreFile(),
+                    material.keyStorePassword(),
+                    material.keyStoreType()));
+        }
     }
 
     private static void applySharedSettings(SslContextBuilder builder,

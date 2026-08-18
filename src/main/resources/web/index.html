@@ -172,6 +172,35 @@
               <input type="text" id="rm-listener-tls-ciphers" placeholder="uses global default">
             </div>
           </div>
+          <div class="tls-subsection-label" style="margin-top:10px;">Recapture client identity <span class="label-hint">(used when replaying/recapturing into this listener; required if Client Authentication is Require)</span></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="rm-listener-replay-tls-cert">Certificate file</label>
+              <input type="text" id="rm-listener-replay-tls-cert" placeholder="/path/to/cert.pem">
+            </div>
+            <div class="form-group">
+              <label for="rm-listener-replay-tls-key">Private key file</label>
+              <input type="text" id="rm-listener-replay-tls-key" placeholder="/path/to/key.pem">
+            </div>
+          </div>
+          <div class="tls-alt-or">- or keystore -</div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="rm-listener-replay-tls-keystore">Keystore file</label>
+              <input type="text" id="rm-listener-replay-tls-keystore" placeholder="/path/to/keystore.p12">
+            </div>
+            <div class="form-group">
+              <label for="rm-listener-replay-tls-keystore-pwd">Password</label>
+              <input type="password" id="rm-listener-replay-tls-keystore-pwd" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="rm-listener-replay-tls-keystore-type">Type</label>
+              <select id="rm-listener-replay-tls-keystore-type">
+                <option value="PKCS12">PKCS12</option>
+                <option value="JKS">JKS</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="form-section-hdr">Target</div>

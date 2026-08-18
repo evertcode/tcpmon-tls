@@ -9,5 +9,6 @@ public record ListenerConfig(
         ClientAuthMode clientAuthMode,
         TlsMaterial tlsMaterial,
         List<String> enabledProtocols,
-        List<String> enabledCiphers) {
+        List<String> enabledCiphers,
+        TlsMaterial replayIdentity) {
 }

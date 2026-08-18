@@ -676,13 +676,14 @@ public final class ControlPlaneServer implements AutoCloseable {
 
         TlsMaterial listenerTls = parseTlsMaterial(listenerNode);
         TlsMaterial targetTls = parseTlsMaterial(targetNode);
+        TlsMaterial replayIdentity = parseTlsMaterial(listenerNode.path("replayIdentity"));
         List<String> listenerProtocols = parseStringList(listenerNode, "tlsProtocols");
         List<String> listenerCiphers = parseStringList(listenerNode, "tlsCiphers");
         List<String> targetProtocols = parseStringList(targetNode, "tlsProtocols");
         List<String> targetCiphers = parseStringList(targetNode, "tlsCiphers");
 
         ListenerConfig listener = new ListenerConfig(listenerHost, listenerPort, listenerTransport, clientAuth, listenerTls,
-                listenerProtocols, listenerCiphers);
+                listenerProtocols, listenerCiphers, replayIdentity);
         TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, targetTls,
                 targetProtocols, targetCiphers);
         return new RouteConfig(id, listener, target);
@@ -767,6 +768,9 @@ public final class ControlPlaneServer implements AutoCloseable {
             putTlsMaterial(listener, route.listener().tlsMaterial());
             listener.put("tlsProtocols", route.listener().enabledProtocols());
             listener.put("tlsCiphers", route.listener().enabledCiphers());
+            Map<String, Object> replayIdentity = new LinkedHashMap<>();
+            putTlsMaterial(replayIdentity, route.listener().replayIdentity());
+            listener.put("replayIdentity", replayIdentity);
             routeMap.put("listener", listener);
             Map<String, Object> target = new LinkedHashMap<>();
             target.put("host", route.target().host());
@@ -823,7 +827,8 @@ public final class ControlPlaneServer implements AutoCloseable {
                         updated.listener().clientAuthMode(),
                         mergeTlsMaterial(original.listener().tlsMaterial(), updated.listener().tlsMaterial()),
                         updated.listener().enabledProtocols(),
-                        updated.listener().enabledCiphers()),
+                        updated.listener().enabledCiphers(),
+                        mergeTlsMaterial(original.listener().replayIdentity(), updated.listener().replayIdentity())),
                 new TargetConfig(
                         updated.target().host(),
                         updated.target().port(),

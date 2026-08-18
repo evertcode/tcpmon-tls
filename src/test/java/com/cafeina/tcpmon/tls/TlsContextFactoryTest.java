@@ -53,7 +53,7 @@ class TlsContextFactoryTest {
                     List.of("TLSv1.3", "TLSv1.2"),
                     List.of());
             RouteConfig route = new RouteConfig("default",
-                    new ListenerConfig("127.0.0.1", 0, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls(), List.of(), List.of()),
+                    new ListenerConfig("127.0.0.1", 0, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls(), List.of(), List.of(), null),
                     new TargetConfig("127.0.0.1", server.port(), TransportMode.TLS, "backend.local", true, false, false, emptyTls(), List.of(), List.of()));
 
             SslContext sslContext = TlsContextFactory.buildClientContext(config, route);
