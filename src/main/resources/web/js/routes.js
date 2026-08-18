@@ -240,12 +240,20 @@ async function selectRoute(routeId) {
 }
 
 function renderRouteHeader() {
+  const header = document.getElementById('route-header');
+  if (getState('searchAllRoutes')) {
+    header.replaceChildren(buildEmptyState(
+      'Searching across all routes.',
+      'Results include sessions from every configured route. Click a result to open its route and continue from there.'
+    ));
+    updateTopbarSubtitle();
+    return;
+  }
   const selectedRouteId = getState('activeRoute');
   const selectedSessionId = getState('activeSession');
   const config = getState('proxyConfig');
   const sessions = sessionsForActiveRoute();
   const requestRows = requestRowsForActiveRoute();
-  const header = document.getElementById('route-header');
   if (!selectedRouteId) {
     header.replaceChildren();
     updateTopbarSubtitle();

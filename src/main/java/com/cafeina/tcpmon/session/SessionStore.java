@@ -46,7 +46,7 @@ import java.util.function.Consumer;
 public final class SessionStore implements AutoCloseable {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
-    private static final int SCHEMA_VERSION = 4;
+    private static final int SCHEMA_VERSION = 5;
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
 
@@ -373,10 +373,13 @@ public final class SessionStore implements AutoCloseable {
                     s.target_address
                 from session_exchanges e
                 join sessions s on s.session_id = e.session_id
-                where e.route_id = ?
+                where 1=1
                 """);
         List<Object> params = new ArrayList<>();
-        params.add(routeId);
+        if (routeId != null && !routeId.isBlank()) {
+            sql.append("and e.route_id = ?\n");
+            params.add(routeId);
+        }
         if (cursor != null && !cursor.isBlank()) {
             String[] parts = cursor.split("\\|", 3);
             if (parts.length == 3) {
@@ -441,19 +444,18 @@ public final class SessionStore implements AutoCloseable {
                 return result;
             }
         } catch (SQLException exception) {
-            throw new IllegalStateException("Unable to list paginated request rows for route " + routeId, exception);
+            throw new IllegalStateException("Unable to list paginated request rows for route " + (routeId == null || routeId.isBlank() ? "(all routes)" : routeId), exception);
         }
     }
 
     public synchronized Map<String, Object> requestFacets(String routeId) {
+        boolean hasRoute = routeId != null && !routeId.isBlank();
         Map<String, Object> result = new LinkedHashMap<>();
-        try (PreparedStatement stmt = connection.prepareStatement("""
-                select distinct request_method
-                from session_exchanges
-                where route_id = ? and request_method is not null and request_method != ''
-                order by request_method
-                """)) {
-            stmt.setString(1, routeId);
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "select distinct request_method from session_exchanges where 1=1 "
+                        + (hasRoute ? "and route_id = ? " : "")
+                        + "and request_method is not null and request_method != '' order by request_method")) {
+            if (hasRoute) stmt.setString(1, routeId);
             try (ResultSet rs = stmt.executeQuery()) {
                 List<String> methods = new ArrayList<>();
                 while (rs.next()) {
@@ -464,13 +466,11 @@ public final class SessionStore implements AutoCloseable {
         } catch (SQLException e) {
             throw new IllegalStateException("Unable to get methods for route " + routeId, e);
         }
-        try (PreparedStatement stmt = connection.prepareStatement("""
-                select distinct response_status_code
-                from session_exchanges
-                where route_id = ? and response_status_code is not null and response_status_code != ''
-                order by response_status_code
-                """)) {
-            stmt.setString(1, routeId);
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "select distinct response_status_code from session_exchanges where 1=1 "
+                        + (hasRoute ? "and route_id = ? " : "")
+                        + "and response_status_code is not null and response_status_code != '' order by response_status_code")) {
+            if (hasRoute) stmt.setString(1, routeId);
             try (ResultSet rs = stmt.executeQuery()) {
                 List<String> codes = new ArrayList<>();
                 while (rs.next()) {
@@ -481,17 +481,16 @@ public final class SessionStore implements AutoCloseable {
         } catch (SQLException e) {
             throw new IllegalStateException("Unable to get status codes for route " + routeId, e);
         }
-        try (PreparedStatement stmt = connection.prepareStatement("""
-                select
-                    count(*) as total_requests,
-                    sum(case when s.status = 'OPEN' and e.status = 'OPEN' then 1 else 0 end) as live_requests,
-                    sum(case when e.response_status_code like '5%' then 1 else 0 end) as error_count,
-                    cast(avg(e.duration_ms) as integer) as avg_duration_ms
-                from session_exchanges e
-                join sessions s on s.session_id = e.session_id
-                where e.route_id = ?
-                """)) {
-            stmt.setString(1, routeId);
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "select"
+                        + "    count(*) as total_requests,"
+                        + "    sum(case when s.status = 'OPEN' and e.status = 'OPEN' then 1 else 0 end) as live_requests,"
+                        + "    sum(case when e.response_status_code like '5%' then 1 else 0 end) as error_count,"
+                        + "    cast(avg(e.duration_ms) as integer) as avg_duration_ms"
+                        + " from session_exchanges e"
+                        + " join sessions s on s.session_id = e.session_id"
+                        + " where 1=1 " + (hasRoute ? "and e.route_id = ? " : ""))) {
+            if (hasRoute) stmt.setString(1, routeId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     result.put("totalRequests", rs.getLong("total_requests"));
@@ -727,6 +726,10 @@ public final class SessionStore implements AutoCloseable {
             migrateToVersion4();
             currentVersion = 4;
         }
+        if (currentVersion < 5) {
+            migrateToVersion5();
+            currentVersion = 5;
+        }
         if (currentVersion != SCHEMA_VERSION) {
             throw new IllegalStateException("Unsupported schema version: " + currentVersion);
         }
@@ -820,6 +823,16 @@ public final class SessionStore implements AutoCloseable {
             // column already exists
         }
         writeSchemaVersion(4);
+    }
+
+    private void migrateToVersion5() throws SQLException {
+        try (Statement st = connection.createStatement()) {
+            st.execute("""
+                    create index if not exists idx_session_exchanges_started
+                    on session_exchanges(started_at desc, session_id desc, exchange_index asc)
+                    """);
+        }
+        writeSchemaVersion(5);
     }
 
     private void createSessionExchangesTable() throws SQLException {

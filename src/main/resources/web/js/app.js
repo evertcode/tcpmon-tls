@@ -332,7 +332,7 @@ function bindUiEvents() {
         renderConfigButton();
         break;
       case 'select-session':
-        await selectSession(actionEl.dataset.sessionId, Number(actionEl.dataset.exchangeIndex || 0));
+        await selectSessionRow(actionEl.dataset.sessionId, Number(actionEl.dataset.exchangeIndex || 0), actionEl.dataset.routeId || '');
         break;
       case 'change-request-page':
         await changeRequestPage(Number(actionEl.dataset.delta || 0));
@@ -449,6 +449,10 @@ function bindUiEvents() {
   });
 
   document.addEventListener('change', event => {
+    if (event.target.id === 'request-search-all-routes') {
+      toggleSearchAllRoutes(event.target.checked);
+      return;
+    }
     if (event.target.id === 'request-method-filter' || event.target.id === 'request-status-code-filter' || event.target.id === 'request-page-size') {
       resetRequestPageAndRender();
     }
@@ -720,6 +724,12 @@ function scheduleRequestTableRefresh() {
 function updateTopbarSubtitle() {
   const el = document.getElementById('topbar-subtitle');
   if (!el) return;
+  if (getState('searchAllRoutes')) {
+    const facets = getState('requestFacets') || {};
+    const total = Number(facets.totalRequests || getState('requestRows').length || 0);
+    el.textContent = 'Searching all routes — ' + total + ' request' + (total !== 1 ? 's' : '');
+    return;
+  }
   const activeRoute = getState('activeRoute');
   if (!activeRoute) {
     el.textContent = 'Select route, inspect recorded requests, open one to view request and response.';
@@ -753,8 +763,9 @@ async function clearRequestFilters() {
     requestStatusCodeFilterValue: ''
   });
   const activeRoute = getState('activeRoute');
-  if (!activeRoute) return;
-  await loadRequestsForRoute(activeRoute);
+  const searchAllRoutes = getState('searchAllRoutes');
+  if (!activeRoute && !searchAllRoutes) return;
+  await loadRequestsForRoute(searchAllRoutes ? null : activeRoute);
   renderRequestTable();
 }
 

@@ -9,6 +9,7 @@ window.uiState = {
   requestFacets: null,
   requestPageSize: 10,
   activeRoute: null,
+  searchAllRoutes: false,
   lastLoadedSession: null,
   proxyConfig: null,
   routeOrder: [],

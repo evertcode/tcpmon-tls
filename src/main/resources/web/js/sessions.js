@@ -66,14 +66,18 @@ async function loadRequestsForRoute(routeId) {
   const statusCode = getState('requestStatusCodeFilterValue');
   const q = getState('requestSearchValue').trim();
   const limit = String(getState('requestPageSize') || 10);
-  const params = new URLSearchParams({ routeId, limit });
+  const params = new URLSearchParams({ limit });
+  if (routeId) params.set('routeId', routeId);
   if (method) params.set('method', method);
   if (statusCode) params.set('statusCode', statusCode);
   if (q) params.set('q', q);
 
+  const facetsParams = new URLSearchParams();
+  if (routeId) facetsParams.set('routeId', routeId);
+
   const [requestsData, facetsData] = await Promise.all([
     fetchJson('/api/requests?' + params),
-    fetchJson('/api/request-facets?routeId=' + encodeURIComponent(routeId))
+    fetchJson('/api/request-facets?' + facetsParams)
   ]);
 
   patchState({
@@ -91,7 +95,8 @@ async function loadRequestsPage(routeId, cursor, resetStack) {
   const statusCode = getState('requestStatusCodeFilterValue');
   const q = getState('requestSearchValue').trim();
   const limit = String(getState('requestPageSize') || 10);
-  const params = new URLSearchParams({ routeId, limit });
+  const params = new URLSearchParams({ limit });
+  if (routeId) params.set('routeId', routeId);
   if (cursor) params.set('cursor', cursor);
   if (method) params.set('method', method);
   if (statusCode) params.set('statusCode', statusCode);
@@ -110,6 +115,15 @@ async function loadRequestsPage(routeId, cursor, resetStack) {
   });
 }
 
+async function toggleSearchAllRoutes(checked) {
+  setState('searchAllRoutes', checked);
+  const routeId = checked ? null : getState('activeRoute');
+  if (checked || routeId) {
+    await loadRequestsForRoute(routeId);
+  }
+  await renderApp({ detail: false });
+}
+
 function sessionsForActiveRoute() {
   const sessions = getState('allSessions');
   const selectedRouteId = getState('activeRoute');
@@ -122,6 +136,17 @@ function requestRowsForActiveRoute() {
   return getState('requestRows');
 }
 
+function buildAllRoutesToggleRow(checked) {
+  const row = document.createElement('label');
+  row.className = 'request-all-routes-toggle';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.id = 'request-search-all-routes';
+  checkbox.checked = Boolean(checked);
+  row.append(checkbox, document.createTextNode(' Search all routes'));
+  return row;
+}
+
 function renderRequestTable() {
   const requestRows = requestRowsForActiveRoute();
   const container = document.getElementById('request-table');
@@ -129,28 +154,34 @@ function renderRequestTable() {
   const methodVal = getState('requestMethodFilterValue');
   const statusVal = getState('requestStatusCodeFilterValue');
   const hasActiveFilters = Boolean(searchVal || methodVal || statusVal);
+  const searchAllRoutes = getState('searchAllRoutes');
+  const toggleRow = buildAllRoutesToggleRow(searchAllRoutes);
 
   if (!requestRows.length) {
     const facets = getState('requestFacets');
     const total = facets ? Number(facets.totalRequests || 0) : 0;
+    let emptyContent;
     if (total > 0) {
       const clearBtn = document.createElement('button');
       clearBtn.className = 'utility';
       clearBtn.textContent = 'Clear filters';
       clearBtn.dataset.action = 'clear-request-filters';
       const filterSummary = activeFilterSummary();
-      container.replaceChildren(buildEmptyState(
+      emptyContent = buildEmptyState(
         filterSummary ? `No requests match ${filterSummary}.` : 'No requests match the current filters.',
         'Clear filters or broaden the search query.',
         clearBtn
-      ));
+      );
+    } else if (searchAllRoutes) {
+      emptyContent = buildEmptyState('No traffic captured on any route yet.', 'Send a request through one of your routes to see it here.');
     } else {
       const listener = routeEndpointLabel(getState('activeRoute'), 'listener');
-      container.replaceChildren(buildEmptyState(
+      emptyContent = buildEmptyState(
         listener ? `No traffic captured on ${listener}.` : 'No traffic captured for this route yet.',
         activeRouteCaptureHint()
-      ));
+      );
     }
+    container.replaceChildren(toggleRow, emptyContent);
     return;
   }
   const card = document.createElement('section');
@@ -180,8 +211,8 @@ function renderRequestTable() {
   }
 
   card.appendChild(toolbar);
-  card.appendChild(renderRequestTableContent(requestRows));
-  container.replaceChildren(card);
+  card.appendChild(renderRequestTableContent(requestRows, searchAllRoutes));
+  container.replaceChildren(toggleRow, card);
 }
 
 function buildSelectElement(id, options) {
@@ -197,7 +228,7 @@ function buildSelectElement(id, options) {
   return select;
 }
 
-function renderRequestTableContent(requestRows) {
+function renderRequestTableContent(requestRows, showRoute = false) {
   const hasMore = getState('requestHasMore');
   const cursorStack = getState('requestCursorStack');
   const hasPrev = cursorStack.length > 0;
@@ -211,7 +242,7 @@ function renderRequestTableContent(requestRows) {
   const fragment = document.createDocumentFragment();
   const scroller = document.createElement('div');
   scroller.className = 'request-table-scroll';
-  scroller.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex));
+  scroller.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex, showRoute));
   fragment.appendChild(scroller);
   fragment.appendChild(buildRequestTableFooter(rangeStart, rangeEnd, totalRequests, hasPrev, hasMore));
   return fragment;
@@ -255,8 +286,9 @@ async function resetRequestPageAndRender() {
     requestPageSize: pageSizeEl ? Number(pageSizeEl.value) : getState('requestPageSize')
   });
   const activeRoute = getState('activeRoute');
-  if (!activeRoute) return;
-  await loadRequestsForRoute(activeRoute);
+  const searchAllRoutes = getState('searchAllRoutes');
+  if (!activeRoute && !searchAllRoutes) return;
+  await loadRequestsForRoute(searchAllRoutes ? null : activeRoute);
   renderRequestTable();
 }
 
@@ -269,37 +301,43 @@ function debounceRequestSearch() {
   setState('requestSearchDebounceTimer', setTimeout(async () => {
     setState('requestSearchDebounceTimer', null);
     const activeRoute = getState('activeRoute');
-    if (!activeRoute) return;
-    await loadRequestsForRoute(activeRoute);
+    const searchAllRoutes = getState('searchAllRoutes');
+    if (!activeRoute && !searchAllRoutes) return;
+    await loadRequestsForRoute(searchAllRoutes ? null : activeRoute);
     renderRequestTable();
   }, 300));
 }
 
 async function changeRequestPage(delta) {
   const activeRouteId = getState('activeRoute');
-  if (!activeRouteId) return;
+  const searchAllRoutes = getState('searchAllRoutes');
+  if (!activeRouteId && !searchAllRoutes) return;
+  const effectiveRouteId = searchAllRoutes ? null : activeRouteId;
   if (delta > 0) {
     const nextCursor = getState('requestNextCursor');
     if (!nextCursor) return;
     const currentCursor = getState('requestCurrentCursor');
     setState('requestCursorStack', [...getState('requestCursorStack'), currentCursor]);
-    await loadRequestsPage(activeRouteId, nextCursor, false);
+    await loadRequestsPage(effectiveRouteId, nextCursor, false);
   } else {
     const stack = [...getState('requestCursorStack')];
     if (!stack.length) return;
     const prevCursor = stack.pop();
     setState('requestCursorStack', stack);
-    await loadRequestsPage(activeRouteId, prevCursor, false);
+    await loadRequestsPage(effectiveRouteId, prevCursor, false);
   }
   renderRequestTable();
 }
 
-function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex) {
+function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex, showRoute = false) {
   const table = document.createElement('table');
   table.className = 'request-table';
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  for (const label of ['Method', 'Path', 'Response', 'Duration', 'Size', 'Client', 'Started']) {
+  const labels = showRoute
+    ? ['Route', 'Method', 'Path', 'Response', 'Duration', 'Size', 'Client', 'Started']
+    : ['Method', 'Path', 'Response', 'Duration', 'Size', 'Client', 'Started'];
+  for (const label of labels) {
     const th = document.createElement('th');
     th.textContent = label;
     headerRow.appendChild(th);
@@ -314,9 +352,13 @@ function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex)
     row.dataset.action = 'select-session';
     row.dataset.sessionId = request.sessionId;
     row.dataset.exchangeIndex = String(exchangeIndex);
+    row.dataset.routeId = request.routeId || '';
     row.tabIndex = 0;
     row.setAttribute('aria-selected', String(request.sessionId === activeSession && exchangeIndex === activeExchangeIndex));
 
+    if (showRoute) {
+      row.appendChild(buildTextCell(request.routeId || '', 'mono'));
+    }
     row.appendChild(buildMethodCell(request.requestMethod || ''));
     row.appendChild(buildPathCell(request));
     row.appendChild(buildStatusCell(request.responseStatusCode));
@@ -472,4 +514,12 @@ async function selectSession(sessionId, exchangeIndex = 0) {
     banner: false,
     detail: true
   });
+}
+
+async function selectSessionRow(sessionId, exchangeIndex, routeId) {
+  if (routeId && (getState('searchAllRoutes') || routeId !== getState('activeRoute'))) {
+    setState('searchAllRoutes', false);
+    await selectRoute(routeId);
+  }
+  await selectSession(sessionId, exchangeIndex);
 }

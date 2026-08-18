@@ -273,10 +273,6 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
         Map<String, String> params = parseQueryParams(exchange.getRequestURI().getQuery());
         String routeId = params.getOrDefault("routeId", "").trim();
-        if (routeId.isBlank()) {
-            sendJson(exchange, 400, Map.of("error", "routeId is required"));
-            return;
-        }
         int limit = parseIntParam(params.getOrDefault("limit", "50"), 50, 1, MAX_REQUEST_LIMIT);
         String cursor = params.getOrDefault("cursor", null);
         String method = params.getOrDefault("method", null);
@@ -302,10 +298,6 @@ public final class ControlPlaneServer implements AutoCloseable {
         }
         Map<String, String> params = parseQueryParams(exchange.getRequestURI().getQuery());
         String routeId = params.getOrDefault("routeId", "").trim();
-        if (routeId.isBlank()) {
-            sendJson(exchange, 400, Map.of("error", "routeId is required"));
-            return;
-        }
         sendJson(exchange, 200, sessionStore.requestFacets(routeId));
     }
 

@@ -961,6 +961,14 @@ button.action-edit {
   gap: 8px;
   margin-bottom: 10px;
 }
+.request-all-routes-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
 .request-toolbar input[type="search"] {
   min-width: 0;
 }
