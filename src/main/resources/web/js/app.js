@@ -126,6 +126,14 @@ function initializeStaticButtonIcons() {
     title: 'Close dialog',
     ariaLabel: 'Close dialog'
   });
+  setButtonContent(document.getElementById('import-har-btn'), '', 'upload', {
+    title: 'Import HAR',
+    ariaLabel: 'Import HAR'
+  });
+  setButtonContent(document.getElementById('har-import-modal-close-btn'), '', 'close', {
+    title: 'Close dialog',
+    ariaLabel: 'Close dialog'
+  });
 }
 
 const THEME_STORAGE_KEY = 'tcpmon-theme-preference';
@@ -264,6 +272,27 @@ function bindUiEvents() {
   const requestBuilderCancelBtn = document.getElementById('request-builder-cancel-btn');
   if (requestBuilderCancelBtn) requestBuilderCancelBtn.addEventListener('click', () => closeRequestBuilderModal());
 
+  const importHarBtn = document.getElementById('import-har-btn');
+  if (importHarBtn) importHarBtn.addEventListener('click', () => openHarImportPicker());
+
+  const harImportFileInput = document.getElementById('har-import-file-input');
+  if (harImportFileInput) harImportFileInput.addEventListener('change', event => handleHarFileSelected(event));
+
+  const harImportModal = document.getElementById('har-import-modal');
+  if (harImportModal) {
+    harImportModal.addEventListener('click', event => {
+      if (event.target === harImportModal) {
+        closeHarImportModal();
+      }
+    });
+  }
+
+  const harImportModalCloseBtn = document.getElementById('har-import-modal-close-btn');
+  if (harImportModalCloseBtn) harImportModalCloseBtn.addEventListener('click', () => closeHarImportModal());
+
+  const harImportCancelBtn = document.getElementById('har-import-cancel-btn');
+  if (harImportCancelBtn) harImportCancelBtn.addEventListener('click', () => closeHarImportModal());
+
   const listenerTransport = document.getElementById('rm-listener-transport');
   if (listenerTransport) listenerTransport.addEventListener('change', event => toggleListenerTls(event.target.value));
 
@@ -352,6 +381,9 @@ function bindUiEvents() {
       case 'submit-request-builder':
         await submitRequestBuilder(actionEl.dataset.destination);
         break;
+      case 'select-har-entry':
+        selectHarEntry(Number(actionEl.dataset.entryIndex));
+        break;
       case 'save-session-notes':
         await saveSessionNotes();
         break;
@@ -416,6 +448,8 @@ function bindUiEvents() {
           closeReplayEditModal();
         } else if (modal.id === 'request-builder-modal') {
           closeRequestBuilderModal();
+        } else if (modal.id === 'har-import-modal') {
+          closeHarImportModal();
         }
       }
     }

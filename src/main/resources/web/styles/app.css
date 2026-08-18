@@ -2072,6 +2072,37 @@ tr.session-entry:focus-visible {
   max-width: 760px;
 }
 
+.har-import-modal-box {
+  width: min(560px, 100%);
+  max-width: 560px;
+}
+.har-import-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.har-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.har-entry-item {
+  text-align: left;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+.har-entry-item:hover {
+  background: var(--surface-2);
+}
+
 .modal-body {
   display: grid;
   gap: 2px;

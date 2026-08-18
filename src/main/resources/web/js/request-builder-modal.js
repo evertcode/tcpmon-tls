@@ -12,7 +12,7 @@ function populateRequestBuilderRoutes() {
   }));
 }
 
-function openRequestBuilderModal() {
+function openRequestBuilderModal(prefill) {
   populateRequestBuilderRoutes();
   const select = document.getElementById('rb-route-select');
   if (!select.options.length) {
@@ -22,12 +22,12 @@ function openRequestBuilderModal() {
 
   requestBuilderModalOpenerEl = document.activeElement;
 
-  document.getElementById('rb-method').value = 'GET';
-  document.getElementById('rb-path').value = '';
-  document.getElementById('rb-query').value = '';
-  document.getElementById('rb-version').value = 'HTTP/1.1';
-  document.getElementById('rb-headers').value = '';
-  document.getElementById('rb-body').value = '';
+  document.getElementById('rb-method').value = prefill?.method || 'GET';
+  document.getElementById('rb-path').value = prefill?.path || '';
+  document.getElementById('rb-query').value = prefill?.query || '';
+  document.getElementById('rb-version').value = prefill?.version || 'HTTP/1.1';
+  document.getElementById('rb-headers').value = prefill?.headersText || '';
+  document.getElementById('rb-body').value = prefill?.bodyText || '';
 
   const modal = document.getElementById('request-builder-modal');
   modal.style.display = 'flex';
