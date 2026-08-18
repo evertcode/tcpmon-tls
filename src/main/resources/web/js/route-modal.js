@@ -93,6 +93,8 @@ function openAddRouteModal() {
   document.getElementById('rm-target-insecure').checked = false;
   document.getElementById('rm-target-verify').checked = true;
   document.getElementById('rm-target-rewrite').checked = false;
+  document.getElementById('rm-request-delay').value = '';
+  document.getElementById('rm-response-delay').value = '';
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -158,6 +160,8 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-target-insecure').checked = !!route.target.insecureTrustAll;
   document.getElementById('rm-target-verify').checked = route.target.verifyHostname !== false;
   document.getElementById('rm-target-rewrite').checked = !!route.target.rewriteHostHeader;
+  document.getElementById('rm-request-delay').value = route.requestDelayMs || '';
+  document.getElementById('rm-response-delay').value = route.responseDelayMs || '';
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -245,7 +249,9 @@ function buildRoutePayload() {
       insecureTrustAll: document.getElementById('rm-target-insecure').checked,
       verifyHostname: document.getElementById('rm-target-verify').checked,
       rewriteHostHeader: document.getElementById('rm-target-rewrite').checked
-    }
+    },
+    requestDelayMs: Math.max(0, parseInt(document.getElementById('rm-request-delay').value, 10) || 0),
+    responseDelayMs: Math.max(0, parseInt(document.getElementById('rm-response-delay').value, 10) || 0)
   };
   if (listenerTransport === 'TLS') {
     const cert = tlsFieldVal('rm-listener-tls-cert');

@@ -47,7 +47,7 @@ import java.util.function.Consumer;
 public final class SessionStore implements AutoCloseable {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
-    private static final int SCHEMA_VERSION = 7;
+    private static final int SCHEMA_VERSION = 8;
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
 
@@ -739,6 +739,10 @@ public final class SessionStore implements AutoCloseable {
             migrateToVersion7();
             currentVersion = 7;
         }
+        if (currentVersion < 8) {
+            migrateToVersion8();
+            currentVersion = 8;
+        }
         if (currentVersion != SCHEMA_VERSION) {
             throw new IllegalStateException("Unsupported schema version: " + currentVersion);
         }
@@ -874,6 +878,21 @@ public final class SessionStore implements AutoCloseable {
             }
         }
         writeSchemaVersion(7);
+    }
+
+    private void migrateToVersion8() throws SQLException {
+        String[] cols = {
+            "request_delay_ms INTEGER NOT NULL DEFAULT 0",
+            "response_delay_ms INTEGER NOT NULL DEFAULT 0"
+        };
+        for (String col : cols) {
+            try (Statement st = connection.createStatement()) {
+                st.execute("ALTER TABLE routes ADD COLUMN " + col);
+            } catch (SQLException ignored) {
+                // column already exists
+            }
+        }
+        writeSchemaVersion(8);
     }
 
     private void createSessionExchangesTable() throws SQLException {
@@ -1640,8 +1659,9 @@ public final class SessionStore implements AutoCloseable {
                     target_tls_protocols, target_tls_ciphers,
                     listener_replay_tls_cert, listener_replay_tls_key, listener_replay_tls_keystore,
                     listener_replay_tls_keystore_password, listener_replay_tls_keystore_type,
-                    listener_replay_tls_truststore, listener_replay_tls_truststore_password, listener_replay_tls_truststore_type
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    listener_replay_tls_truststore, listener_replay_tls_truststore_password, listener_replay_tls_truststore_type,
+                    request_delay_ms, response_delay_ms
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)) {
             setRouteParams(statement, route);
             statement.executeUpdate();
@@ -1666,7 +1686,8 @@ public final class SessionStore implements AutoCloseable {
                     target_tls_protocols = ?, target_tls_ciphers = ?,
                     listener_replay_tls_cert = ?, listener_replay_tls_key = ?, listener_replay_tls_keystore = ?,
                     listener_replay_tls_keystore_password = ?, listener_replay_tls_keystore_type = ?,
-                    listener_replay_tls_truststore = ?, listener_replay_tls_truststore_password = ?, listener_replay_tls_truststore_type = ?
+                    listener_replay_tls_truststore = ?, listener_replay_tls_truststore_password = ?, listener_replay_tls_truststore_type = ?,
+                    request_delay_ms = ?, response_delay_ms = ?
                 where id = ?
                 """)) {
             statement.setString(1, route.listener().host());
@@ -1687,7 +1708,9 @@ public final class SessionStore implements AutoCloseable {
             setStringListParam(statement, 30, route.target().enabledProtocols());
             setStringListParam(statement, 31, route.target().enabledCiphers());
             setTlsMaterialParams(statement, 32, route.listener().replayIdentity());
-            statement.setString(40, route.id());
+            statement.setInt(40, route.requestDelayMs());
+            statement.setInt(41, route.responseDelayMs());
+            statement.setString(42, route.id());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to update route " + route.id(), exception);
@@ -1723,6 +1746,8 @@ public final class SessionStore implements AutoCloseable {
         setStringListParam(statement, 31, route.target().enabledProtocols());
         setStringListParam(statement, 32, route.target().enabledCiphers());
         setTlsMaterialParams(statement, 33, route.listener().replayIdentity());
+        statement.setInt(41, route.requestDelayMs());
+        statement.setInt(42, route.responseDelayMs());
     }
 
     private static void setNullableString(PreparedStatement st, int index, String value) throws SQLException {
@@ -1797,7 +1822,8 @@ public final class SessionStore implements AutoCloseable {
                 readTlsMaterial(resultSet, "target"),
                 readStringListColumn(resultSet, "target_tls_protocols"),
                 readStringListColumn(resultSet, "target_tls_ciphers"));
-        return new RouteConfig(resultSet.getString("id"), listener, target);
+        return new RouteConfig(resultSet.getString("id"), listener, target,
+                resultSet.getInt("request_delay_ms"), resultSet.getInt("response_delay_ms"));
     }
 
     private TlsMaterial readTlsMaterial(ResultSet rs, String prefix) throws SQLException {

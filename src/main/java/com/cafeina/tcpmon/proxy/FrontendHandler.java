@@ -25,6 +25,7 @@ import java.net.InetSocketAddress;
 import java.security.cert.Certificate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 final class FrontendHandler extends ChannelInboundHandlerAdapter {
     private static final Logger log = LoggerFactory.getLogger(FrontendHandler.class);
@@ -123,13 +124,23 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                     outboundPayload,
                     null,
                     Map.of("intercepted", false, "hostRewritten", rewriteResult.rewritten()));
-            outboundChannel.writeAndFlush(Unpooled.wrappedBuffer(outboundPayload));
+            if (route.requestDelayMs() > 0) {
+                context.executor().schedule(
+                        () -> outboundChannel.writeAndFlush(Unpooled.wrappedBuffer(outboundPayload)),
+                        route.requestDelayMs(), TimeUnit.MILLISECONDS);
+            } else {
+                outboundChannel.writeAndFlush(Unpooled.wrappedBuffer(outboundPayload));
+            }
         }
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext context) {
-        closeOnFlush(outboundChannel);
+        if (route.requestDelayMs() > 0) {
+            context.executor().schedule(() -> closeOnFlush(outboundChannel), route.requestDelayMs(), TimeUnit.MILLISECONDS);
+        } else {
+            closeOnFlush(outboundChannel);
+        }
         if (sessionId != null) {
             sessionStore.closeSessionAsync(sessionId, "CLIENT_CLOSED");
             log.debug("Client disconnected routeId={} sessionId={}", route.id(), sessionId);
@@ -203,7 +214,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
             if (outboundSslContext != null) {
                 channel.pipeline().addLast("ssl", TlsContextFactory.newClientHandler(route, outboundSslContext, channel.alloc()));
             }
-            channel.pipeline().addLast("backend", new BackendHandler(inboundChannel, sessionId, config, sessionStore));
+            channel.pipeline().addLast("backend", new BackendHandler(inboundChannel, sessionId, config, route, sessionStore));
         }
     }
 }

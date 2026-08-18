@@ -298,6 +298,19 @@
           </div>
         </div>
 
+        <div class="form-section-hdr">Simulation</div>
+        <div class="section-note">Optional artificial delay to simulate a slow network. Only applies to non-intercepted (immediate-forward) traffic.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="rm-request-delay">Request delay (ms) <span class="label-hint">(client → target)</span></label>
+            <input type="number" id="rm-request-delay" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label for="rm-response-delay">Response delay (ms) <span class="label-hint">(target → client)</span></label>
+            <input type="number" id="rm-response-delay" placeholder="0" min="0">
+          </div>
+        </div>
+
         <div class="modal-actions" id="route-modal-actions">
           <button id="route-modal-cancel-btn" class="secondary">Cancel</button>
           <button id="route-modal-save-btn" class="primary">Save</button>

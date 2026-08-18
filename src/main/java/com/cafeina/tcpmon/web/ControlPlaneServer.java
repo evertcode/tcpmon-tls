@@ -686,7 +686,9 @@ public final class ControlPlaneServer implements AutoCloseable {
                 listenerProtocols, listenerCiphers, replayIdentity);
         TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, targetTls,
                 targetProtocols, targetCiphers);
-        return new RouteConfig(id, listener, target);
+        int requestDelayMs = Math.max(0, body.path("requestDelayMs").asInt(0));
+        int responseDelayMs = Math.max(0, body.path("responseDelayMs").asInt(0));
+        return new RouteConfig(id, listener, target, requestDelayMs, responseDelayMs);
     }
 
     private static List<String> parseStringList(JsonNode node, String field) {
@@ -760,6 +762,8 @@ public final class ControlPlaneServer implements AutoCloseable {
         for (var route : registry.routes()) {
             Map<String, Object> routeMap = new LinkedHashMap<>();
             routeMap.put("id", route.id());
+            routeMap.put("requestDelayMs", route.requestDelayMs());
+            routeMap.put("responseDelayMs", route.responseDelayMs());
             Map<String, Object> listener = new LinkedHashMap<>();
             listener.put("host", route.listener().host());
             listener.put("port", route.listener().port());
@@ -839,7 +843,9 @@ public final class ControlPlaneServer implements AutoCloseable {
                         updated.target().rewriteHostHeader(),
                         mergeTlsMaterial(original.target().tlsMaterial(), updated.target().tlsMaterial()),
                         updated.target().enabledProtocols(),
-                        updated.target().enabledCiphers()));
+                        updated.target().enabledCiphers()),
+                updated.requestDelayMs(),
+                updated.responseDelayMs());
     }
 
     static TlsMaterial mergeTlsMaterial(TlsMaterial original, TlsMaterial updated) {

@@ -2,6 +2,7 @@ package com.cafeina.tcpmon.proxy;
 
 import com.cafeina.tcpmon.Direction;
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.session.PendingPayload;
 import com.cafeina.tcpmon.session.SessionStore;
 import io.netty.buffer.ByteBuf;
@@ -17,18 +18,21 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 import java.security.cert.Certificate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 final class BackendHandler extends ChannelInboundHandlerAdapter {
     private static final Logger log = LoggerFactory.getLogger(BackendHandler.class);
     private final Channel inboundChannel;
     private final String sessionId;
     private final ProxyConfig config;
+    private final RouteConfig route;
     private final SessionStore sessionStore;
 
-    BackendHandler(Channel inboundChannel, String sessionId, ProxyConfig config, SessionStore sessionStore) {
+    BackendHandler(Channel inboundChannel, String sessionId, ProxyConfig config, RouteConfig route, SessionStore sessionStore) {
         this.inboundChannel = inboundChannel;
         this.sessionId = sessionId;
         this.config = config;
+        this.route = route;
         this.sessionStore = sessionStore;
     }
 
@@ -61,13 +65,25 @@ final class BackendHandler extends ChannelInboundHandlerAdapter {
             sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, payload, pendingPayload.pendingId(), Map.of("intercepted", true));
         } else {
             sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, payload, null, Map.of("intercepted", false));
-            inboundChannel.writeAndFlush(Unpooled.wrappedBuffer(payload));
+            if (route.responseDelayMs() > 0) {
+                context.executor().schedule(
+                        () -> inboundChannel.writeAndFlush(Unpooled.wrappedBuffer(payload)),
+                        route.responseDelayMs(), TimeUnit.MILLISECONDS);
+            } else {
+                inboundChannel.writeAndFlush(Unpooled.wrappedBuffer(payload));
+            }
         }
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext context) {
-        FrontendHandler.closeOnFlush(inboundChannel);
+        if (route.responseDelayMs() > 0) {
+            context.executor().schedule(
+                    () -> FrontendHandler.closeOnFlush(inboundChannel),
+                    route.responseDelayMs(), TimeUnit.MILLISECONDS);
+        } else {
+            FrontendHandler.closeOnFlush(inboundChannel);
+        }
     }
 
     @Override
