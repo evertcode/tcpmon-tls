@@ -68,6 +68,8 @@ function openAddRouteModal() {
   document.getElementById('rm-listener-tls-truststore-pwd').value = '';
   document.getElementById('rm-listener-tls-truststore-type').value = 'PKCS12';
   document.getElementById('rm-listener-client-auth').value = 'NONE';
+  document.getElementById('rm-listener-tls-protocols').value = '';
+  document.getElementById('rm-listener-tls-ciphers').value = '';
   document.getElementById('rm-target-host').value = '';
   document.getElementById('rm-target-port').value = '';
   document.getElementById('rm-target-transport').value = 'PLAIN';
@@ -80,6 +82,8 @@ function openAddRouteModal() {
   document.getElementById('rm-target-tls-truststore').value = '';
   document.getElementById('rm-target-tls-truststore-pwd').value = '';
   document.getElementById('rm-target-tls-truststore-type').value = 'PKCS12';
+  document.getElementById('rm-target-tls-protocols').value = '';
+  document.getElementById('rm-target-tls-ciphers').value = '';
   document.getElementById('rm-target-sni').value = '';
   document.getElementById('rm-target-insecure').checked = false;
   document.getElementById('rm-target-verify').checked = true;
@@ -119,6 +123,8 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-listener-tls-truststore-pwd').placeholder = route.listener.tlsTruststorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
   document.getElementById('rm-listener-tls-truststore-type').value = route.listener.tlsTruststoreType || 'PKCS12';
   document.getElementById('rm-listener-client-auth').value = route.listener.clientAuth || 'NONE';
+  document.getElementById('rm-listener-tls-protocols').value = (route.listener.tlsProtocols || []).join(',');
+  document.getElementById('rm-listener-tls-ciphers').value = (route.listener.tlsCiphers || []).join(',');
   document.getElementById('rm-target-host').value = route.target.host || '';
   document.getElementById('rm-target-port').value = route.target.port || '';
   const targetTransport = route.target.transport || 'PLAIN';
@@ -134,6 +140,8 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-target-tls-truststore-pwd').value = '';
   document.getElementById('rm-target-tls-truststore-pwd').placeholder = route.target.tlsTruststorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
   document.getElementById('rm-target-tls-truststore-type').value = route.target.tlsTruststoreType || 'PKCS12';
+  document.getElementById('rm-target-tls-protocols').value = (route.target.tlsProtocols || []).join(',');
+  document.getElementById('rm-target-tls-ciphers').value = (route.target.tlsCiphers || []).join(',');
   document.getElementById('rm-target-sni').value = route.target.sniHost || '';
   document.getElementById('rm-target-insecure').checked = !!route.target.insecureTrustAll;
   document.getElementById('rm-target-verify').checked = route.target.verifyHostname !== false;
@@ -187,6 +195,10 @@ function tlsFieldVal(id) {
   return v || undefined;
 }
 
+function parseCsvList(value) {
+  return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 function secretFieldVal(id, preserveExisting) {
   const field = document.getElementById(id);
   const value = field.value.trim();
@@ -238,6 +250,10 @@ function buildRoutePayload() {
     if (tsPwd) payload.listener.tlsTruststorePassword = tsPwd;
     if (tsType) payload.listener.tlsTruststoreType = tsType;
     payload.listener.clientAuth = document.getElementById('rm-listener-client-auth').value;
+    const listenerProtocols = parseCsvList(document.getElementById('rm-listener-tls-protocols').value);
+    if (listenerProtocols.length) payload.listener.tlsProtocols = listenerProtocols;
+    const listenerCiphers = parseCsvList(document.getElementById('rm-listener-tls-ciphers').value);
+    if (listenerCiphers.length) payload.listener.tlsCiphers = listenerCiphers;
   }
   if (targetTransport === 'TLS') {
     const cert = tlsFieldVal('rm-target-tls-cert');
@@ -256,6 +272,10 @@ function buildRoutePayload() {
     if (ts) payload.target.tlsTruststore = ts;
     if (tsPwd) payload.target.tlsTruststorePassword = tsPwd;
     if (tsType) payload.target.tlsTruststoreType = tsType;
+    const targetProtocols = parseCsvList(document.getElementById('rm-target-tls-protocols').value);
+    if (targetProtocols.length) payload.target.tlsProtocols = targetProtocols;
+    const targetCiphers = parseCsvList(document.getElementById('rm-target-tls-ciphers').value);
+    if (targetCiphers.length) payload.target.tlsCiphers = targetCiphers;
   }
   return payload;
 }

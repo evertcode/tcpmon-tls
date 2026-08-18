@@ -384,7 +384,7 @@ class SessionStoreTest {
              Statement statement = connection.createStatement()) {
             try (ResultSet version = statement.executeQuery("pragma user_version")) {
                 assertTrue(version.next());
-                assertEquals(3, version.getInt(1));
+                assertEquals(6, version.getInt(1));
             }
             try (ResultSet columns = statement.executeQuery("pragma table_info(routes)")) {
                 List<String> names = new java.util.ArrayList<>();
@@ -393,6 +393,17 @@ class SessionStoreTest {
                 }
                 assertTrue(names.contains("listener_tls_cert"));
                 assertTrue(names.contains("target_tls_truststore_password"));
+                assertTrue(names.contains("listener_tls_protocols"));
+                assertTrue(names.contains("listener_tls_ciphers"));
+                assertTrue(names.contains("target_tls_protocols"));
+                assertTrue(names.contains("target_tls_ciphers"));
+            }
+            try (ResultSet columns = statement.executeQuery("pragma table_info(sessions)")) {
+                List<String> names = new java.util.ArrayList<>();
+                while (columns.next()) {
+                    names.add(columns.getString("name"));
+                }
+                assertTrue(names.contains("notes"));
             }
             try (ResultSet exchangeTable = statement.executeQuery("""
                     select 1

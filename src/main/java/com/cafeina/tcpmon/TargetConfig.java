@@ -1,5 +1,7 @@
 package com.cafeina.tcpmon;
 
+import java.util.List;
+
 public record TargetConfig(
         String host,
         int port,
@@ -8,5 +10,7 @@ public record TargetConfig(
         boolean insecureTrustAll,
         boolean verifyHostname,
         boolean rewriteHostHeader,
-        TlsMaterial tlsMaterial) {
+        TlsMaterial tlsMaterial,
+        List<String> enabledProtocols,
+        List<String> enabledCiphers) {
 }

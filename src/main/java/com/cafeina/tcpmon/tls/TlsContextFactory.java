@@ -45,7 +45,8 @@ public final class TlsContextFactory {
             throw new IllegalArgumentException("TLS listener requires --listen-cert/--listen-key or --listen-keystore");
         }
 
-        applySharedSettings(builder, config.enabledProtocols(), config.enabledCiphers());
+        applySharedSettings(builder, listener.enabledProtocols(), listener.enabledCiphers(),
+                config.enabledProtocols(), config.enabledCiphers());
         if (material.trustStoreFile() != null) {
             if (isPem(material.trustStoreFile())) {
                 builder.trustManager(material.trustStoreFile().toFile());
@@ -67,7 +68,8 @@ public final class TlsContextFactory {
     public static SslContext buildClientContext(ProxyConfig config, TargetConfig target) throws GeneralSecurityException, IOException {
         TlsMaterial material = target.tlsMaterial();
         SslContextBuilder builder = SslContextBuilder.forClient();
-        applySharedSettings(builder, config.enabledProtocols(), config.enabledCiphers());
+        applySharedSettings(builder, target.enabledProtocols(), target.enabledCiphers(),
+                config.enabledProtocols(), config.enabledCiphers());
         if (material != null) {
             if (material.certificateFile() != null && material.privateKeyFile() != null) {
                 builder.keyManager(material.certificateFile().toFile(), material.privateKeyFile().toFile());
@@ -112,7 +114,11 @@ public final class TlsContextFactory {
         return handler;
     }
 
-    private static void applySharedSettings(SslContextBuilder builder, List<String> protocols, List<String> ciphers) {
+    private static void applySharedSettings(SslContextBuilder builder,
+            List<String> routeProtocols, List<String> routeCiphers,
+            List<String> globalProtocols, List<String> globalCiphers) {
+        List<String> protocols = routeProtocols.isEmpty() ? globalProtocols : routeProtocols;
+        List<String> ciphers = routeCiphers.isEmpty() ? globalCiphers : routeCiphers;
         if (!protocols.isEmpty()) {
             builder.protocols(protocols.toArray(String[]::new));
         }

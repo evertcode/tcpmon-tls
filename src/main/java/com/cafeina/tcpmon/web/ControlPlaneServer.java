@@ -676,10 +676,27 @@ public final class ControlPlaneServer implements AutoCloseable {
 
         TlsMaterial listenerTls = parseTlsMaterial(listenerNode);
         TlsMaterial targetTls = parseTlsMaterial(targetNode);
+        List<String> listenerProtocols = parseStringList(listenerNode, "tlsProtocols");
+        List<String> listenerCiphers = parseStringList(listenerNode, "tlsCiphers");
+        List<String> targetProtocols = parseStringList(targetNode, "tlsProtocols");
+        List<String> targetCiphers = parseStringList(targetNode, "tlsCiphers");
 
-        ListenerConfig listener = new ListenerConfig(listenerHost, listenerPort, listenerTransport, clientAuth, listenerTls);
-        TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, targetTls);
+        ListenerConfig listener = new ListenerConfig(listenerHost, listenerPort, listenerTransport, clientAuth, listenerTls,
+                listenerProtocols, listenerCiphers);
+        TargetConfig target = new TargetConfig(targetHost, targetPort, targetTransport, sniHost, insecureTrustAll, verifyHostname, rewriteHostHeader, targetTls,
+                targetProtocols, targetCiphers);
         return new RouteConfig(id, listener, target);
+    }
+
+    private static List<String> parseStringList(JsonNode node, String field) {
+        JsonNode arr = node.path(field);
+        if (!arr.isArray()) return List.of();
+        List<String> result = new ArrayList<>();
+        for (JsonNode item : arr) {
+            String v = item.asText("").trim();
+            if (!v.isBlank()) result.add(v);
+        }
+        return result;
     }
 
     private static void validateHostname(String hostname, String fieldName) {
@@ -748,6 +765,8 @@ public final class ControlPlaneServer implements AutoCloseable {
             listener.put("transport", route.listener().transportMode().name());
             listener.put("clientAuth", route.listener().clientAuthMode().name());
             putTlsMaterial(listener, route.listener().tlsMaterial());
+            listener.put("tlsProtocols", route.listener().enabledProtocols());
+            listener.put("tlsCiphers", route.listener().enabledCiphers());
             routeMap.put("listener", listener);
             Map<String, Object> target = new LinkedHashMap<>();
             target.put("host", route.target().host());
@@ -758,6 +777,8 @@ public final class ControlPlaneServer implements AutoCloseable {
             target.put("verifyHostname", route.target().verifyHostname());
             target.put("rewriteHostHeader", route.target().rewriteHostHeader());
             putTlsMaterial(target, route.target().tlsMaterial());
+            target.put("tlsProtocols", route.target().enabledProtocols());
+            target.put("tlsCiphers", route.target().enabledCiphers());
             routeMap.put("target", target);
             routes.add(routeMap);
         }
@@ -800,7 +821,9 @@ public final class ControlPlaneServer implements AutoCloseable {
                         updated.listener().port(),
                         updated.listener().transportMode(),
                         updated.listener().clientAuthMode(),
-                        mergeTlsMaterial(original.listener().tlsMaterial(), updated.listener().tlsMaterial())),
+                        mergeTlsMaterial(original.listener().tlsMaterial(), updated.listener().tlsMaterial()),
+                        updated.listener().enabledProtocols(),
+                        updated.listener().enabledCiphers()),
                 new TargetConfig(
                         updated.target().host(),
                         updated.target().port(),
@@ -809,7 +832,9 @@ public final class ControlPlaneServer implements AutoCloseable {
                         updated.target().insecureTrustAll(),
                         updated.target().verifyHostname(),
                         updated.target().rewriteHostHeader(),
-                        mergeTlsMaterial(original.target().tlsMaterial(), updated.target().tlsMaterial())));
+                        mergeTlsMaterial(original.target().tlsMaterial(), updated.target().tlsMaterial()),
+                        updated.target().enabledProtocols(),
+                        updated.target().enabledCiphers()));
     }
 
     static TlsMaterial mergeTlsMaterial(TlsMaterial original, TlsMaterial updated) {

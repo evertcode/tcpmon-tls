@@ -26,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ReplayServiceTest {
     @Test
     void resolvesListenerEndpointForRecaptureMode() {
-        ListenerConfig listener = new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls());
-        TargetConfig target = new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", true, false, false, emptyTls());
+        ListenerConfig listener = new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls(), List.of(), List.of());
+        TargetConfig target = new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", true, false, false, emptyTls(), List.of(), List.of());
         RouteConfig route = new RouteConfig("default", listener, target);
         ProxyConfig config = replayServiceConfig();
         ReplayService replayService = new ReplayService(config, new RouteRegistry(List.of(route), null));
@@ -53,8 +53,8 @@ class ReplayServiceTest {
                 }
             });
 
-            ListenerConfig listener = new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls());
-            TargetConfig target = new TargetConfig("127.0.0.1", serverSocket.getLocalPort(), TransportMode.PLAIN, null, false, false, false, emptyTls());
+            ListenerConfig listener = new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls(), List.of(), List.of());
+            TargetConfig target = new TargetConfig("127.0.0.1", serverSocket.getLocalPort(), TransportMode.PLAIN, null, false, false, false, emptyTls(), List.of(), List.of());
             RouteConfig route = new RouteConfig("default", listener, target);
             ProxyConfig cfg = replayServiceConfig();
             ReplayService replayService = new ReplayService(cfg, new RouteRegistry(List.of(route), null));

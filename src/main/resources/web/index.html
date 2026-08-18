@@ -162,6 +162,16 @@
               <option value="REQUIRE">Require</option>
             </select>
           </div>
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group">
+              <label for="rm-listener-tls-protocols">TLS protocols <span class="label-hint">(comma-separated, e.g. TLSv1.2,TLSv1.3)</span></label>
+              <input type="text" id="rm-listener-tls-protocols" placeholder="uses global default">
+            </div>
+            <div class="form-group">
+              <label for="rm-listener-tls-ciphers">Cipher suites <span class="label-hint">(comma-separated)</span></label>
+              <input type="text" id="rm-listener-tls-ciphers" placeholder="uses global default">
+            </div>
+          </div>
         </div>
 
         <div class="form-section-hdr">Target</div>
@@ -245,6 +255,16 @@
                 <option value="PKCS12">PKCS12</option>
                 <option value="JKS">JKS</option>
               </select>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:10px;">
+            <div class="form-group">
+              <label for="rm-target-tls-protocols">TLS protocols <span class="label-hint">(comma-separated, e.g. TLSv1.2,TLSv1.3)</span></label>
+              <input type="text" id="rm-target-tls-protocols" placeholder="uses global default">
+            </div>
+            <div class="form-group">
+              <label for="rm-target-tls-ciphers">Cipher suites <span class="label-hint">(comma-separated)</span></label>
+              <input type="text" id="rm-target-tls-ciphers" placeholder="uses global default">
             </div>
           </div>
         </div>

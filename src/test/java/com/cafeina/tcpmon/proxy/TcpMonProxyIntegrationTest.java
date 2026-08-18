@@ -54,8 +54,8 @@ class TcpMonProxyIntegrationTest {
              SessionStore store = new SessionStore(tempDir.resolve("plain-sessions"), JsonSupport.objectMapper())) {
             int proxyPort = freePort();
             RouteConfig route = new RouteConfig("default",
-                    new ListenerConfig("127.0.0.1", proxyPort, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls()),
-                    new TargetConfig("127.0.0.1", echoServer.port(), TransportMode.PLAIN, null, false, false, false, emptyTls()));
+                    new ListenerConfig("127.0.0.1", proxyPort, TransportMode.PLAIN, ClientAuthMode.NONE, emptyTls(), List.of(), List.of()),
+                    new TargetConfig("127.0.0.1", echoServer.port(), TransportMode.PLAIN, null, false, false, false, emptyTls(), List.of(), List.of()));
             ProxyConfig config = new ProxyConfig(
                     new UiConfig("127.0.0.1", 0, false, null, null),
                     tempDir.resolve("plain-sessions"),
@@ -100,7 +100,9 @@ class TcpMonProxyIntegrationTest {
                                     null,
                                     null,
                                     "PKCS12",
-                                    "PKCS12")),
+                                    "PKCS12"),
+                            List.of(),
+                            List.of()),
                     new TargetConfig(
                             "127.0.0.1",
                             echoServer.port(),
@@ -117,7 +119,9 @@ class TcpMonProxyIntegrationTest {
                                     backendCertificate.certificate().toPath(),
                                     null,
                                     "PKCS12",
-                                    "PKCS12")));
+                                    "PKCS12"),
+                            List.of(),
+                            List.of()));
             ProxyConfig config = new ProxyConfig(
                     new UiConfig("127.0.0.1", 0, false, null, null),
                     tempDir.resolve("tls-sessions"),
