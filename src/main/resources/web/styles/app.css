@@ -1581,11 +1581,12 @@ pre {
 
 .route-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px;
   border-radius: 8px;
   padding: 10px;
+  position: relative;
 }
 
 .route-row-select {
@@ -1673,6 +1674,47 @@ tr.session-entry:focus-visible {
 
 .route-perf-line {
   font-family: var(--sans);
+}
+
+.route-drag-handle {
+  align-self: center;
+  cursor: grab;
+  -webkit-user-drag: element;
+  user-select: none;
+  touch-action: none;
+  opacity: 0.5;
+}
+
+.route-row:hover .route-drag-handle,
+.route-row:focus-within .route-drag-handle {
+  opacity: 1;
+}
+
+.route-drag-handle:active {
+  cursor: grabbing;
+}
+
+.route-row.dragging {
+  opacity: 0.45;
+}
+
+.route-row.drag-over-before::before,
+.route-row.drag-over-after::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.route-row.drag-over-before::before {
+  top: -5px;
+}
+
+.route-row.drag-over-after::after {
+  bottom: -5px;
 }
 
 .route-perf-errors {

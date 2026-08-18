@@ -166,6 +166,14 @@ function bindUiEvents() {
   const routeSearch = document.getElementById('route-search');
   if (routeSearch) routeSearch.addEventListener('input', () => renderRouteList());
 
+  const routesContainer = document.getElementById('routes');
+  if (routesContainer) {
+    routesContainer.addEventListener('dragstart', handleRouteDragStart);
+    routesContainer.addEventListener('dragover', handleRouteDragOver);
+    routesContainer.addEventListener('drop', handleRouteDrop);
+    routesContainer.addEventListener('dragend', handleRouteDragEnd);
+  }
+
   const refreshRoutesBtn = document.getElementById('refresh-routes-btn');
   if (refreshRoutesBtn) refreshRoutesBtn.addEventListener('click', () => refreshSessions(true));
 
@@ -338,7 +346,15 @@ function bindUiEvents() {
       }
     }
     if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !modal) {
-      moveListFocus(event, '.route-row-select') || moveListFocus(event, 'tr.session-entry');
+      if (event.altKey) {
+        const row = event.target.closest('.route-row');
+        if (row) {
+          event.preventDefault();
+          moveRouteOrderByKeyboard(row.dataset.routeId, event.key === 'ArrowDown');
+        }
+      } else {
+        moveListFocus(event, '.route-row-select') || moveListFocus(event, 'tr.session-entry');
+      }
     }
   });
 
@@ -660,5 +676,6 @@ async function clearRequestFilters() {
 
 bindUiEvents();
 initializeTheme();
+initializeRouteOrder();
 initializeStaticButtonIcons();
 initApp();

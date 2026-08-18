@@ -32,6 +32,137 @@ function groupedRoutes() {
   return [...map.values()].sort((a, b) => a.routeId.localeCompare(b.routeId));
 }
 
+const ROUTE_ORDER_STORAGE_KEY = 'tcpmon-route-order';
+
+function getStoredRouteOrder() {
+  try {
+    const raw = localStorage.getItem(ROUTE_ORDER_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function initializeRouteOrder() {
+  setState('routeOrder', getStoredRouteOrder());
+}
+
+function persistRouteOrder(order) {
+  setState('routeOrder', order);
+  try {
+    localStorage.setItem(ROUTE_ORDER_STORAGE_KEY, JSON.stringify(order));
+  } catch (error) {
+    // Ignore storage failures; in-memory order still applies for this session.
+  }
+}
+
+function applyRouteOrder(routes) {
+  const storedOrder = getState('routeOrder') || [];
+  const orderIndex = new Map(storedOrder.map((id, index) => [id, index]));
+  const known = routes
+    .filter(r => orderIndex.has(r.routeId))
+    .sort((a, b) => orderIndex.get(a.routeId) - orderIndex.get(b.routeId));
+  const unknown = routes
+    .filter(r => !orderIndex.has(r.routeId))
+    .sort((a, b) => a.routeId.localeCompare(b.routeId));
+  const merged = [...known, ...unknown];
+
+  // Only reconcile (prune stale ids / append new ones) once proxyConfig has
+  // loaded — before that, `routes` is an incomplete transient snapshot and
+  // must not be treated as authoritative, or the stored order gets wiped.
+  if (getState('proxyConfig')) {
+    const reconciledIds = merged.map(r => r.routeId);
+    const changed = reconciledIds.length !== storedOrder.length
+      || reconciledIds.some((id, i) => id !== storedOrder[i]);
+    if (changed) {
+      persistRouteOrder(reconciledIds);
+    }
+  }
+  return merged;
+}
+
+let draggedRouteId = null;
+
+function reorderRoutes(draggedId, targetRouteId, placeAfter) {
+  if (!draggedId || draggedId === targetRouteId) return;
+  const order = (getState('routeOrder') || []).slice();
+  const fromIndex = order.indexOf(draggedId);
+  if (fromIndex !== -1) order.splice(fromIndex, 1);
+  const targetIndex = order.indexOf(targetRouteId);
+  if (targetIndex === -1) {
+    order.push(draggedId);
+  } else {
+    order.splice(targetIndex + (placeAfter ? 1 : 0), 0, draggedId);
+  }
+  persistRouteOrder(order);
+  renderRouteList();
+}
+
+function clearRouteDragIndicators() {
+  document.querySelectorAll('.route-row.drag-over-before, .route-row.drag-over-after')
+    .forEach(el => el.classList.remove('drag-over-before', 'drag-over-after'));
+}
+
+function handleRouteDragStart(event) {
+  const handle = event.target.closest('.route-drag-handle');
+  if (!handle) return;
+  const row = handle.closest('.route-row');
+  if (!row) return;
+  draggedRouteId = row.dataset.routeId;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', draggedRouteId);
+  try {
+    event.dataTransfer.setDragImage(row, 16, 16);
+  } catch (error) {
+    // Some browsers may reject a custom drag image; fall back to default.
+  }
+  row.classList.add('dragging');
+}
+
+function handleRouteDragOver(event) {
+  if (!draggedRouteId) return;
+  const row = event.target.closest('.route-row');
+  if (!row || row.dataset.routeId === draggedRouteId) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  clearRouteDragIndicators();
+  const rect = row.getBoundingClientRect();
+  const placeAfter = event.clientY - rect.top > rect.height / 2;
+  row.classList.add(placeAfter ? 'drag-over-after' : 'drag-over-before');
+}
+
+function handleRouteDrop(event) {
+  if (!draggedRouteId) return;
+  const row = event.target.closest('.route-row');
+  clearRouteDragIndicators();
+  if (row && row.dataset.routeId !== draggedRouteId) {
+    event.preventDefault();
+    const rect = row.getBoundingClientRect();
+    const placeAfter = event.clientY - rect.top > rect.height / 2;
+    reorderRoutes(draggedRouteId, row.dataset.routeId, placeAfter);
+  }
+  draggedRouteId = null;
+}
+
+function handleRouteDragEnd() {
+  draggedRouteId = null;
+  clearRouteDragIndicators();
+  const draggingRow = document.querySelector('.route-row.dragging');
+  if (draggingRow) draggingRow.classList.remove('dragging');
+}
+
+function moveRouteOrderByKeyboard(routeId, moveDown) {
+  const rows = [...document.querySelectorAll('.route-row')];
+  const index = rows.findIndex(r => r.dataset.routeId === routeId);
+  const targetRow = rows[index + (moveDown ? 1 : -1)];
+  if (!targetRow) return;
+  reorderRoutes(routeId, targetRow.dataset.routeId, moveDown);
+  requestAnimationFrame(() => {
+    document.querySelector(`.route-row-select[data-route-id="${CSS.escape(routeId)}"]`)?.focus();
+  });
+}
+
 function filteredRoutes() {
   const query = document.getElementById('route-search').value.trim().toLowerCase();
   const sessionRoutes = groupedRoutes();
@@ -51,7 +182,7 @@ function filteredRoutes() {
       avgDurationMs: null,
       errorCount: 0
     }));
-  const all = [...sessionRoutes, ...configOnly].sort((a, b) => a.routeId.localeCompare(b.routeId));
+  const all = applyRouteOrder([...sessionRoutes, ...configOnly]);
   return all.filter(route => {
     if (!query) return true;
     return [route.routeId, route.targetAddress, route.clientAddress].join(' ').toLowerCase().includes(query);
@@ -382,8 +513,22 @@ function buildRouteListItem(route, selectedRouteId) {
 
   side.appendChild(buildRouteActions(route.routeId));
 
-  row.append(select, side);
+  row.append(buildRouteDragHandle(route.routeId), select, side);
   return row;
+}
+
+function buildRouteDragHandle(routeId) {
+  const handle = document.createElement('button');
+  handle.type = 'button';
+  handle.className = 'utility icon-only route-drag-handle';
+  handle.draggable = true;
+  handle.dataset.routeId = routeId;
+  setButtonContent(handle, '', 'grip', {
+    title: 'Drag to reorder',
+    ariaLabel: `Reorder route "${routeId}"`
+  });
+  handle.addEventListener('click', event => event.stopPropagation());
+  return handle;
 }
 
 function buildRouteActions(routeId) {
