@@ -690,8 +690,14 @@ public final class ControlPlaneServer implements AutoCloseable {
         int responseDelayMs = Math.max(0, body.path("responseDelayMs").asInt(0));
         String interceptMethod = nullIfBlank(body.path("interceptMethod").asText(null));
         String interceptPathContains = nullIfBlank(body.path("interceptPathContains").asText(null));
+        int mockStatusCode = Math.max(0, body.path("mockStatusCode").asInt(0));
+        String mockMethod = nullIfBlank(body.path("mockMethod").asText(null));
+        String mockPathContains = nullIfBlank(body.path("mockPathContains").asText(null));
+        String mockHeaders = nullIfBlank(body.path("mockHeaders").asText(null));
+        String mockBody = nullIfBlank(body.path("mockBody").asText(null));
         return new RouteConfig(id, listener, target, requestDelayMs, responseDelayMs,
-                interceptMethod, interceptPathContains);
+                interceptMethod, interceptPathContains,
+                mockStatusCode, mockMethod, mockPathContains, mockHeaders, mockBody);
     }
 
     private static List<String> parseStringList(JsonNode node, String field) {
@@ -769,6 +775,11 @@ public final class ControlPlaneServer implements AutoCloseable {
             routeMap.put("responseDelayMs", route.responseDelayMs());
             routeMap.put("interceptMethod", route.interceptMethod());
             routeMap.put("interceptPathContains", route.interceptPathContains());
+            routeMap.put("mockStatusCode", route.mockStatusCode());
+            routeMap.put("mockMethod", route.mockMethod());
+            routeMap.put("mockPathContains", route.mockPathContains());
+            routeMap.put("mockHeaders", route.mockHeaders());
+            routeMap.put("mockBody", route.mockBody());
             Map<String, Object> listener = new LinkedHashMap<>();
             listener.put("host", route.listener().host());
             listener.put("port", route.listener().port());
@@ -852,7 +863,12 @@ public final class ControlPlaneServer implements AutoCloseable {
                 updated.requestDelayMs(),
                 updated.responseDelayMs(),
                 updated.interceptMethod(),
-                updated.interceptPathContains());
+                updated.interceptPathContains(),
+                updated.mockStatusCode(),
+                updated.mockMethod(),
+                updated.mockPathContains(),
+                updated.mockHeaders(),
+                updated.mockBody());
     }
 
     static TlsMaterial mergeTlsMaterial(TlsMaterial original, TlsMaterial updated) {

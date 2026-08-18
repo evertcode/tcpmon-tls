@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.Certificate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -76,7 +77,12 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECT_FAILED", Map.of("error", future.cause().toString()));
                 log.warn("Target connection failed routeId={} sessionId={} target={}:{} error={}",
                         route.id(), sessionId, route.target().host(), route.target().port(), future.cause().toString());
-                inboundChannel.close();
+                if (route.mockStatusCode() > 0) {
+                    inboundChannel.config().setAutoRead(true);
+                    inboundChannel.read();
+                } else {
+                    inboundChannel.close();
+                }
             }
         });
     }
@@ -91,6 +97,15 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         byte[] payload = new byte[buffer.readableBytes()];
         buffer.readBytes(payload);
         buffer.release();
+
+        if (route.mockStatusCode() > 0) {
+            HttpRequestRewriter.RequestLine requestLine = HttpRequestRewriter.parseRequestLine(payload);
+            if (matchesMock(requestLine)) {
+                serveMock(context, payload);
+                return;
+            }
+        }
+
         HttpRequestRewriter.RewriteResult rewriteResult = route.target().rewriteHostHeader()
                 ? HttpRequestRewriter.rewriteHostHeader(payload, route.target().host(), route.target().port())
                 : new HttpRequestRewriter.RewriteResult(payload, false);
@@ -153,6 +168,72 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         }
         return pathContains == null || requestLine.path().contains(pathContains);
     }
+
+    private boolean matchesMock(HttpRequestRewriter.RequestLine requestLine) {
+        if (requestLine == null) {
+            return false;
+        }
+        String method = route.mockMethod();
+        String pathContains = route.mockPathContains();
+        if (method != null && !method.equalsIgnoreCase(requestLine.method())) {
+            return false;
+        }
+        return pathContains == null || requestLine.path().contains(pathContains);
+    }
+
+    private void serveMock(ChannelHandlerContext context, byte[] requestPayload) {
+        byte[] responseBytes = buildMockResponse();
+        log.trace("Serving mock response routeId={} sessionId={} status={} bytes={}",
+                route.id(), sessionId, route.mockStatusCode(), responseBytes.length);
+        sessionStore.recordPayloadAsync(sessionId, Direction.CLIENT_TO_TARGET, requestPayload, null,
+                Map.of("intercepted", false, "hostRewritten", false));
+        sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, responseBytes, null,
+                Map.of("intercepted", false, "mocked", true));
+        context.channel().writeAndFlush(Unpooled.wrappedBuffer(responseBytes));
+    }
+
+    private byte[] buildMockResponse() {
+        Map<String, String> headers = new LinkedHashMap<>();
+        if (route.mockHeaders() != null) {
+            for (String line : route.mockHeaders().split("\r?\n")) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                int separator = line.indexOf(':');
+                if (separator <= 0) {
+                    continue;
+                }
+                headers.put(line.substring(0, separator).trim(), line.substring(separator + 1).trim());
+            }
+        }
+        byte[] body = (route.mockBody() == null ? "" : route.mockBody()).getBytes(StandardCharsets.UTF_8);
+        boolean hasContentLength = headers.keySet().stream().anyMatch(k -> k.equalsIgnoreCase("content-length"));
+        if (!hasContentLength) {
+            headers.put("Content-Length", Integer.toString(body.length));
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("HTTP/1.1 ").append(route.mockStatusCode()).append(' ')
+                .append(REASON_PHRASES.getOrDefault(route.mockStatusCode(), "")).append("\r\n");
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            builder.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
+        }
+        builder.append("\r\n");
+
+        byte[] head = builder.toString().getBytes(StandardCharsets.ISO_8859_1);
+        byte[] result = new byte[head.length + body.length];
+        System.arraycopy(head, 0, result, 0, head.length);
+        System.arraycopy(body, 0, result, head.length, body.length);
+        return result;
+    }
+
+    private static final Map<Integer, String> REASON_PHRASES = Map.ofEntries(
+            Map.entry(200, "OK"), Map.entry(201, "Created"), Map.entry(204, "No Content"),
+            Map.entry(301, "Moved Permanently"), Map.entry(302, "Found"), Map.entry(304, "Not Modified"),
+            Map.entry(400, "Bad Request"), Map.entry(401, "Unauthorized"), Map.entry(403, "Forbidden"),
+            Map.entry(404, "Not Found"), Map.entry(405, "Method Not Allowed"), Map.entry(409, "Conflict"),
+            Map.entry(422, "Unprocessable Entity"), Map.entry(429, "Too Many Requests"),
+            Map.entry(500, "Internal Server Error"), Map.entry(502, "Bad Gateway"), Map.entry(503, "Service Unavailable"));
 
     @Override
     public void channelInactive(ChannelHandlerContext context) {

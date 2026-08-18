@@ -7,5 +7,10 @@ public record RouteConfig(
         int requestDelayMs,
         int responseDelayMs,
         String interceptMethod,
-        String interceptPathContains) {
+        String interceptPathContains,
+        int mockStatusCode,
+        String mockMethod,
+        String mockPathContains,
+        String mockHeaders,
+        String mockBody) {
 }

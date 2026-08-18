@@ -47,7 +47,7 @@ import java.util.function.Consumer;
 public final class SessionStore implements AutoCloseable {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
-    private static final int SCHEMA_VERSION = 9;
+    private static final int SCHEMA_VERSION = 10;
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
 
@@ -747,6 +747,10 @@ public final class SessionStore implements AutoCloseable {
             migrateToVersion9();
             currentVersion = 9;
         }
+        if (currentVersion < 10) {
+            migrateToVersion10();
+            currentVersion = 10;
+        }
         if (currentVersion != SCHEMA_VERSION) {
             throw new IllegalStateException("Unsupported schema version: " + currentVersion);
         }
@@ -909,6 +913,24 @@ public final class SessionStore implements AutoCloseable {
             }
         }
         writeSchemaVersion(9);
+    }
+
+    private void migrateToVersion10() throws SQLException {
+        String[] cols = {
+            "mock_status_code INTEGER NOT NULL DEFAULT 0",
+            "mock_method TEXT",
+            "mock_path_contains TEXT",
+            "mock_headers TEXT",
+            "mock_body TEXT"
+        };
+        for (String col : cols) {
+            try (Statement st = connection.createStatement()) {
+                st.execute("ALTER TABLE routes ADD COLUMN " + col);
+            } catch (SQLException ignored) {
+                // column already exists
+            }
+        }
+        writeSchemaVersion(10);
     }
 
     private void createSessionExchangesTable() throws SQLException {
@@ -1677,8 +1699,9 @@ public final class SessionStore implements AutoCloseable {
                     listener_replay_tls_keystore_password, listener_replay_tls_keystore_type,
                     listener_replay_tls_truststore, listener_replay_tls_truststore_password, listener_replay_tls_truststore_type,
                     request_delay_ms, response_delay_ms,
-                    intercept_method, intercept_path_contains
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    intercept_method, intercept_path_contains,
+                    mock_status_code, mock_method, mock_path_contains, mock_headers, mock_body
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)) {
             setRouteParams(statement, route);
             statement.executeUpdate();
@@ -1705,7 +1728,8 @@ public final class SessionStore implements AutoCloseable {
                     listener_replay_tls_keystore_password = ?, listener_replay_tls_keystore_type = ?,
                     listener_replay_tls_truststore = ?, listener_replay_tls_truststore_password = ?, listener_replay_tls_truststore_type = ?,
                     request_delay_ms = ?, response_delay_ms = ?,
-                    intercept_method = ?, intercept_path_contains = ?
+                    intercept_method = ?, intercept_path_contains = ?,
+                    mock_status_code = ?, mock_method = ?, mock_path_contains = ?, mock_headers = ?, mock_body = ?
                 where id = ?
                 """)) {
             statement.setString(1, route.listener().host());
@@ -1730,7 +1754,12 @@ public final class SessionStore implements AutoCloseable {
             statement.setInt(41, route.responseDelayMs());
             setNullableString(statement, 42, route.interceptMethod());
             setNullableString(statement, 43, route.interceptPathContains());
-            statement.setString(44, route.id());
+            statement.setInt(44, route.mockStatusCode());
+            setNullableString(statement, 45, route.mockMethod());
+            setNullableString(statement, 46, route.mockPathContains());
+            setNullableString(statement, 47, route.mockHeaders());
+            setNullableString(statement, 48, route.mockBody());
+            statement.setString(49, route.id());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to update route " + route.id(), exception);
@@ -1770,6 +1799,11 @@ public final class SessionStore implements AutoCloseable {
         statement.setInt(42, route.responseDelayMs());
         setNullableString(statement, 43, route.interceptMethod());
         setNullableString(statement, 44, route.interceptPathContains());
+        statement.setInt(45, route.mockStatusCode());
+        setNullableString(statement, 46, route.mockMethod());
+        setNullableString(statement, 47, route.mockPathContains());
+        setNullableString(statement, 48, route.mockHeaders());
+        setNullableString(statement, 49, route.mockBody());
     }
 
     private static void setNullableString(PreparedStatement st, int index, String value) throws SQLException {
@@ -1846,7 +1880,10 @@ public final class SessionStore implements AutoCloseable {
                 readStringListColumn(resultSet, "target_tls_ciphers"));
         return new RouteConfig(resultSet.getString("id"), listener, target,
                 resultSet.getInt("request_delay_ms"), resultSet.getInt("response_delay_ms"),
-                resultSet.getString("intercept_method"), resultSet.getString("intercept_path_contains"));
+                resultSet.getString("intercept_method"), resultSet.getString("intercept_path_contains"),
+                resultSet.getInt("mock_status_code"), resultSet.getString("mock_method"),
+                resultSet.getString("mock_path_contains"), resultSet.getString("mock_headers"),
+                resultSet.getString("mock_body"));
     }
 
     private TlsMaterial readTlsMaterial(ResultSet rs, String prefix) throws SQLException {

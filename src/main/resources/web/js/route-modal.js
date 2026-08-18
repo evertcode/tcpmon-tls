@@ -97,6 +97,11 @@ function openAddRouteModal() {
   document.getElementById('rm-response-delay').value = '';
   document.getElementById('rm-intercept-method').value = '';
   document.getElementById('rm-intercept-path').value = '';
+  document.getElementById('rm-mock-status').value = '';
+  document.getElementById('rm-mock-method').value = '';
+  document.getElementById('rm-mock-path').value = '';
+  document.getElementById('rm-mock-headers').value = '';
+  document.getElementById('rm-mock-body').value = '';
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -166,6 +171,11 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-response-delay').value = route.responseDelayMs || '';
   document.getElementById('rm-intercept-method').value = route.interceptMethod || '';
   document.getElementById('rm-intercept-path').value = route.interceptPathContains || '';
+  document.getElementById('rm-mock-status').value = route.mockStatusCode || '';
+  document.getElementById('rm-mock-method').value = route.mockMethod || '';
+  document.getElementById('rm-mock-path').value = route.mockPathContains || '';
+  document.getElementById('rm-mock-headers').value = route.mockHeaders || '';
+  document.getElementById('rm-mock-body').value = route.mockBody || '';
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -257,7 +267,12 @@ function buildRoutePayload() {
     requestDelayMs: Math.max(0, parseInt(document.getElementById('rm-request-delay').value, 10) || 0),
     responseDelayMs: Math.max(0, parseInt(document.getElementById('rm-response-delay').value, 10) || 0),
     interceptMethod: document.getElementById('rm-intercept-method').value.trim().toUpperCase() || null,
-    interceptPathContains: document.getElementById('rm-intercept-path').value.trim() || null
+    interceptPathContains: document.getElementById('rm-intercept-path').value.trim() || null,
+    mockStatusCode: Math.max(0, parseInt(document.getElementById('rm-mock-status').value, 10) || 0),
+    mockMethod: document.getElementById('rm-mock-method').value.trim().toUpperCase() || null,
+    mockPathContains: document.getElementById('rm-mock-path').value.trim() || null,
+    mockHeaders: document.getElementById('rm-mock-headers').value.trim() || null,
+    mockBody: document.getElementById('rm-mock-body').value || null
   };
   if (listenerTransport === 'TLS') {
     const cert = tlsFieldVal('rm-listener-tls-cert');

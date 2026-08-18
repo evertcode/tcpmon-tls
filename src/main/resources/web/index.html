@@ -324,6 +324,31 @@
           </div>
         </div>
 
+        <div class="form-section-hdr">Mock Response</div>
+        <div class="section-note">Optional stub: matching requests get this canned response instead of reaching the target. Works even if the target is unreachable. Leave status at 0 to disable.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="rm-mock-status">Status code <span class="label-hint">(0 = disabled)</span></label>
+            <input type="number" id="rm-mock-status" placeholder="0" min="0" max="599">
+          </div>
+          <div class="form-group">
+            <label for="rm-mock-method">Method <span class="label-hint">(e.g. POST)</span></label>
+            <input type="text" id="rm-mock-method" placeholder="any method">
+          </div>
+          <div class="form-group">
+            <label for="rm-mock-path">Path contains <span class="label-hint">(substring match)</span></label>
+            <input type="text" id="rm-mock-path" placeholder="any path">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="rm-mock-headers">Headers <span class="label-hint">(Name: Value per line)</span></label>
+          <textarea id="rm-mock-headers" rows="4" placeholder="Content-Type: application/json"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="rm-mock-body">Body</label>
+          <textarea id="rm-mock-body" rows="6" placeholder=""></textarea>
+        </div>
+
         <div class="modal-actions" id="route-modal-actions">
           <button id="route-modal-cancel-btn" class="secondary">Cancel</button>
           <button id="route-modal-save-btn" class="primary">Save</button>
