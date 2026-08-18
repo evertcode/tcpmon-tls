@@ -268,6 +268,24 @@
     </div>
   </div>
 
+  <div id="body-view-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="body-view-modal-title" aria-hidden="true">
+    <div class="modal-box body-view-modal-box">
+      <div class="modal-hdr">
+        <div class="modal-hdr-main">
+          <strong id="body-view-modal-title">Request body</strong>
+        </div>
+        <button id="body-view-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+      </div>
+      <div class="modal-body body-view-modal-body">
+        <div class="body-view-modal-toolbar">
+          <button id="body-view-modal-copy-headers-btn" class="utility" data-action="copy-current-headers">Copy headers</button>
+          <button id="body-view-modal-copy-body-btn" class="utility" data-action="copy-current-body">Copy body</button>
+        </div>
+        <div id="body-view-modal-viewer-container" class="body-view-modal-viewer-container"></div>
+      </div>
+    </div>
+  </div>
+
   <script defer src="/assets/js/state.js"></script>
   <script defer src="/assets/js/utils.js"></script>
   <script defer src="/assets/js/api.js"></script>
@@ -276,6 +294,7 @@
   <script defer src="/assets/js/details.js"></script>
   <script defer src="/assets/js/actions.js"></script>
   <script defer src="/assets/js/route-modal.js"></script>
+  <script defer src="/assets/js/body-modal.js"></script>
   <script defer src="/assets/js/app.js"></script>
 </body>
 </html>

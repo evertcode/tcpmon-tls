@@ -108,6 +108,12 @@ function initializeStaticButtonIcons() {
     ariaLabel: 'Close dialog'
   });
   setButtonContent(document.getElementById('confirm-modal-confirm-btn'), 'Delete route', 'trash');
+  setButtonContent(document.getElementById('body-view-modal-close-btn'), '', 'close', {
+    title: 'Close dialog',
+    ariaLabel: 'Close dialog'
+  });
+  setButtonContent(document.getElementById('body-view-modal-copy-headers-btn'), 'Copy headers', 'copy');
+  setButtonContent(document.getElementById('body-view-modal-copy-body-btn'), 'Copy body', 'copy');
 }
 
 const THEME_STORAGE_KEY = 'tcpmon-theme-preference';
@@ -201,6 +207,18 @@ function bindUiEvents() {
   const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
   if (confirmModalCancelBtn) confirmModalCancelBtn.addEventListener('click', () => closeConfirmModal());
 
+  const bodyViewModal = document.getElementById('body-view-modal');
+  if (bodyViewModal) {
+    bodyViewModal.addEventListener('click', event => {
+      if (event.target === bodyViewModal) {
+        closeBodyViewModal();
+      }
+    });
+  }
+
+  const bodyViewModalCloseBtn = document.getElementById('body-view-modal-close-btn');
+  if (bodyViewModalCloseBtn) bodyViewModalCloseBtn.addEventListener('click', () => closeBodyViewModal());
+
   const listenerTransport = document.getElementById('rm-listener-transport');
   if (listenerTransport) listenerTransport.addEventListener('change', event => toggleListenerTls(event.target.value));
 
@@ -277,6 +295,9 @@ function bindUiEvents() {
       case 'copy-current-body':
         await copyCurrentBody(parseBooleanAttr(actionEl.dataset.isRequest));
         break;
+      case 'expand-body-view':
+        await openBodyViewModal(parseBooleanAttr(actionEl.dataset.isRequest));
+        break;
       case 'release-pending':
         await releasePending(actionEl.dataset.pendingId);
         break;
@@ -332,6 +353,8 @@ function bindUiEvents() {
           closeRouteModal();
         } else if (modal.id === 'confirm-modal') {
           closeConfirmModal();
+        } else if (modal.id === 'body-view-modal') {
+          closeBodyViewModal();
         }
       }
     }

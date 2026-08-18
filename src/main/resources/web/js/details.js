@@ -500,6 +500,9 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
   if (hasBody && !bodyTruncated) {
     toolbar.appendChild(buildPayloadToolbarButton('copy-current-body', { isRequest: String(isRequest) }, 'Copy body'));
   }
+  if (hasBody) {
+    toolbar.appendChild(buildPayloadToolbarButton('expand-body-view', { isRequest: String(isRequest) }, 'Expand', 'expand'));
+  }
   if (toolbar.children.length) {
     head.appendChild(toolbar);
   }
@@ -539,14 +542,14 @@ function buildPayloadBodySection(bodyText, hasBody, isRequest, bodyTruncated, se
   return body;
 }
 
-function buildPayloadToolbarButton(action, dataset, label) {
+function buildPayloadToolbarButton(action, dataset, label, icon = 'copy') {
   const button = document.createElement('button');
   button.className = 'utility';
   button.dataset.action = action;
   for (const [key, value] of Object.entries(dataset || {})) {
     button.dataset[key] = value;
   }
-  setButtonContent(button, label, 'copy');
+  setButtonContent(button, label, icon);
   return button;
 }
 

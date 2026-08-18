@@ -1997,6 +1997,49 @@ tr.session-entry:focus-visible {
   line-height: 1.45;
 }
 
+.body-view-modal-box {
+  width: min(1100px, 100%);
+  max-width: 1100px;
+  height: min(85vh, 900px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-body.body-view-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.body-view-modal-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.body-view-modal-viewer-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.body-view-modal-viewer-container .body-viewer {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.body-view-modal-viewer-container .body-viewer-scroll {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
 .modal-body {
   display: grid;
   gap: 2px;
