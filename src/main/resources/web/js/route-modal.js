@@ -95,6 +95,8 @@ function openAddRouteModal() {
   document.getElementById('rm-target-rewrite').checked = false;
   document.getElementById('rm-request-delay').value = '';
   document.getElementById('rm-response-delay').value = '';
+  document.getElementById('rm-intercept-method').value = '';
+  document.getElementById('rm-intercept-path').value = '';
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -162,6 +164,8 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-target-rewrite').checked = !!route.target.rewriteHostHeader;
   document.getElementById('rm-request-delay').value = route.requestDelayMs || '';
   document.getElementById('rm-response-delay').value = route.responseDelayMs || '';
+  document.getElementById('rm-intercept-method').value = route.interceptMethod || '';
+  document.getElementById('rm-intercept-path').value = route.interceptPathContains || '';
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -251,7 +255,9 @@ function buildRoutePayload() {
       rewriteHostHeader: document.getElementById('rm-target-rewrite').checked
     },
     requestDelayMs: Math.max(0, parseInt(document.getElementById('rm-request-delay').value, 10) || 0),
-    responseDelayMs: Math.max(0, parseInt(document.getElementById('rm-response-delay').value, 10) || 0)
+    responseDelayMs: Math.max(0, parseInt(document.getElementById('rm-response-delay').value, 10) || 0),
+    interceptMethod: document.getElementById('rm-intercept-method').value.trim().toUpperCase() || null,
+    interceptPathContains: document.getElementById('rm-intercept-path').value.trim() || null
   };
   if (listenerTransport === 'TLS') {
     const cert = tlsFieldVal('rm-listener-tls-cert');

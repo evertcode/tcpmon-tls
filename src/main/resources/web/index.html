@@ -311,6 +311,19 @@
           </div>
         </div>
 
+        <div class="form-section-hdr">Conditional Interception</div>
+        <div class="section-note">Optional filter to only pause matching requests when intercept mode is on for this route's traffic; everything else auto-forwards. Leave blank to intercept every request (current behavior).</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="rm-intercept-method">Method <span class="label-hint">(e.g. POST)</span></label>
+            <input type="text" id="rm-intercept-method" placeholder="any method">
+          </div>
+          <div class="form-group">
+            <label for="rm-intercept-path">Path contains <span class="label-hint">(substring match)</span></label>
+            <input type="text" id="rm-intercept-path" placeholder="any path">
+          </div>
+        </div>
+
         <div class="modal-actions" id="route-modal-actions">
           <button id="route-modal-cancel-btn" class="secondary">Cancel</button>
           <button id="route-modal-save-btn" class="primary">Save</button>

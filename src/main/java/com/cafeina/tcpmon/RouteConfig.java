@@ -5,5 +5,7 @@ public record RouteConfig(
         ListenerConfig listener,
         TargetConfig target,
         int requestDelayMs,
-        int responseDelayMs) {
+        int responseDelayMs,
+        String interceptMethod,
+        String interceptPathContains) {
 }

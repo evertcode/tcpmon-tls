@@ -688,7 +688,10 @@ public final class ControlPlaneServer implements AutoCloseable {
                 targetProtocols, targetCiphers);
         int requestDelayMs = Math.max(0, body.path("requestDelayMs").asInt(0));
         int responseDelayMs = Math.max(0, body.path("responseDelayMs").asInt(0));
-        return new RouteConfig(id, listener, target, requestDelayMs, responseDelayMs);
+        String interceptMethod = nullIfBlank(body.path("interceptMethod").asText(null));
+        String interceptPathContains = nullIfBlank(body.path("interceptPathContains").asText(null));
+        return new RouteConfig(id, listener, target, requestDelayMs, responseDelayMs,
+                interceptMethod, interceptPathContains);
     }
 
     private static List<String> parseStringList(JsonNode node, String field) {
@@ -764,6 +767,8 @@ public final class ControlPlaneServer implements AutoCloseable {
             routeMap.put("id", route.id());
             routeMap.put("requestDelayMs", route.requestDelayMs());
             routeMap.put("responseDelayMs", route.responseDelayMs());
+            routeMap.put("interceptMethod", route.interceptMethod());
+            routeMap.put("interceptPathContains", route.interceptPathContains());
             Map<String, Object> listener = new LinkedHashMap<>();
             listener.put("host", route.listener().host());
             listener.put("port", route.listener().port());
@@ -845,7 +850,9 @@ public final class ControlPlaneServer implements AutoCloseable {
                         updated.target().enabledProtocols(),
                         updated.target().enabledCiphers()),
                 updated.requestDelayMs(),
-                updated.responseDelayMs());
+                updated.responseDelayMs(),
+                updated.interceptMethod(),
+                updated.interceptPathContains());
     }
 
     static TlsMaterial mergeTlsMaterial(TlsMaterial original, TlsMaterial updated) {

@@ -384,7 +384,7 @@ class SessionStoreTest {
              Statement statement = connection.createStatement()) {
             try (ResultSet version = statement.executeQuery("pragma user_version")) {
                 assertTrue(version.next());
-                assertEquals(8, version.getInt(1));
+                assertEquals(9, version.getInt(1));
             }
             try (ResultSet columns = statement.executeQuery("pragma table_info(routes)")) {
                 List<String> names = new java.util.ArrayList<>();
@@ -401,6 +401,8 @@ class SessionStoreTest {
                 assertTrue(names.contains("listener_replay_tls_keystore_password"));
                 assertTrue(names.contains("request_delay_ms"));
                 assertTrue(names.contains("response_delay_ms"));
+                assertTrue(names.contains("intercept_method"));
+                assertTrue(names.contains("intercept_path_contains"));
             }
             try (ResultSet columns = statement.executeQuery("pragma table_info(sessions)")) {
                 List<String> names = new java.util.ArrayList<>();

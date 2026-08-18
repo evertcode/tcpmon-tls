@@ -57,6 +57,32 @@ final class HttpRequestRewriter {
         return HTTP_METHODS.contains(method);
     }
 
+    static RequestLine parseRequestLine(byte[] payload) {
+        String body = new String(payload, StandardCharsets.ISO_8859_1);
+        int lineEnd = body.indexOf("\r\n");
+        if (lineEnd < 0) {
+            lineEnd = body.indexOf('\n');
+        }
+        if (lineEnd <= 0) {
+            return null;
+        }
+        String startLine = body.substring(0, lineEnd);
+        if (!looksLikeHttpRequest(startLine)) {
+            return null;
+        }
+        String[] parts = startLine.split(" ", 3);
+        if (parts.length < 2) {
+            return null;
+        }
+        String target = parts[1];
+        int querySeparator = target.indexOf('?');
+        String path = querySeparator >= 0 ? target.substring(0, querySeparator) : target;
+        return new RequestLine(parts[0], path);
+    }
+
     record RewriteResult(byte[] payload, boolean rewritten) {
+    }
+
+    record RequestLine(String method, String path) {
     }
 }

@@ -102,10 +102,11 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                     route.id(), sessionId, outboundPayload.length);
             return;
         }
+        boolean intercept = shouldIntercept(outboundPayload);
         log.trace("Forwarding client payload routeId={} sessionId={} bytes={} intercepted={}",
-                route.id(), sessionId, outboundPayload.length, config.interceptMode().intercepts(Direction.CLIENT_TO_TARGET));
+                route.id(), sessionId, outboundPayload.length, intercept);
 
-        if (config.interceptMode().intercepts(Direction.CLIENT_TO_TARGET)) {
+        if (intercept) {
             PendingPayload pendingPayload = sessionStore.addPending(
                     sessionId,
                     Direction.CLIENT_TO_TARGET,
@@ -132,6 +133,25 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 outboundChannel.writeAndFlush(Unpooled.wrappedBuffer(outboundPayload));
             }
         }
+    }
+
+    private boolean shouldIntercept(byte[] payload) {
+        if (!config.interceptMode().intercepts(Direction.CLIENT_TO_TARGET)) {
+            return false;
+        }
+        String method = route.interceptMethod();
+        String pathContains = route.interceptPathContains();
+        if (method == null && pathContains == null) {
+            return true;
+        }
+        HttpRequestRewriter.RequestLine requestLine = HttpRequestRewriter.parseRequestLine(payload);
+        if (requestLine == null) {
+            return false;
+        }
+        if (method != null && !method.equalsIgnoreCase(requestLine.method())) {
+            return false;
+        }
+        return pathContains == null || requestLine.path().contains(pathContains);
     }
 
     @Override
