@@ -114,6 +114,10 @@ function initializeStaticButtonIcons() {
   });
   setButtonContent(document.getElementById('body-view-modal-copy-headers-btn'), 'Copy headers', 'copy');
   setButtonContent(document.getElementById('body-view-modal-copy-body-btn'), 'Copy body', 'copy');
+  setButtonContent(document.getElementById('replay-edit-modal-close-btn'), '', 'close', {
+    title: 'Close dialog',
+    ariaLabel: 'Close dialog'
+  });
 }
 
 const THEME_STORAGE_KEY = 'tcpmon-theme-preference';
@@ -219,6 +223,21 @@ function bindUiEvents() {
   const bodyViewModalCloseBtn = document.getElementById('body-view-modal-close-btn');
   if (bodyViewModalCloseBtn) bodyViewModalCloseBtn.addEventListener('click', () => closeBodyViewModal());
 
+  const replayEditModal = document.getElementById('replay-edit-modal');
+  if (replayEditModal) {
+    replayEditModal.addEventListener('click', event => {
+      if (event.target === replayEditModal) {
+        closeReplayEditModal();
+      }
+    });
+  }
+
+  const replayEditModalCloseBtn = document.getElementById('replay-edit-modal-close-btn');
+  if (replayEditModalCloseBtn) replayEditModalCloseBtn.addEventListener('click', () => closeReplayEditModal());
+
+  const replayEditCancelBtn = document.getElementById('replay-edit-cancel-btn');
+  if (replayEditCancelBtn) replayEditCancelBtn.addEventListener('click', () => closeReplayEditModal());
+
   const listenerTransport = document.getElementById('rm-listener-transport');
   if (listenerTransport) listenerTransport.addEventListener('change', event => toggleListenerTls(event.target.value));
 
@@ -298,6 +317,12 @@ function bindUiEvents() {
       case 'expand-body-view':
         await openBodyViewModal(parseBooleanAttr(actionEl.dataset.isRequest));
         break;
+      case 'edit-and-resend':
+        await openReplayEditModal();
+        break;
+      case 'submit-replay-edit':
+        await submitReplayEdit(actionEl.dataset.destination);
+        break;
       case 'release-pending':
         await releasePending(actionEl.dataset.pendingId);
         break;
@@ -355,6 +380,8 @@ function bindUiEvents() {
           closeConfirmModal();
         } else if (modal.id === 'body-view-modal') {
           closeBodyViewModal();
+        } else if (modal.id === 'replay-edit-modal') {
+          closeReplayEditModal();
         }
       }
     }

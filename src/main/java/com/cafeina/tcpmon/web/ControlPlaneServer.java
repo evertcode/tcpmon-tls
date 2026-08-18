@@ -376,6 +376,18 @@ public final class ControlPlaneServer implements AutoCloseable {
                 return;
             }
 
+            if (body.hasNonNull("http")) {
+                if (routeId == null || routeId.isBlank()) {
+                    sendJson(exchange, 400, Map.of("error", "routeId is required when replaying edited HTTP payloads"));
+                    return;
+                }
+                byte[] payload = HttpMessageEditor.buildHttpMessage(body.path("http"));
+                enforcePayloadLimit(payload);
+                Map<String, Object> result = replayService.replay(payload, routeId, destination);
+                sendJson(exchange, 200, result);
+                return;
+            }
+
             if (body.hasNonNull("sessionId") && body.hasNonNull("exchangeIndex")) {
                 String sessionId = body.path("sessionId").asText();
                 int exchangeIndex = body.path("exchangeIndex").asInt(0);

@@ -286,6 +286,34 @@
     </div>
   </div>
 
+  <div id="replay-edit-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="replay-edit-modal-title" aria-hidden="true">
+    <div class="modal-box replay-edit-modal-box">
+      <div class="modal-hdr">
+        <div class="modal-hdr-main">
+          <strong id="replay-edit-modal-title">Edit &amp; Resend Request</strong>
+        </div>
+        <button id="replay-edit-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+      </div>
+      <div class="modal-body replay-edit-modal-body">
+        <div class="editor-grid">
+          <div class="request-grid">
+            <input id="replay-edit-method" placeholder="Method">
+            <input id="replay-edit-path" placeholder="Path">
+            <input id="replay-edit-query" placeholder="Query">
+            <input id="replay-edit-version" placeholder="Version">
+          </div>
+          <textarea id="replay-edit-headers" rows="8" placeholder="Headers"></textarea>
+          <textarea id="replay-edit-body" rows="10" placeholder="Body"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button id="replay-edit-cancel-btn" class="secondary">Cancel</button>
+          <button class="secondary" data-action="submit-replay-edit" data-destination="target">Send to target</button>
+          <button class="primary" data-action="submit-replay-edit" data-destination="listener">Send to listener</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script defer src="/assets/js/state.js"></script>
   <script defer src="/assets/js/utils.js"></script>
   <script defer src="/assets/js/api.js"></script>
@@ -295,6 +323,7 @@
   <script defer src="/assets/js/actions.js"></script>
   <script defer src="/assets/js/route-modal.js"></script>
   <script defer src="/assets/js/body-modal.js"></script>
+  <script defer src="/assets/js/replay-edit-modal.js"></script>
   <script defer src="/assets/js/app.js"></script>
 </body>
 </html>

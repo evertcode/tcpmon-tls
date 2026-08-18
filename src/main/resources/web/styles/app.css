@@ -2040,6 +2040,11 @@ tr.session-entry:focus-visible {
   max-height: none;
 }
 
+.replay-edit-modal-box {
+  width: min(760px, 100%);
+  max-width: 760px;
+}
+
 .modal-body {
   display: grid;
   gap: 2px;

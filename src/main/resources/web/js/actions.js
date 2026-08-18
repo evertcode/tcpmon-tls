@@ -34,7 +34,8 @@ function buildPayloadActionsMenu() {
   items.append(
     buildPayloadActionButton('payload-menu-item', 'copy-curl-from-session', {}, 'Copy as cURL', 'copy'),
     buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'json' }, 'Download JSON', 'download'),
-    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'xml' }, 'Download XML', 'download')
+    buildPayloadActionButton('payload-menu-item', 'download-exchange', { format: 'xml' }, 'Download XML', 'download'),
+    buildPayloadActionButton('payload-menu-item', 'edit-and-resend', {}, 'Edit & Resend', 'edit')
   );
 
   menu.append(summary, items);
