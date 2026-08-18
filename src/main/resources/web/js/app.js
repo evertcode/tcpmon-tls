@@ -352,6 +352,9 @@ function bindUiEvents() {
       case 'submit-request-builder':
         await submitRequestBuilder(actionEl.dataset.destination);
         break;
+      case 'save-session-notes':
+        await saveSessionNotes();
+        break;
       case 'release-pending':
         await releasePending(actionEl.dataset.pendingId);
         break;

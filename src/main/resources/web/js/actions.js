@@ -157,6 +157,26 @@ async function resolveFullBody(payload, isRequest) {
   return fetchFullBodyText(sessionId, exchangeIndex, isRequest ? 'request' : 'response', decoded);
 }
 
+async function saveSessionNotes() {
+  const sessionId = getState('activeSession');
+  if (!sessionId) return;
+  const notes = document.getElementById('session-notes-input').value;
+  try {
+    await fetchJson('/api/sessions/' + encodeURIComponent(sessionId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes })
+    });
+    const lastLoadedSession = getState('lastLoadedSession');
+    if (lastLoadedSession && lastLoadedSession.sessionId === sessionId) {
+      lastLoadedSession.notes = notes;
+    }
+    setStatus('success', 'Notes saved');
+  } catch (error) {
+    setStatus('error', error.message);
+  }
+}
+
 async function copyCurrentBody(isRequest) {
   const payload = resolvePayload(isRequest);
   if (!payload) return;

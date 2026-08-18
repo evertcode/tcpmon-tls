@@ -929,6 +929,16 @@ button.action-edit {
   font-size: 12px;
   color: var(--text-muted);
 }
+.session-notes {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.session-notes-input {
+  width: 100%;
+  resize: vertical;
+}
 .route-header-empty-hint {
   margin-top: 14px;
   padding-top: 12px;

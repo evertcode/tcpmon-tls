@@ -245,6 +245,23 @@ public final class ControlPlaneServer implements AutoCloseable {
             return;
         }
 
+        if ("PATCH".equalsIgnoreCase(exchange.getRequestMethod()) && path.startsWith("/api/sessions/")) {
+            String remainder = path.substring("/api/sessions/".length());
+            if (remainder.isEmpty() || remainder.contains("/")) {
+                sendJson(exchange, 404, Map.of("error", "not found"));
+                return;
+            }
+            try {
+                JsonNode body = readJsonBody(exchange);
+                String notes = body.path("notes").asText("");
+                sessionStore.updateSessionNotes(remainder, notes);
+                sendJson(exchange, 200, Map.of("sessionId", remainder, "notes", notes));
+            } catch (IllegalArgumentException exception) {
+                sendJson(exchange, 400, Map.of("error", exception.getMessage()));
+            }
+            return;
+        }
+
         sendJson(exchange, 405, Map.of("error", "method not allowed"));
     }
 

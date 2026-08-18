@@ -46,7 +46,7 @@ import java.util.function.Consumer;
 public final class SessionStore implements AutoCloseable {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
-    private static final int SCHEMA_VERSION = 3;
+    private static final int SCHEMA_VERSION = 4;
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
 
@@ -150,6 +150,18 @@ public final class SessionStore implements AutoCloseable {
 
     public void closeSessionAsync(String sessionId, String status) {
         submitWrite(() -> closeSession(sessionId, status));
+    }
+
+    public synchronized void updateSessionNotes(String sessionId, String notes) {
+        requireSessionExists(sessionId);
+        try (PreparedStatement statement = connection.prepareStatement(
+                "update sessions set notes = ? where session_id = ?")) {
+            statement.setString(1, notes);
+            statement.setString(2, sessionId);
+            statement.executeUpdate();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to update notes for session " + sessionId, exception);
+        }
     }
 
     public synchronized void recordLifecycle(String sessionId, String type, Map<String, Object> details) {
@@ -509,7 +521,8 @@ public final class SessionStore implements AutoCloseable {
                     listener_address,
                     target_address,
                     inbound_tls_json,
-                    outbound_tls_json
+                    outbound_tls_json,
+                    notes
                 from sessions
                 where session_id = ?
                 """)) {
@@ -529,6 +542,7 @@ public final class SessionStore implements AutoCloseable {
                 payload.put("targetAddress", resultSet.getString("target_address"));
                 payload.put("inboundTls", readMap(resultSet.getString("inbound_tls_json")));
                 payload.put("outboundTls", readMap(resultSet.getString("outbound_tls_json")));
+                payload.put("notes", resultSet.getString("notes"));
                 payload.put("events", loadEvents(sessionId));
                 payload.put("pendingPayloads", pendingPayloads(sessionId));
                 return payload;
@@ -709,6 +723,10 @@ public final class SessionStore implements AutoCloseable {
             migrateToVersion3();
             currentVersion = 3;
         }
+        if (currentVersion < 4) {
+            migrateToVersion4();
+            currentVersion = 4;
+        }
         if (currentVersion != SCHEMA_VERSION) {
             throw new IllegalStateException("Unsupported schema version: " + currentVersion);
         }
@@ -793,6 +811,15 @@ public final class SessionStore implements AutoCloseable {
     private void migrateToVersion3() throws SQLException {
         createSessionExchangesTable();
         writeSchemaVersion(3);
+    }
+
+    private void migrateToVersion4() throws SQLException {
+        try (Statement st = connection.createStatement()) {
+            st.execute("ALTER TABLE sessions ADD COLUMN notes TEXT");
+        } catch (SQLException ignored) {
+            // column already exists
+        }
+        writeSchemaVersion(4);
     }
 
     private void createSessionExchangesTable() throws SQLException {

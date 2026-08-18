@@ -289,7 +289,7 @@ function buildRouteHeaderViewModel(routeId, sessions, requestRows, selectedSessi
     avgDurationMs,
     pendingStatClass: pendingCount >= 3 ? 'stat-danger' : pendingCount > 0 ? 'stat-warn' : '',
     summary: buildRouteActivitySummary(total, liveCount, pendingCount, avgDurationMs),
-    activeSelection: buildActiveSelectionViewModel(activeSession, selectedSessionId)
+    activeSelection: buildActiveSelectionViewModel(activeSession, selectedSessionId, lastLoadedSession)
   };
 }
 
@@ -301,14 +301,18 @@ function calculateAverageDuration(sessions) {
   return Math.round(withDuration.reduce((sum, session) => sum + Number(session.durationMs), 0) / withDuration.length);
 }
 
-function buildActiveSelectionViewModel(activeSession, selectedSessionId) {
+function buildActiveSelectionViewModel(activeSession, selectedSessionId, lastLoadedSession) {
+  const notes = (lastLoadedSession && lastLoadedSession.sessionId === selectedSessionId)
+    ? (lastLoadedSession.notes || '')
+    : '';
   if (!activeSession) {
     return {
       empty: true,
       clientAddress: 'Select a request below to inspect payloads and timing.',
       statusCode: '',
       durationMs: null,
-      startedAt: ''
+      startedAt: '',
+      notes
     };
   }
   return {
@@ -316,7 +320,8 @@ function buildActiveSelectionViewModel(activeSession, selectedSessionId) {
     clientAddress: activeSession.clientAddress || 'Unknown client',
     statusCode: String(activeSession.responseStatusCode || ''),
     durationMs: activeSession.durationMs == null ? null : Number(activeSession.durationMs),
-    startedAt: activeSession.startedAt || ''
+    startedAt: activeSession.startedAt || '',
+    notes
   };
 }
 
@@ -823,8 +828,33 @@ function buildActiveSelectionPanel(selection) {
     buildSelectionMetaItem('Started', formatTime(selection.startedAt) || '—', 'route-selection-value')
   );
 
-  panel.append(grid);
+  panel.append(grid, buildSessionNotesSection(selection.notes));
   return panel;
+}
+
+function buildSessionNotesSection(notes) {
+  const section = document.createElement('div');
+  section.className = 'session-notes';
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = 'Notes';
+
+  const textarea = document.createElement('textarea');
+  textarea.id = 'session-notes-input';
+  textarea.className = 'session-notes-input';
+  textarea.rows = 3;
+  textarea.placeholder = 'Add a note about this session…';
+  textarea.value = notes || '';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'utility';
+  saveBtn.dataset.action = 'save-session-notes';
+  saveBtn.textContent = 'Save notes';
+
+  section.append(label, textarea, saveBtn);
+  return section;
 }
 
 function buildSelectionMetaItem(label, value, valueClass = 'route-selection-value') {
