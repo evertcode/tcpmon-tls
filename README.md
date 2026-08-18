@@ -4,7 +4,7 @@
 
 `tcpmon-tls` is a Java tool for debugging local and remote integrations over TCP, TLS, and HTTP/HTTPS.
 
-Current release: `0.6.3`
+Current release: `0.6.9`
 
 ![tcpmon-tls control plane](docs/images/tcpmon-tls.png) It lets you inspect `request/response` traffic, intercept payloads, edit HTTP requests, resend them to the target, recapture them through the local listener, and run multiple routes in a single process.
 
@@ -15,8 +15,13 @@ Current release: `0.6.3`
 - HTTP `request/response` inspection from a local web UI
 - route-centric control plane with operational route health and active request context
 - interception, structured editing, and forwarding of requests
-- replay to the target and recapture through the local listener
-- `TLS` and `mTLS` support for inbound and outbound connections
+- conditional interception per route — only pause requests matching a method/path filter, everything else forwards automatically
+- mock/stub responses per route — reply with a canned status, headers, and body without ever reaching the target, even if it's unreachable
+- per-route latency simulation — inject a fixed delay on the request and/or response leg to reproduce slow-network conditions
+- replay to the target and recapture through the local listener, including recapture into `mTLS`-required listeners via a dedicated replay identity certificate
+- a Request Builder to compose and send arbitrary requests to a route, including from an imported HAR entry
+- cross-route search across all captured traffic, and free-text notes per session
+- `TLS` and `mTLS` support for inbound and outbound connections, with per-route protocol and cipher suite overrides
 - optional Bearer token authentication for the web UI
 - optional HTTPS for the control plane
 - `JSON` or `YAML` config file for application-level settings only
@@ -85,7 +90,7 @@ mvn -q package -DskipTests
 Resulting jar:
 
 ```text
-target/tcpmon-tls-0.6.3.jar
+target/tcpmon-tls-0.6.9.jar
 ```
 
 ## Quick start
@@ -93,7 +98,7 @@ target/tcpmon-tls-0.6.3.jar
 Start the proxy:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.3.jar
+java -jar target/tcpmon-tls-0.6.9.jar
 ```
 
 Open the UI and create routes from there:
@@ -137,6 +142,7 @@ When **Target Transport** is `TLS`, additional fields appear:
 | Trust all certificates | Disable certificate validation (local testing only) |
 | Client Certificate / Keystore | Outbound mTLS material |
 | Truststore | Trust material for validating the remote certificate |
+| TLS protocols / Cipher suites | Override the global `tlsProtocols`/`tlsCiphers` config for this target only; leave blank to use the global default |
 
 When **Listener Transport** is `TLS`, additional fields appear:
 
@@ -145,6 +151,44 @@ When **Listener Transport** is `TLS`, additional fields appear:
 | Certificate file / Keystore | Server certificate for the local TLS listener |
 | Truststore | Trust material for validating inbound client certificates |
 | Client Authentication | `None`, `Optional`, or `Require` (for inbound mTLS) |
+| TLS protocols / Cipher suites | Override the global `tlsProtocols`/`tlsCiphers` config for this listener only; leave blank to use the global default |
+| Recapture client identity | A client certificate/keystore presented when recapturing a request through this listener. Required if Client Authentication is `Require` — see [Recapture into an mTLS-required listener](#recapture-into-an-mtls-required-listener) |
+
+### Simulating a slow network
+
+Each route has an optional **Simulation** section with two fields:
+
+| Field | Description |
+|---|---|
+| Request delay (ms) | Delay applied before forwarding the client's request to the target |
+| Response delay (ms) | Delay applied before forwarding the target's response to the client |
+
+Both default to `0` (no delay, current behavior). The delay only applies to traffic that is forwarded immediately — it does not add to the time a payload spends held for manual interception.
+
+### Conditional interception
+
+By default, `--intercept-mode` pauses **every** request/response on **every** route. Each route can narrow that down with an optional method/path filter in the **Conditional Interception** section:
+
+| Field | Description |
+|---|---|
+| Method | Only pause requests with this HTTP method (case-insensitive). Blank matches any method |
+| Path contains | Only pause requests whose path contains this substring. Blank matches any path |
+
+If both are blank (the default), the route intercepts unconditionally. The filter only applies to the request direction — response interception under `RESPONSE`/`BOTH` mode is unaffected.
+
+### Mock responses
+
+Each route can serve a canned response for matching requests instead of reaching the target, via the **Mock Response** section:
+
+| Field | Description |
+|---|---|
+| Status code | HTTP status code to return. `0` disables mocking (default) |
+| Method | Only mock requests with this HTTP method. Blank matches any method |
+| Path contains | Only mock requests whose path contains this substring. Blank matches any path |
+| Headers | Response headers, one `Name: Value` per line |
+| Body | Response body |
+
+Mocking works even if the target is unreachable — a request that doesn't match the mock filter still proxies normally to the target (or fails the same way an unmocked route would if the target is down).
 
 ### Typical route: local HTTP → remote HTTPS
 
@@ -172,15 +216,15 @@ The config file manages **application-level settings only**. Routes are stored i
 Generate an example:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.3.jar --init-config tcpmon.json
+java -jar target/tcpmon-tls-0.6.9.jar --init-config tcpmon.json
 # or
-java -jar target/tcpmon-tls-0.6.3.jar --init-config tcpmon.yaml
+java -jar target/tcpmon-tls-0.6.9.jar --init-config tcpmon.yaml
 ```
 
 Start with a config file:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.3.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.6.9.jar --config tcpmon.json
 ```
 
 ### Config file fields
@@ -234,7 +278,7 @@ logging:
 ### CLI flags
 
 ```bash
-java -jar target/tcpmon-tls-0.6.3.jar \
+java -jar target/tcpmon-tls-0.6.9.jar \
   --ui-host 127.0.0.1 \
   --ui-port 8080 \
   --ui-enabled=true \
@@ -295,6 +339,10 @@ Disables remote certificate validation for outbound TLS. Intended for local test
 
 Rewrites the HTTP `Host` header before sending the request to the remote target. Needed in flows like `curl http://127.0.0.1:9000/...` where the backend expects `Host: api.example.com`. Without this, many backends return `403`, `421`, or incorrect responses.
 
+### Recapture into an mTLS-required listener
+
+Recapturing a request resends it through the route's own local listener so it gets captured as a new session. If the listener's **Client Authentication** is `Require`, that handshake needs a client certificate — but the proxy never holds the real client's private key, so it can't impersonate the original caller. Configure a **Recapture client identity** (a certificate/keystore dedicated to this purpose) in the listener's TLS section; the proxy presents it only when recapturing into that listener. Without one, recapture into a `Require`-mode listener fails with an explicit error instead of a generic connection failure.
+
 ## Local UI
 
 The UI shows:
@@ -307,6 +355,8 @@ The UI shows:
 - TTFB indicator in the response card
 - session timing waterfall (TLS inbound, TLS outbound, wait, download, total)
 - exchange diff for keep-alive sessions with multiple HTTP exchanges
+- a free-text notes field per session, for annotating captured traffic
+- a `Search all routes` toggle in the request table to search across every route instead of just the active one
 
 ### Available actions
 
@@ -321,9 +371,14 @@ For intercepted payloads:
 - `Forward original`
 - `Edit and forward`
 
-### Export
+### Request Builder
+
+The `New request` button in the sidebar opens a Request Builder modal: pick a route, then compose a method, path, query, HTTP version, headers, and body from scratch, and send it either to the target or to the local listener (for recapture). Imported HAR entries prefill the same modal.
+
+### HAR export and import
 
 - `Export HAR` — exports all sessions in the active route as a HAR 1.2 file, importable in Chrome DevTools or Postman
+- `Import HAR` — the sidebar's import button loads a HAR file and opens the Request Builder prefilled with a chosen entry (method, path, query, headers, body); if the file has multiple entries, a picker lets you choose which one to load
 
 ### Configuration panel
 
@@ -352,7 +407,7 @@ When the flag is omitted, the API is open (default for local use).
 Provide a PKCS12 or JKS keystore to serve the UI over HTTPS:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.3.jar \
+java -jar target/tcpmon-tls-0.6.9.jar \
   --ui-tls-keystore ./ui.p12 \
   --ui-tls-keystore-password changeit
 ```
@@ -412,13 +467,14 @@ When a direction is intercepted:
 - it stays pending in memory
 - you can forward it as-is or edit it from the UI
 
+`--intercept-mode` is a global switch across all routes. Each route can further narrow it down with a **Conditional Interception** method/path filter (see [Conditional interception](#conditional-interception)) so only requests matching that filter actually pause — everything else on the route forwards automatically.
+
 ## Current limitations
 
 - the UI HTTP parser supports `Content-Length`, `Transfer-Encoding: chunked`, `gzip`, `deflate`, and `br`
 - it still does not interpret:
   - WebSocket
   - incremental HTTP streaming
-- local recapture to a `TLS` listener with `client auth REQUIRE` does not present a client certificate yet
 - the tool is optimized for local debugging, not high throughput
 - the UI is focused on HTTP; generic TCP traffic falls back to raw view
 
