@@ -202,7 +202,13 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 Map.of("intercepted", false, "hostRewritten", false));
         sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, responseBytes, null,
                 Map.of("intercepted", false, "mocked", true));
-        context.channel().writeAndFlush(Unpooled.wrappedBuffer(responseBytes));
+        if (liveRoute.responseDelayMs() > 0) {
+            context.executor().schedule(
+                    () -> context.channel().writeAndFlush(Unpooled.wrappedBuffer(responseBytes)),
+                    liveRoute.responseDelayMs(), TimeUnit.MILLISECONDS);
+        } else {
+            context.channel().writeAndFlush(Unpooled.wrappedBuffer(responseBytes));
+        }
     }
 
     private byte[] buildMockResponse(RouteConfig liveRoute) {

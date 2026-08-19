@@ -331,6 +331,11 @@ function bindUiEvents() {
     if (field) field.addEventListener('input', checkAllTlsConflicts);
   }
 
+  for (const fieldId of ['rm-mock-status', 'rm-mock-headers', 'rm-mock-body']) {
+    const field = document.getElementById(fieldId);
+    if (field) field.addEventListener('input', updateMockPreview);
+  }
+
   for (const fieldId of ['rm-id', 'rm-listener-host', 'rm-listener-port', 'rm-target-host', 'rm-target-port']) {
     const field = document.getElementById(fieldId);
     if (!field) continue;

@@ -390,8 +390,15 @@
               <textarea id="rm-mock-headers" rows="4" placeholder="Content-Type: application/json"></textarea>
             </div>
             <div class="form-group">
-              <label for="rm-mock-body">Body</label>
+              <div class="body-field-hdr">
+                <label for="rm-mock-body">Body</label>
+                <button type="button" class="utility" data-action="format-body-field" data-target="rm-mock-body">Format</button>
+              </div>
               <textarea id="rm-mock-body" rows="6" placeholder=""></textarea>
+            </div>
+            <div class="form-group">
+              <label>Response preview <span class="label-hint">(what a matching request would receive)</span></label>
+              <pre id="rm-mock-preview" class="mock-response-preview"></pre>
             </div>
           </div>
         </div>

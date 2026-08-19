@@ -137,6 +137,7 @@ function formatBodyFieldInPlace(textareaId) {
   if (looksLikeJson(value)) {
     try {
       field.value = JSON.stringify(JSON.parse(value), null, 2);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
     } catch (error) {
       setStatus('error', 'Body is not valid JSON');
     }
@@ -144,6 +145,7 @@ function formatBodyFieldInPlace(textareaId) {
   }
   if (looksLikeXml(value)) {
     field.value = prettyPrintXml(value);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
   }
 }
 

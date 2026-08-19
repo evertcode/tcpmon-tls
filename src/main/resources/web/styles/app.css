@@ -1618,6 +1618,15 @@ pre {
   height: 12px;
   flex: none;
 }
+.mock-response-preview {
+  max-height: 200px;
+  overflow: auto;
+}
+.mock-response-preview:empty::before {
+  content: 'Fill in status/headers/body above to see the response tcpmon would send.';
+  color: var(--text-muted);
+  font-family: var(--sans);
+}
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .form-row-3 { display:grid; grid-template-columns:2fr 2fr 1fr; gap:8px; }
 .tls-alt-or { text-align:center; font-size:11px; color:var(--text-muted); margin:4px 0 8px; opacity:.7; }

@@ -61,6 +61,43 @@ function updateBehaviorTabIndicator() {
 
 function toggleMockFields(enabled) {
   document.getElementById('rm-mock-fields').style.display = enabled ? '' : 'none';
+  updateMockPreview();
+}
+
+const MOCK_REASON_PHRASES = {
+  200: 'OK', 201: 'Created', 204: 'No Content',
+  301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
+  400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden',
+  404: 'Not Found', 405: 'Method Not Allowed', 409: 'Conflict',
+  422: 'Unprocessable Entity', 429: 'Too Many Requests',
+  500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable'
+};
+
+function buildMockPreviewText() {
+  const status = Math.max(100, parseInt(routeModalFieldValue('rm-mock-status', '200'), 10) || 200);
+  const reason = MOCK_REASON_PHRASES[status] || '';
+  const body = document.getElementById('rm-mock-body').value || '';
+  const headerLines = [];
+  let hasContentLength = false;
+  for (const line of document.getElementById('rm-mock-headers').value.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const separator = line.indexOf(':');
+    if (separator <= 0) continue;
+    const name = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim();
+    headerLines.push(`${name}: ${value}`);
+    if (name.toLowerCase() === 'content-length') hasContentLength = true;
+  }
+  if (!hasContentLength) {
+    headerLines.push(`Content-Length: ${new TextEncoder().encode(body).length}`);
+  }
+  return `HTTP/1.1 ${status}${reason ? ' ' + reason : ''}\n${headerLines.join('\n')}\n\n${body}`;
+}
+
+function updateMockPreview() {
+  const preview = document.getElementById('rm-mock-preview');
+  if (!preview) return;
+  preview.textContent = document.getElementById('rm-mock-enabled').checked ? buildMockPreviewText() : '';
 }
 
 function checkTlsCertKeystoreConflict(certId, keyId, keystoreId, warningId) {
