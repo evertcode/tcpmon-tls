@@ -6,3 +6,4 @@ tcpmon.yaml
 /.idea/
 /.vscode/
 *.iml
+/.playwright-mcp/
