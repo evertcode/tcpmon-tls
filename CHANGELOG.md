@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.13] - 2026-08-19
+
+### Features
+
+- **Multiple mock rules per route** — a route can now define a list of mock rules (method/path filter, status, headers, body), evaluated in order with first-match-wins, instead of a single stub. This is the only way to mock several endpoints on one route without binding a separate listener per endpoint. Existing single-mock routes are migrated automatically on upgrade
+- **Duplicate route** — a "Duplicate" action next to Edit/Delete opens the Add Route modal pre-filled from an existing route, with a unique suggested ID and the listener port cleared to avoid a port conflict
+- **Mocked responses now honor the configured response delay** — previously a mock always answered instantly, ignoring the route's "Simulation" response delay
+
+### UI improvements
+
+- **Redesigned Add/Edit Route modal** — split into Connection and Behavior tabs, TLS/Simulation/Intercept sections collapse by default and auto-expand only when a route already has values there, Listener and Target lay out side by side when neither uses TLS, and the header shows live summary pills (mock/intercept/delay) so route state is visible without opening a section
+- **"Mocked" badge** — requests served by a mock rule are now marked in both the request table and the response detail panel, and the route modal shows how many times a route's mock has been served
+- **Format button and inline validation for mock rules** — each mock rule's body gets the same JSON/XML Format button as other request editors, and blank/invalid fields are flagged as you edit instead of only on save
+- **Explicit stored-password indicator** — TLS keystore/truststore password fields now show a lock icon and text when a saved password will be kept, instead of relying on a placeholder that disappeared once focused
+
+### Bug fixes
+
+- **Requests to an unreachable target no longer disappear** — when the target connection was refused, timed out, or dropped mid-session, the client's request was never read from the socket and so was never recorded; the session vanished from the request list with no trace. The request now shows up with the existing "No response" badge, and the response panel shows the actual connection error (e.g. "Connection refused")
+
 ## [0.6.12] - 2026-08-18
 
 ### UI improvements
