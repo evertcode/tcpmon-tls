@@ -151,9 +151,11 @@ function openAddRouteModal() {
   document.getElementById('rm-listener-tls-key').value = '';
   document.getElementById('rm-listener-tls-keystore').value = '';
   document.getElementById('rm-listener-tls-keystore-pwd').value = '';
+  markStoredSecret('rm-listener-tls-keystore-pwd-hint', false);
   document.getElementById('rm-listener-tls-keystore-type').value = 'PKCS12';
   document.getElementById('rm-listener-tls-truststore').value = '';
   document.getElementById('rm-listener-tls-truststore-pwd').value = '';
+  markStoredSecret('rm-listener-tls-truststore-pwd-hint', false);
   document.getElementById('rm-listener-tls-truststore-type').value = 'PKCS12';
   document.getElementById('rm-listener-client-auth').value = 'NONE';
   document.getElementById('rm-listener-tls-protocols').value = '';
@@ -162,6 +164,7 @@ function openAddRouteModal() {
   document.getElementById('rm-listener-replay-tls-key').value = '';
   document.getElementById('rm-listener-replay-tls-keystore').value = '';
   document.getElementById('rm-listener-replay-tls-keystore-pwd').value = '';
+  markStoredSecret('rm-listener-replay-tls-keystore-pwd-hint', false);
   document.getElementById('rm-listener-replay-tls-keystore-type').value = 'PKCS12';
   document.getElementById('rm-target-host').value = '';
   document.getElementById('rm-target-port').value = '';
@@ -172,9 +175,11 @@ function openAddRouteModal() {
   document.getElementById('rm-target-tls-key').value = '';
   document.getElementById('rm-target-tls-keystore').value = '';
   document.getElementById('rm-target-tls-keystore-pwd').value = '';
+  markStoredSecret('rm-target-tls-keystore-pwd-hint', false);
   document.getElementById('rm-target-tls-keystore-type').value = 'PKCS12';
   document.getElementById('rm-target-tls-truststore').value = '';
   document.getElementById('rm-target-tls-truststore-pwd').value = '';
+  markStoredSecret('rm-target-tls-truststore-pwd-hint', false);
   document.getElementById('rm-target-tls-truststore-type').value = 'PKCS12';
   document.getElementById('rm-target-tls-protocols').value = '';
   document.getElementById('rm-target-tls-ciphers').value = '';
@@ -207,20 +212,10 @@ function openAddRouteModal() {
   setTimeout(() => document.getElementById('rm-id').focus(), 50);
 }
 
-function openEditRouteModal(routeId) {
-  const proxyConfig = getState('proxyConfig');
-  const route = proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeId);
-  if (!route) {
-    alert('Route config not loaded yet. Try clicking Config first.');
-    return;
-  }
-  routeModalMode = 'edit';
-  routeModalEditId = routeId;
-  document.getElementById('route-modal-title').textContent = 'Edit Route';
-  document.getElementById('rm-id').value = route.id;
-  document.getElementById('rm-id').disabled = true;
+function populateRouteForm(route, options = {}) {
+  const preserveSecrets = options.preserveSecrets !== false;
   document.getElementById('rm-listener-host').value = route.listener.host || '0.0.0.0';
-  document.getElementById('rm-listener-port').value = route.listener.port || '';
+  document.getElementById('rm-listener-port').value = options.clearListenerPort ? '' : (route.listener.port || '');
   const listenerTransport = route.listener.transport || 'PLAIN';
   document.getElementById('rm-listener-transport').value = listenerTransport;
   toggleListenerTls(listenerTransport);
@@ -228,11 +223,11 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-listener-tls-key').value = route.listener.tlsKey || '';
   document.getElementById('rm-listener-tls-keystore').value = route.listener.tlsKeystore || '';
   document.getElementById('rm-listener-tls-keystore-pwd').value = '';
-  document.getElementById('rm-listener-tls-keystore-pwd').placeholder = route.listener.tlsKeystorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
+  markStoredSecret('rm-listener-tls-keystore-pwd-hint', preserveSecrets && route.listener.tlsKeystorePasswordConfigured);
   document.getElementById('rm-listener-tls-keystore-type').value = route.listener.tlsKeystoreType || 'PKCS12';
   document.getElementById('rm-listener-tls-truststore').value = route.listener.tlsTruststore || '';
   document.getElementById('rm-listener-tls-truststore-pwd').value = '';
-  document.getElementById('rm-listener-tls-truststore-pwd').placeholder = route.listener.tlsTruststorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
+  markStoredSecret('rm-listener-tls-truststore-pwd-hint', preserveSecrets && route.listener.tlsTruststorePasswordConfigured);
   document.getElementById('rm-listener-tls-truststore-type').value = route.listener.tlsTruststoreType || 'PKCS12';
   document.getElementById('rm-listener-client-auth').value = route.listener.clientAuth || 'NONE';
   document.getElementById('rm-listener-tls-protocols').value = (route.listener.tlsProtocols || []).join(',');
@@ -242,7 +237,7 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-listener-replay-tls-key').value = replayIdentity.tlsKey || '';
   document.getElementById('rm-listener-replay-tls-keystore').value = replayIdentity.tlsKeystore || '';
   document.getElementById('rm-listener-replay-tls-keystore-pwd').value = '';
-  document.getElementById('rm-listener-replay-tls-keystore-pwd').placeholder = replayIdentity.tlsKeystorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
+  markStoredSecret('rm-listener-replay-tls-keystore-pwd-hint', preserveSecrets && replayIdentity.tlsKeystorePasswordConfigured);
   document.getElementById('rm-listener-replay-tls-keystore-type').value = replayIdentity.tlsKeystoreType || 'PKCS12';
   document.getElementById('rm-target-host').value = route.target.host || '';
   document.getElementById('rm-target-port').value = route.target.port || '';
@@ -253,11 +248,11 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-target-tls-key').value = route.target.tlsKey || '';
   document.getElementById('rm-target-tls-keystore').value = route.target.tlsKeystore || '';
   document.getElementById('rm-target-tls-keystore-pwd').value = '';
-  document.getElementById('rm-target-tls-keystore-pwd').placeholder = route.target.tlsKeystorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
+  markStoredSecret('rm-target-tls-keystore-pwd-hint', preserveSecrets && route.target.tlsKeystorePasswordConfigured);
   document.getElementById('rm-target-tls-keystore-type').value = route.target.tlsKeystoreType || 'PKCS12';
   document.getElementById('rm-target-tls-truststore').value = route.target.tlsTruststore || '';
   document.getElementById('rm-target-tls-truststore-pwd').value = '';
-  document.getElementById('rm-target-tls-truststore-pwd').placeholder = route.target.tlsTruststorePasswordConfigured ? 'Stored password preserved unless replaced' : '';
+  markStoredSecret('rm-target-tls-truststore-pwd-hint', preserveSecrets && route.target.tlsTruststorePasswordConfigured);
   document.getElementById('rm-target-tls-truststore-type').value = route.target.tlsTruststoreType || 'PKCS12';
   document.getElementById('rm-target-tls-protocols').value = (route.target.tlsProtocols || []).join(',');
   document.getElementById('rm-target-tls-ciphers').value = (route.target.tlsCiphers || []).join(',');
@@ -284,6 +279,25 @@ function openEditRouteModal(routeId) {
     targetTransport === 'TLS' && !!((route.target.tlsProtocols || []).length || (route.target.tlsCiphers || []).length);
   document.getElementById('rm-simulation-details').open = !!(route.requestDelayMs || route.responseDelayMs);
   document.getElementById('rm-intercept-details').open = !!(route.interceptMethod || route.interceptPathContains);
+
+  return !!(route.listener.tlsKeystorePasswordConfigured || route.listener.tlsTruststorePasswordConfigured
+    || replayIdentity.tlsKeystorePasswordConfigured
+    || route.target.tlsKeystorePasswordConfigured || route.target.tlsTruststorePasswordConfigured);
+}
+
+function openEditRouteModal(routeId) {
+  const proxyConfig = getState('proxyConfig');
+  const route = proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeId);
+  if (!route) {
+    alert('Route config not loaded yet. Try clicking Config first.');
+    return;
+  }
+  routeModalMode = 'edit';
+  routeModalEditId = routeId;
+  document.getElementById('route-modal-title').textContent = 'Edit Route';
+  document.getElementById('rm-id').value = route.id;
+  document.getElementById('rm-id').disabled = true;
+  populateRouteForm(route, { preserveSecrets: true, clearListenerPort: false });
   checkAllTlsConflicts();
   updateConnectionGridLayout();
   switchRouteModalTab('connection');
@@ -292,6 +306,43 @@ function openEditRouteModal(routeId) {
   routeModalOpenerEl = document.activeElement;
   showRouteModal();
   setTimeout(() => document.getElementById('rm-id').focus(), 50);
+}
+
+function openDuplicateRouteModal(routeId) {
+  const proxyConfig = getState('proxyConfig');
+  const route = proxyConfig && (proxyConfig.routes || []).find(r => r.id === routeId);
+  if (!route) {
+    alert('Route config not loaded yet. Try clicking Config first.');
+    return;
+  }
+  routeModalMode = 'add';
+  routeModalEditId = null;
+  document.getElementById('route-modal-title').textContent = 'Duplicate Route';
+  const existingIds = new Set((proxyConfig.routes || []).map(r => r.id));
+  let candidateId = `${route.id}-copy`;
+  let suffix = 2;
+  while (existingIds.has(candidateId)) {
+    candidateId = `${route.id}-copy-${suffix}`;
+    suffix += 1;
+  }
+  document.getElementById('rm-id').value = candidateId;
+  document.getElementById('rm-id').disabled = false;
+  const hasStoredSecrets = populateRouteForm(route, { preserveSecrets: false, clearListenerPort: true });
+  checkAllTlsConflicts();
+  updateConnectionGridLayout();
+  switchRouteModalTab('connection');
+  clearRouteModalErrors();
+  updateRouteModalSummary();
+  routeModalOpenerEl = document.activeElement;
+  showRouteModal();
+  setTimeout(() => {
+    const idField = document.getElementById('rm-id');
+    idField.focus();
+    idField.select();
+  }, 50);
+  if (hasStoredSecrets) {
+    setStatus('info', 'Duplicated route: stored TLS keystore/truststore passwords are not copied — re-enter them if this route needs them.');
+  }
 }
 
 function showRouteModal() {
@@ -454,6 +505,34 @@ function showRouteModalError(msg) {
   const el = document.getElementById('route-modal-error');
   el.textContent = msg;
   el.style.display = 'block';
+}
+
+const ROUTE_MODAL_REQUIRED_TEXT_FIELDS = {
+  'rm-id': 'Route ID is required.',
+  'rm-listener-host': 'Listener host is required.',
+  'rm-target-host': 'Target host is required.'
+};
+const ROUTE_MODAL_PORT_FIELDS = new Set(['rm-listener-port', 'rm-target-port']);
+
+function validateRouteModalFieldOnBlur(id) {
+  const field = document.getElementById(id);
+  if (!field) return;
+  if (ROUTE_MODAL_PORT_FIELDS.has(id)) {
+    const value = Number(field.value);
+    if (!Number.isInteger(value) || value < 1 || value > 65535) {
+      setFieldInvalid(field, 'Use a port from 1 to 65535.');
+    } else {
+      clearFieldInvalid(field);
+    }
+    return;
+  }
+  const message = ROUTE_MODAL_REQUIRED_TEXT_FIELDS[id];
+  if (!message) return;
+  if (!String(field.value || '').trim()) {
+    setFieldInvalid(field, message);
+  } else {
+    clearFieldInvalid(field);
+  }
 }
 
 function validateRouteForm(payload) {

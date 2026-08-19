@@ -287,7 +287,8 @@ const ICON_PATHS = {
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
   grip: '<circle cx="9" cy="6" r="1.2"/><circle cx="9" cy="12" r="1.2"/><circle cx="9" cy="18" r="1.2"/><circle cx="15" cy="6" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="15" cy="18" r="1.2"/>',
   expand: '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>',
-  upload: '<path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/>'
+  upload: '<path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'
 };
 
 function buildIcon(name) {
@@ -321,6 +322,19 @@ function setButtonContent(button, label, iconName = '', options = {}) {
     button.title = options.title;
   }
   return button;
+}
+
+function markStoredSecret(hintId, configured) {
+  const hint = document.getElementById(hintId);
+  if (!hint) return;
+  hint.replaceChildren();
+  if (!configured) {
+    hint.style.display = 'none';
+    return;
+  }
+  hint.appendChild(buildIcon('lock'));
+  hint.appendChild(document.createTextNode('Stored password kept unless you enter a new one'));
+  hint.style.display = 'flex';
 }
 
 function routeEndpointLabel(routeId, endpoint = 'listener') {

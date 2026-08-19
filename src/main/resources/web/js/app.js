@@ -331,6 +331,17 @@ function bindUiEvents() {
     if (field) field.addEventListener('input', checkAllTlsConflicts);
   }
 
+  for (const fieldId of ['rm-id', 'rm-listener-host', 'rm-listener-port', 'rm-target-host', 'rm-target-port']) {
+    const field = document.getElementById(fieldId);
+    if (!field) continue;
+    field.addEventListener('blur', () => validateRouteModalFieldOnBlur(fieldId));
+    field.addEventListener('input', () => {
+      if (field.getAttribute('aria-invalid') === 'true') {
+        validateRouteModalFieldOnBlur(fieldId);
+      }
+    });
+  }
+
   document.addEventListener('change', event => {
     if (event.target && event.target.id === 'theme-select') {
       applyThemePreference(event.target.value);
@@ -370,6 +381,10 @@ function bindUiEvents() {
       case 'edit-route':
         event.stopPropagation();
         openEditRouteModal(actionEl.dataset.routeId);
+        break;
+      case 'duplicate-route':
+        event.stopPropagation();
+        openDuplicateRouteModal(actionEl.dataset.routeId);
         break;
       case 'delete-route':
         event.stopPropagation();

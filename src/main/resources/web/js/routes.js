@@ -549,17 +549,24 @@ function buildRouteActions(routeId) {
   actions.className = 'route-actions';
   actions.append(
     buildRouteActionButton('edit-route', routeId, 'Edit'),
+    buildRouteActionButton('duplicate-route', routeId, 'Duplicate'),
     buildRouteActionButton('delete-route', routeId, 'Delete')
   );
   return actions;
 }
+
+const ROUTE_ACTION_ICONS = {
+  'delete-route': 'trash',
+  'duplicate-route': 'copy',
+  'edit-route': 'edit'
+};
 
 function buildRouteActionButton(action, routeId, title) {
   const button = document.createElement('button');
   button.className = `utility route-action-btn icon-only${action === 'delete-route' ? ' route-action-delete' : ''}`;
   button.dataset.action = action;
   button.dataset.routeId = routeId;
-  setButtonContent(button, '', action === 'delete-route' ? 'trash' : 'edit', {
+  setButtonContent(button, '', ROUTE_ACTION_ICONS[action] || 'edit', {
     title,
     ariaLabel: `${title} route "${routeId}"`
   });
