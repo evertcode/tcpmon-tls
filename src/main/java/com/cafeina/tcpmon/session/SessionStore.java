@@ -3,6 +3,7 @@ package com.cafeina.tcpmon.session;
 import com.cafeina.tcpmon.ClientAuthMode;
 import com.cafeina.tcpmon.Direction;
 import com.cafeina.tcpmon.ListenerConfig;
+import com.cafeina.tcpmon.MockRule;
 import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
 import com.cafeina.tcpmon.TlsMaterial;
@@ -47,7 +48,9 @@ import java.util.function.Consumer;
 public final class SessionStore implements AutoCloseable {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
-    private static final int SCHEMA_VERSION = 11;
+    private static final TypeReference<List<MockRule>> MOCK_RULES_TYPE = new TypeReference<>() {
+    };
+    private static final int SCHEMA_VERSION = 12;
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
 
@@ -762,6 +765,10 @@ public final class SessionStore implements AutoCloseable {
             migrateToVersion11();
             currentVersion = 11;
         }
+        if (currentVersion < 12) {
+            migrateToVersion12();
+            currentVersion = 12;
+        }
         if (currentVersion != SCHEMA_VERSION) {
             throw new IllegalStateException("Unsupported schema version: " + currentVersion);
         }
@@ -951,6 +958,44 @@ public final class SessionStore implements AutoCloseable {
             // column already exists
         }
         writeSchemaVersion(11);
+    }
+
+    private void migrateToVersion12() throws SQLException {
+        try (Statement st = connection.createStatement()) {
+            st.execute("ALTER TABLE routes ADD COLUMN mock_rules_json TEXT");
+        } catch (SQLException ignored) {
+            // column already exists
+        }
+
+        record LegacyMock(String id, int statusCode, String method, String pathContains, String headers, String body) {
+        }
+        List<LegacyMock> legacyMocks = new ArrayList<>();
+        try (Statement select = connection.createStatement();
+             ResultSet rs = select.executeQuery("""
+                     select id, mock_status_code, mock_method, mock_path_contains, mock_headers, mock_body
+                     from routes
+                     """)) {
+            while (rs.next()) {
+                legacyMocks.add(new LegacyMock(
+                        rs.getString("id"),
+                        rs.getInt("mock_status_code"),
+                        rs.getString("mock_method"),
+                        rs.getString("mock_path_contains"),
+                        rs.getString("mock_headers"),
+                        rs.getString("mock_body")));
+            }
+        }
+        try (PreparedStatement update = connection.prepareStatement("update routes set mock_rules_json = ? where id = ?")) {
+            for (LegacyMock legacy : legacyMocks) {
+                List<MockRule> rules = legacy.statusCode() > 0
+                        ? List.of(new MockRule(legacy.method(), legacy.pathContains(), legacy.statusCode(), legacy.headers(), legacy.body()))
+                        : List.of();
+                update.setString(1, writeMockRules(rules));
+                update.setString(2, legacy.id());
+                update.executeUpdate();
+            }
+        }
+        writeSchemaVersion(12);
     }
 
     private void createSessionExchangesTable() throws SQLException {
@@ -1670,6 +1715,25 @@ public final class SessionStore implements AutoCloseable {
         }
     }
 
+    private List<MockRule> readMockRules(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, MOCK_RULES_TYPE);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to read mock rules JSON", exception);
+        }
+    }
+
+    private String writeMockRules(List<MockRule> rules) {
+        try {
+            return objectMapper.writeValueAsString(rules);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to write mock rules JSON", exception);
+        }
+    }
+
     private static Map<String, Object> stripBase64(Map<String, Object> details) {
         Map<String, Object> cleaned = new LinkedHashMap<>(details);
         cleaned.remove("base64");
@@ -1741,8 +1805,8 @@ public final class SessionStore implements AutoCloseable {
                     listener_replay_tls_truststore, listener_replay_tls_truststore_password, listener_replay_tls_truststore_type,
                     request_delay_ms, response_delay_ms,
                     intercept_method, intercept_path_contains,
-                    mock_status_code, mock_method, mock_path_contains, mock_headers, mock_body
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    mock_rules_json
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)) {
             setRouteParams(statement, route);
             statement.executeUpdate();
@@ -1770,7 +1834,7 @@ public final class SessionStore implements AutoCloseable {
                     listener_replay_tls_truststore = ?, listener_replay_tls_truststore_password = ?, listener_replay_tls_truststore_type = ?,
                     request_delay_ms = ?, response_delay_ms = ?,
                     intercept_method = ?, intercept_path_contains = ?,
-                    mock_status_code = ?, mock_method = ?, mock_path_contains = ?, mock_headers = ?, mock_body = ?
+                    mock_rules_json = ?
                 where id = ?
                 """)) {
             statement.setString(1, route.listener().host());
@@ -1795,12 +1859,8 @@ public final class SessionStore implements AutoCloseable {
             statement.setInt(41, route.responseDelayMs());
             setNullableString(statement, 42, route.interceptMethod());
             setNullableString(statement, 43, route.interceptPathContains());
-            statement.setInt(44, route.mockStatusCode());
-            setNullableString(statement, 45, route.mockMethod());
-            setNullableString(statement, 46, route.mockPathContains());
-            setNullableString(statement, 47, route.mockHeaders());
-            setNullableString(statement, 48, route.mockBody());
-            statement.setString(49, route.id());
+            statement.setString(44, writeMockRules(route.mockRules()));
+            statement.setString(45, route.id());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to update route " + route.id(), exception);
@@ -1840,11 +1900,7 @@ public final class SessionStore implements AutoCloseable {
         statement.setInt(42, route.responseDelayMs());
         setNullableString(statement, 43, route.interceptMethod());
         setNullableString(statement, 44, route.interceptPathContains());
-        statement.setInt(45, route.mockStatusCode());
-        setNullableString(statement, 46, route.mockMethod());
-        setNullableString(statement, 47, route.mockPathContains());
-        setNullableString(statement, 48, route.mockHeaders());
-        setNullableString(statement, 49, route.mockBody());
+        statement.setString(45, writeMockRules(route.mockRules()));
     }
 
     private static void setNullableString(PreparedStatement st, int index, String value) throws SQLException {
@@ -1922,9 +1978,7 @@ public final class SessionStore implements AutoCloseable {
         return new RouteConfig(resultSet.getString("id"), listener, target,
                 resultSet.getInt("request_delay_ms"), resultSet.getInt("response_delay_ms"),
                 resultSet.getString("intercept_method"), resultSet.getString("intercept_path_contains"),
-                resultSet.getInt("mock_status_code"), resultSet.getString("mock_method"),
-                resultSet.getString("mock_path_contains"), resultSet.getString("mock_headers"),
-                resultSet.getString("mock_body"));
+                readMockRules(resultSet.getString("mock_rules_json")));
     }
 
     private TlsMaterial readTlsMaterial(ResultSet rs, String prefix) throws SQLException {

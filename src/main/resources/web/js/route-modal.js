@@ -51,7 +51,7 @@ function revealFieldTab(field) {
 function updateBehaviorTabIndicator() {
   const dot = document.getElementById('route-modal-tab-behavior-dot');
   if (!dot) return;
-  const hasBehaviorContent = document.getElementById('rm-mock-enabled')?.checked
+  const hasBehaviorContent = document.querySelectorAll('#rm-mock-rules-list .mock-rule-card').length > 0
     || !!routeModalFieldValue('rm-intercept-method')
     || !!routeModalFieldValue('rm-intercept-path')
     || (parseInt(routeModalFieldValue('rm-request-delay', '0'), 10) || 0) > 0
@@ -59,45 +59,155 @@ function updateBehaviorTabIndicator() {
   dot.classList.toggle('visible', hasBehaviorContent);
 }
 
-function toggleMockFields(enabled) {
-  document.getElementById('rm-mock-fields').style.display = enabled ? '' : 'none';
-  updateMockPreview();
+let mockRuleSeq = 0;
+
+function buildMockRuleField(type, className, labelText, placeholder, value) {
+  const group = document.createElement('div');
+  group.className = 'form-group';
+  const label = document.createElement('label');
+  label.textContent = labelText;
+  const input = document.createElement('input');
+  input.type = type;
+  input.className = className;
+  if (placeholder) input.placeholder = placeholder;
+  if (type === 'number') {
+    input.min = '100';
+    input.max = '599';
+  }
+  if (value !== undefined && value !== null && value !== '') {
+    input.value = value;
+  }
+  group.append(label, input);
+  return group;
 }
 
-const MOCK_REASON_PHRASES = {
-  200: 'OK', 201: 'Created', 204: 'No Content',
-  301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
-  400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden',
-  404: 'Not Found', 405: 'Method Not Allowed', 409: 'Conflict',
-  422: 'Unprocessable Entity', 429: 'Too Many Requests',
-  500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable'
-};
+function createMockRuleCard(rule = {}) {
+  const ruleId = ++mockRuleSeq;
+  const card = document.createElement('div');
+  card.className = 'route-card mock-rule-card';
+  card.dataset.ruleId = String(ruleId);
 
-function buildMockPreviewText() {
-  const status = Math.max(100, parseInt(routeModalFieldValue('rm-mock-status', '200'), 10) || 200);
-  const reason = MOCK_REASON_PHRASES[status] || '';
-  const body = document.getElementById('rm-mock-body').value || '';
-  const headerLines = [];
-  let hasContentLength = false;
-  for (const line of document.getElementById('rm-mock-headers').value.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    const separator = line.indexOf(':');
-    if (separator <= 0) continue;
-    const name = line.slice(0, separator).trim();
-    const value = line.slice(separator + 1).trim();
-    headerLines.push(`${name}: ${value}`);
-    if (name.toLowerCase() === 'content-length') hasContentLength = true;
-  }
-  if (!hasContentLength) {
-    headerLines.push(`Content-Length: ${new TextEncoder().encode(body).length}`);
-  }
-  return `HTTP/1.1 ${status}${reason ? ' ' + reason : ''}\n${headerLines.join('\n')}\n\n${body}`;
+  const hdr = document.createElement('div');
+  hdr.className = 'mock-rule-hdr';
+  const title = document.createElement('strong');
+  title.className = 'mock-rule-title';
+  title.textContent = 'Rule';
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'utility icon-only';
+  setButtonContent(removeBtn, '', 'trash', { title: 'Remove this rule', ariaLabel: 'Remove mock rule' });
+  removeBtn.addEventListener('click', () => {
+    card.remove();
+    updateMockRulesChrome();
+  });
+  hdr.append(title, removeBtn);
+
+  const row = document.createElement('div');
+  row.className = 'form-row-3';
+  row.append(
+    buildMockRuleField('number', 'mock-rule-status', 'Status code', '200', rule.statusCode || ''),
+    buildMockRuleField('text', 'mock-rule-method', 'Method', 'any method', rule.method || ''),
+    buildMockRuleField('text', 'mock-rule-path', 'Path contains', 'any path', rule.pathContains || '')
+  );
+
+  const headersGroup = document.createElement('div');
+  headersGroup.className = 'form-group';
+  const headersLabel = document.createElement('label');
+  headersLabel.textContent = 'Headers (Name: Value per line)';
+  const headersTextarea = document.createElement('textarea');
+  headersTextarea.className = 'mock-rule-headers';
+  headersTextarea.rows = 3;
+  headersTextarea.placeholder = 'Content-Type: application/json';
+  headersTextarea.value = rule.headers || '';
+  headersGroup.append(headersLabel, headersTextarea);
+
+  const bodyGroup = document.createElement('div');
+  bodyGroup.className = 'form-group';
+  const bodyHdr = document.createElement('div');
+  bodyHdr.className = 'body-field-hdr';
+  const bodyLabel = document.createElement('label');
+  bodyLabel.textContent = 'Body';
+  const bodyTextarea = document.createElement('textarea');
+  bodyTextarea.id = `rm-mock-rule-body-${ruleId}`;
+  bodyTextarea.className = 'mock-rule-body';
+  bodyTextarea.rows = 4;
+  bodyTextarea.value = rule.body || '';
+  const formatBtn = document.createElement('button');
+  formatBtn.type = 'button';
+  formatBtn.className = 'utility';
+  formatBtn.textContent = 'Format';
+  formatBtn.dataset.action = 'format-body-field';
+  formatBtn.dataset.target = bodyTextarea.id;
+  bodyHdr.append(bodyLabel, formatBtn);
+  bodyGroup.append(bodyHdr, bodyTextarea);
+
+  card.append(hdr, row, headersGroup, bodyGroup);
+  return card;
 }
 
-function updateMockPreview() {
-  const preview = document.getElementById('rm-mock-preview');
-  if (!preview) return;
-  preview.textContent = document.getElementById('rm-mock-enabled').checked ? buildMockPreviewText() : '';
+function addMockRule(rule = {}) {
+  document.getElementById('rm-mock-rules-list').appendChild(createMockRuleCard(rule));
+  updateMockRulesChrome();
+}
+
+function updateMockRulesChrome() {
+  const list = document.getElementById('rm-mock-rules-list');
+  const cards = list.querySelectorAll('.mock-rule-card');
+  cards.forEach((card, index) => {
+    card.querySelector('.mock-rule-title').textContent = `Rule ${index + 1}`;
+  });
+  let empty = list.querySelector('.mock-rules-empty');
+  if (cards.length === 0) {
+    if (!empty) {
+      empty = document.createElement('div');
+      empty.className = 'muted mock-rules-empty';
+      empty.textContent = 'No mock rules yet — click "+ Add mock rule" below to create one.';
+      list.appendChild(empty);
+    }
+  } else if (empty) {
+    empty.remove();
+  }
+  updateRouteModalSummary();
+}
+
+function populateMockRules(rules) {
+  const list = document.getElementById('rm-mock-rules-list');
+  list.replaceChildren();
+  for (const rule of rules || []) {
+    list.appendChild(createMockRuleCard(rule));
+  }
+  updateMockRulesChrome();
+}
+
+function collectMockRules() {
+  const cards = document.querySelectorAll('#rm-mock-rules-list .mock-rule-card');
+  const rules = [];
+  cards.forEach(card => {
+    const statusField = card.querySelector('.mock-rule-status');
+    rules.push({
+      method: card.querySelector('.mock-rule-method').value.trim().toUpperCase() || null,
+      pathContains: card.querySelector('.mock-rule-path').value.trim() || null,
+      statusCode: Math.max(0, parseInt(statusField.value, 10) || 0),
+      headers: card.querySelector('.mock-rule-headers').value.trim() || null,
+      body: card.querySelector('.mock-rule-body').value || null
+    });
+  });
+  return rules;
+}
+
+function validateMockRuleCards() {
+  const invalidFields = [];
+  document.querySelectorAll('#rm-mock-rules-list .mock-rule-card').forEach(card => {
+    const statusField = card.querySelector('.mock-rule-status');
+    const value = Number(statusField.value);
+    if (!Number.isInteger(value) || value < 100 || value > 599) {
+      setFieldInvalid(statusField, 'Use a status code from 100 to 599.');
+      invalidFields.push(statusField);
+    } else {
+      clearFieldInvalid(statusField);
+    }
+  });
+  return invalidFields;
 }
 
 function updateMockHitCount(routeId) {
@@ -156,9 +266,9 @@ function updateRouteModalSummary() {
   pills.push(`Target ${target}`);
   pills.push(`${listenerTransport} → ${targetTransport}`);
 
-  if (document.getElementById('rm-mock-enabled')?.checked) {
-    const status = routeModalFieldValue('rm-mock-status', '200');
-    pills.push(`Mock ${status}`);
+  const mockRuleCount = document.querySelectorAll('#rm-mock-rules-list .mock-rule-card').length;
+  if (mockRuleCount > 0) {
+    pills.push(mockRuleCount === 1 ? 'Mock 1 rule' : `Mock ${mockRuleCount} rules`);
   }
   const interceptMethod = routeModalFieldValue('rm-intercept-method');
   const interceptPath = routeModalFieldValue('rm-intercept-path');
@@ -236,14 +346,8 @@ function openAddRouteModal() {
   document.getElementById('rm-response-delay').value = '';
   document.getElementById('rm-intercept-method').value = '';
   document.getElementById('rm-intercept-path').value = '';
-  document.getElementById('rm-mock-enabled').checked = false;
-  document.getElementById('rm-mock-status').value = '';
-  document.getElementById('rm-mock-method').value = '';
-  document.getElementById('rm-mock-path').value = '';
-  document.getElementById('rm-mock-headers').value = '';
-  document.getElementById('rm-mock-body').value = '';
+  populateMockRules([]);
   updateMockHitCount(null);
-  toggleMockFields(false);
   document.getElementById('rm-listener-tls-advanced').open = false;
   document.getElementById('rm-target-tls-advanced').open = false;
   document.getElementById('rm-simulation-details').open = false;
@@ -310,14 +414,7 @@ function populateRouteForm(route, options = {}) {
   document.getElementById('rm-response-delay').value = route.responseDelayMs || '';
   document.getElementById('rm-intercept-method').value = route.interceptMethod || '';
   document.getElementById('rm-intercept-path').value = route.interceptPathContains || '';
-  const mockEnabled = !!(route.mockStatusCode && route.mockStatusCode > 0);
-  document.getElementById('rm-mock-enabled').checked = mockEnabled;
-  document.getElementById('rm-mock-status').value = route.mockStatusCode || '';
-  document.getElementById('rm-mock-method').value = route.mockMethod || '';
-  document.getElementById('rm-mock-path').value = route.mockPathContains || '';
-  document.getElementById('rm-mock-headers').value = route.mockHeaders || '';
-  document.getElementById('rm-mock-body').value = route.mockBody || '';
-  toggleMockFields(mockEnabled);
+  populateMockRules(route.mockRules || []);
   document.getElementById('rm-listener-tls-advanced').open =
     listenerTransport === 'TLS' && !!((route.listener.tlsProtocols || []).length || (route.listener.tlsCiphers || []).length
       || replayIdentity.tlsCert || replayIdentity.tlsKey || replayIdentity.tlsKeystore);
@@ -478,13 +575,7 @@ function buildRoutePayload() {
     responseDelayMs: Math.max(0, parseInt(document.getElementById('rm-response-delay').value, 10) || 0),
     interceptMethod: document.getElementById('rm-intercept-method').value.trim().toUpperCase() || null,
     interceptPathContains: document.getElementById('rm-intercept-path').value.trim() || null,
-    mockStatusCode: document.getElementById('rm-mock-enabled').checked
-      ? Math.max(100, parseInt(document.getElementById('rm-mock-status').value, 10) || 200)
-      : 0,
-    mockMethod: document.getElementById('rm-mock-method').value.trim().toUpperCase() || null,
-    mockPathContains: document.getElementById('rm-mock-path').value.trim() || null,
-    mockHeaders: document.getElementById('rm-mock-headers').value.trim() || null,
-    mockBody: document.getElementById('rm-mock-body').value || null
+    mockRules: collectMockRules()
   };
   if (listenerTransport === 'TLS') {
     const cert = tlsFieldVal('rm-listener-tls-cert');
@@ -634,6 +725,8 @@ function validateRouteForm(payload) {
       errors.push(document.getElementById('rm-target-tls-key'));
     }
   }
+
+  errors.push(...validateMockRuleCards());
 
   if (errors.length) {
     showRouteModalError('Review the highlighted fields before saving.');

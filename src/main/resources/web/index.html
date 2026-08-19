@@ -365,42 +365,11 @@
           </details>
 
           <div class="form-section-hdr">Mock Response</div>
-          <div class="section-note">Optional stub: matching requests get this canned response instead of reaching the target, even if the target is unreachable.</div>
-          <div class="form-check">
-            <input type="checkbox" id="rm-mock-enabled">
-            <label for="rm-mock-enabled">Enable mock response for this route</label>
+          <div class="section-note">Optional stubs: matching requests get a canned response instead of reaching the target, even if the target is unreachable. Rules are checked in order — the first match wins.</div>
+          <div id="rm-mock-rules-list"></div>
+          <div class="mock-rules-actions">
+            <button type="button" class="utility" id="rm-mock-add-rule-btn">+ Add mock rule</button>
             <span id="rm-mock-hit-count" class="label-hint mock-hit-count"></span>
-          </div>
-          <div id="rm-mock-fields" style="display:none;">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="rm-mock-status">Status code</label>
-                <input type="number" id="rm-mock-status" placeholder="200" min="100" max="599">
-              </div>
-              <div class="form-group">
-                <label for="rm-mock-method">Method <span class="label-hint">(e.g. POST)</span></label>
-                <input type="text" id="rm-mock-method" placeholder="any method">
-              </div>
-              <div class="form-group">
-                <label for="rm-mock-path">Path contains <span class="label-hint">(substring match)</span></label>
-                <input type="text" id="rm-mock-path" placeholder="any path">
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="rm-mock-headers">Headers <span class="label-hint">(Name: Value per line)</span></label>
-              <textarea id="rm-mock-headers" rows="4" placeholder="Content-Type: application/json"></textarea>
-            </div>
-            <div class="form-group">
-              <div class="body-field-hdr">
-                <label for="rm-mock-body">Body</label>
-                <button type="button" class="utility" data-action="format-body-field" data-target="rm-mock-body">Format</button>
-              </div>
-              <textarea id="rm-mock-body" rows="6" placeholder=""></textarea>
-            </div>
-            <div class="form-group">
-              <label>Response preview <span class="label-hint">(what a matching request would receive)</span></label>
-              <pre id="rm-mock-preview" class="mock-response-preview"></pre>
-            </div>
           </div>
         </div>
 

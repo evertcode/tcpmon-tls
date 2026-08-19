@@ -3,6 +3,7 @@ package com.cafeina.tcpmon.web;
 import com.cafeina.tcpmon.ClientAuthMode;
 import com.cafeina.tcpmon.ListenerConfig;
 import com.cafeina.tcpmon.ProxyConfig;
+import com.cafeina.tcpmon.MockRule;
 import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.TargetConfig;
 import com.cafeina.tcpmon.TlsMaterial;
@@ -690,14 +691,29 @@ public final class ControlPlaneServer implements AutoCloseable {
         int responseDelayMs = Math.max(0, body.path("responseDelayMs").asInt(0));
         String interceptMethod = nullIfBlank(body.path("interceptMethod").asText(null));
         String interceptPathContains = nullIfBlank(body.path("interceptPathContains").asText(null));
-        int mockStatusCode = Math.max(0, body.path("mockStatusCode").asInt(0));
-        String mockMethod = nullIfBlank(body.path("mockMethod").asText(null));
-        String mockPathContains = nullIfBlank(body.path("mockPathContains").asText(null));
-        String mockHeaders = nullIfBlank(body.path("mockHeaders").asText(null));
-        String mockBody = nullIfBlank(body.path("mockBody").asText(null));
+        List<MockRule> mockRules = parseMockRules(body.path("mockRules"));
         return new RouteConfig(id, listener, target, requestDelayMs, responseDelayMs,
                 interceptMethod, interceptPathContains,
-                mockStatusCode, mockMethod, mockPathContains, mockHeaders, mockBody);
+                mockRules);
+    }
+
+    private static List<MockRule> parseMockRules(JsonNode node) {
+        if (!node.isArray()) {
+            return List.of();
+        }
+        List<MockRule> rules = new ArrayList<>();
+        for (JsonNode ruleNode : node) {
+            int statusCode = Math.max(0, ruleNode.path("statusCode").asInt(0));
+            if (statusCode <= 0) {
+                continue;
+            }
+            String method = nullIfBlank(ruleNode.path("method").asText(null));
+            String pathContains = nullIfBlank(ruleNode.path("pathContains").asText(null));
+            String headers = nullIfBlank(ruleNode.path("headers").asText(null));
+            String body = nullIfBlank(ruleNode.path("body").asText(null));
+            rules.add(new MockRule(method, pathContains, statusCode, headers, body));
+        }
+        return List.copyOf(rules);
     }
 
     private static List<String> parseStringList(JsonNode node, String field) {
@@ -775,11 +791,17 @@ public final class ControlPlaneServer implements AutoCloseable {
             routeMap.put("responseDelayMs", route.responseDelayMs());
             routeMap.put("interceptMethod", route.interceptMethod());
             routeMap.put("interceptPathContains", route.interceptPathContains());
-            routeMap.put("mockStatusCode", route.mockStatusCode());
-            routeMap.put("mockMethod", route.mockMethod());
-            routeMap.put("mockPathContains", route.mockPathContains());
-            routeMap.put("mockHeaders", route.mockHeaders());
-            routeMap.put("mockBody", route.mockBody());
+            List<Map<String, Object>> mockRules = new ArrayList<>();
+            for (MockRule rule : route.mockRules()) {
+                Map<String, Object> ruleMap = new LinkedHashMap<>();
+                ruleMap.put("method", rule.method());
+                ruleMap.put("pathContains", rule.pathContains());
+                ruleMap.put("statusCode", rule.statusCode());
+                ruleMap.put("headers", rule.headers());
+                ruleMap.put("body", rule.body());
+                mockRules.add(ruleMap);
+            }
+            routeMap.put("mockRules", mockRules);
             Map<String, Object> listener = new LinkedHashMap<>();
             listener.put("host", route.listener().host());
             listener.put("port", route.listener().port());
@@ -864,11 +886,7 @@ public final class ControlPlaneServer implements AutoCloseable {
                 updated.responseDelayMs(),
                 updated.interceptMethod(),
                 updated.interceptPathContains(),
-                updated.mockStatusCode(),
-                updated.mockMethod(),
-                updated.mockPathContains(),
-                updated.mockHeaders(),
-                updated.mockBody());
+                updated.mockRules());
     }
 
     static TlsMaterial mergeTlsMaterial(TlsMaterial original, TlsMaterial updated) {

@@ -299,13 +299,8 @@ function bindUiEvents() {
   const targetTransport = document.getElementById('rm-target-transport');
   if (targetTransport) targetTransport.addEventListener('change', event => toggleTargetTls(event.target.value));
 
-  const mockEnabled = document.getElementById('rm-mock-enabled');
-  if (mockEnabled) {
-    mockEnabled.addEventListener('change', event => {
-      toggleMockFields(event.target.checked);
-      updateRouteModalSummary();
-    });
-  }
+  const addMockRuleBtn = document.getElementById('rm-mock-add-rule-btn');
+  if (addMockRuleBtn) addMockRuleBtn.addEventListener('click', () => addMockRule());
 
   const routeModalTabs = document.getElementById('route-modal') && document.getElementById('route-modal').querySelectorAll('.modal-tab');
   if (routeModalTabs) {
@@ -329,11 +324,6 @@ function bindUiEvents() {
   ]) {
     const field = document.getElementById(fieldId);
     if (field) field.addEventListener('input', checkAllTlsConflicts);
-  }
-
-  for (const fieldId of ['rm-mock-status', 'rm-mock-headers', 'rm-mock-body']) {
-    const field = document.getElementById(fieldId);
-    if (field) field.addEventListener('input', updateMockPreview);
   }
 
   for (const fieldId of ['rm-id', 'rm-listener-host', 'rm-listener-port', 'rm-target-host', 'rm-target-port']) {
@@ -362,7 +352,6 @@ function bindUiEvents() {
     'rm-target-host',
     'rm-target-port',
     'rm-target-transport',
-    'rm-mock-status',
     'rm-intercept-method',
     'rm-intercept-path',
     'rm-request-delay',

@@ -1,6 +1,7 @@
 package com.cafeina.tcpmon.proxy;
 
 import com.cafeina.tcpmon.Direction;
+import com.cafeina.tcpmon.MockRule;
 import com.cafeina.tcpmon.ProxyConfig;
 import com.cafeina.tcpmon.RouteConfig;
 import com.cafeina.tcpmon.session.PendingPayload;
@@ -26,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.cert.Certificate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 final class FrontendHandler extends ChannelInboundHandlerAdapter {
@@ -89,7 +91,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECT_FAILED", Map.of("error", future.cause().toString()));
                 log.warn("Target connection failed routeId={} sessionId={} target={}:{} error={}",
                         route.id(), sessionId, route.target().host(), route.target().port(), future.cause().toString());
-                if (liveRoute().mockStatusCode() > 0) {
+                if (!liveRoute().mockRules().isEmpty()) {
                     inboundChannel.config().setAutoRead(true);
                     inboundChannel.read();
                 } else {
@@ -111,10 +113,11 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         buffer.release();
 
         RouteConfig liveRoute = liveRoute();
-        if (liveRoute.mockStatusCode() > 0) {
+        if (!liveRoute.mockRules().isEmpty()) {
             HttpRequestRewriter.RequestLine requestLine = HttpRequestRewriter.parseRequestLine(payload);
-            if (matchesMock(liveRoute, requestLine)) {
-                serveMock(context, liveRoute, payload);
+            Optional<MockRule> matchedRule = findMatchingMockRule(liveRoute, requestLine);
+            if (matchedRule.isPresent()) {
+                serveMock(context, liveRoute, matchedRule.get(), payload);
                 return;
             }
         }
@@ -182,22 +185,26 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         return pathContains == null || requestLine.path().contains(pathContains);
     }
 
-    private boolean matchesMock(RouteConfig liveRoute, HttpRequestRewriter.RequestLine requestLine) {
+    private Optional<MockRule> findMatchingMockRule(RouteConfig liveRoute, HttpRequestRewriter.RequestLine requestLine) {
         if (requestLine == null) {
-            return false;
+            return Optional.empty();
         }
-        String method = liveRoute.mockMethod();
-        String pathContains = liveRoute.mockPathContains();
-        if (method != null && !method.equalsIgnoreCase(requestLine.method())) {
-            return false;
+        for (MockRule rule : liveRoute.mockRules()) {
+            if (rule.method() != null && !rule.method().equalsIgnoreCase(requestLine.method())) {
+                continue;
+            }
+            if (rule.pathContains() != null && !requestLine.path().contains(rule.pathContains())) {
+                continue;
+            }
+            return Optional.of(rule);
         }
-        return pathContains == null || requestLine.path().contains(pathContains);
+        return Optional.empty();
     }
 
-    private void serveMock(ChannelHandlerContext context, RouteConfig liveRoute, byte[] requestPayload) {
-        byte[] responseBytes = buildMockResponse(liveRoute);
+    private void serveMock(ChannelHandlerContext context, RouteConfig liveRoute, MockRule rule, byte[] requestPayload) {
+        byte[] responseBytes = buildMockResponse(rule);
         log.trace("Serving mock response routeId={} sessionId={} status={} bytes={}",
-                route.id(), sessionId, liveRoute.mockStatusCode(), responseBytes.length);
+                route.id(), sessionId, rule.statusCode(), responseBytes.length);
         sessionStore.recordPayloadAsync(sessionId, Direction.CLIENT_TO_TARGET, requestPayload, null,
                 Map.of("intercepted", false, "hostRewritten", false));
         sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, responseBytes, null,
@@ -211,10 +218,10 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private byte[] buildMockResponse(RouteConfig liveRoute) {
+    private byte[] buildMockResponse(MockRule rule) {
         Map<String, String> headers = new LinkedHashMap<>();
-        if (liveRoute.mockHeaders() != null) {
-            for (String line : liveRoute.mockHeaders().split("\r?\n")) {
+        if (rule.headers() != null) {
+            for (String line : rule.headers().split("\r?\n")) {
                 if (line.isBlank()) {
                     continue;
                 }
@@ -225,15 +232,15 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 headers.put(line.substring(0, separator).trim(), line.substring(separator + 1).trim());
             }
         }
-        byte[] body = (liveRoute.mockBody() == null ? "" : liveRoute.mockBody()).getBytes(StandardCharsets.UTF_8);
+        byte[] body = (rule.body() == null ? "" : rule.body()).getBytes(StandardCharsets.UTF_8);
         boolean hasContentLength = headers.keySet().stream().anyMatch(k -> k.equalsIgnoreCase("content-length"));
         if (!hasContentLength) {
             headers.put("Content-Length", Integer.toString(body.length));
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.append("HTTP/1.1 ").append(liveRoute.mockStatusCode()).append(' ')
-                .append(REASON_PHRASES.getOrDefault(liveRoute.mockStatusCode(), "")).append("\r\n");
+        builder.append("HTTP/1.1 ").append(rule.statusCode()).append(' ')
+                .append(REASON_PHRASES.getOrDefault(rule.statusCode(), "")).append("\r\n");
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             builder.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
         }

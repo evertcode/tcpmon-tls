@@ -1,5 +1,7 @@
 package com.cafeina.tcpmon;
 
+import java.util.List;
+
 public record RouteConfig(
         String id,
         ListenerConfig listener,
@@ -8,9 +10,5 @@ public record RouteConfig(
         int responseDelayMs,
         String interceptMethod,
         String interceptPathContains,
-        int mockStatusCode,
-        String mockMethod,
-        String mockPathContains,
-        String mockHeaders,
-        String mockBody) {
+        List<MockRule> mockRules) {
 }

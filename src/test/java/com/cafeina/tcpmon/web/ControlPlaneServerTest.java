@@ -113,7 +113,7 @@ class ControlPlaneServerTest {
                         false,
                         new TlsMaterial(null, null, Path.of("/tmp/target.p12"), "target-secret", null, null, "PKCS12", "PKCS12"),
                         List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
         RouteConfig updated = new RouteConfig(
                 "route-a",
                 new ListenerConfig(
@@ -133,7 +133,7 @@ class ControlPlaneServerTest {
                         false,
                         new TlsMaterial(null, null, Path.of("/tmp/target.p12"), "new-target-secret", null, null, "PKCS12", "PKCS12"),
                         List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
 
         RouteConfig merged = ControlPlaneServer.mergeTlsSecrets(original, updated);
 
@@ -153,7 +153,7 @@ class ControlPlaneServerTest {
                 "route-a",
                 new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null, List.of(), List.of(), null),
                 new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null, List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
 
         try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
             store.openSession("route-a", "client", "listener", "target");
@@ -188,7 +188,7 @@ class ControlPlaneServerTest {
                 "route-a",
                 new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null, List.of(), List.of(), null),
                 new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null, List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
 
         try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
             String sessionId = store.openSession("route-a", "client", "listener", "target");
@@ -227,7 +227,7 @@ class ControlPlaneServerTest {
                 "route-a",
                 new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null, List.of(), List.of(), null),
                 new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null, List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
 
         try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
             String sessionId = store.openSession("route-a", "client", "listener", "target");
@@ -274,7 +274,7 @@ class ControlPlaneServerTest {
                 "route-a",
                 new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null, List.of(), List.of(), null),
                 new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null, List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
 
         try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
             String sessionId = store.openSession("route-a", "client", "listener", "target");
@@ -368,7 +368,7 @@ class ControlPlaneServerTest {
                 "route-a",
                 new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null, List.of(), List.of(), null),
                 new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null, List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
 
         try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
             String sessionId = store.openSession("route-a", "client", "listener", "target");
@@ -407,7 +407,7 @@ class ControlPlaneServerTest {
                 "route-a",
                 new ListenerConfig("127.0.0.1", 9000, TransportMode.PLAIN, ClientAuthMode.NONE, null, List.of(), List.of(), null),
                 new TargetConfig("example.com", 443, TransportMode.TLS, "example.com", false, true, false, null, List.of(), List.of()),
-                0, 0, null, null, 0, null, null, null, null);
+                0, 0, null, null, List.of());
 
         try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
             String sessionId = store.openSession("route-a", "client", "listener", "target");
