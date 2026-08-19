@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.10] - 2026-08-18
+
+### Features
+
+- **Request Builder** — a new "New request" button in the sidebar opens a modal with a route picker plus editable method/path/query/version/headers/body fields, letting you send traffic through a route without needing a previously captured exchange first
+- **Edit & Resend** — an "Edit & Resend" option on captured requests opens the method/path/query/version, headers, and body in an editable modal before replaying, reusing the same HTTP builder as the pending-intercept editor
+- **HAR import** — an "Import HAR" button parses a `.har` file client-side and opens the Request Builder pre-filled with a chosen entry (a picker appears when the file has more than one entry); import isn't persisted as a fake historical session, it just feeds the request composer
+- **Session notes** — annotate a captured session with free-text notes from the request-context panel, persisted via a new `PATCH /api/sessions/{id}` endpoint
+- **Cross-route search** — a "Search all routes" toggle searches captured requests across every route instead of just the active one, with a Route column in results
+- **Per-route TLS protocol/cipher override** — pin a specific TLS protocol/cipher-suite list per listener or target, falling back to the global default when unset
+- **mTLS recapture into `Require`-mode listeners** — recapture previously failed outright when a route's own listener required client auth, since the replay connection never presented a certificate. Configure a dedicated "replay identity" certificate on the listener to fix this
+- **Latency simulation** — per-route request/response delay (ms) to simulate a slow network, applied only to the immediate-forward path
+- **Conditional interception** — an optional per-route method/path filter so intercept mode only pauses matching requests, letting everything else auto-forward
+- **Mock/stub responses** — an optional per-route stub (status, method/path filter, headers, body) that responds directly from the proxy instead of reaching the target, working even when the target is unreachable
+- **Drag-and-drop route reordering** — reorder routes by dragging a handle on each row; the order persists in `localStorage` and reconciles against the current config on every render. Alt+Up/Down provides a keyboard fallback
+- **Body view modal** — an "Expand" button next to Copy body opens the current request/response body in a larger modal, reusing the existing body viewer and syntax highlighter
+
+### UI improvements
+
+- **Redesigned route list** — route rows are now a focusable select button plus a side actions column, with keyboard arrow navigation across routes and sessions, a listener→target flow summary, and color-coded HTTP method badges in both the route preview and session table
+
+### Bug fixes
+
+- **Deleted routes no longer reappear in the sidebar** — the route list was built from session history alone with no check against the current config, so a deleted route's past sessions kept it visible after deletion; it's now dropped once its route ID is no longer in the config
+- **Response no longer silently dropped under latency simulation** — if the target closed its connection right after responding, the client channel could close before a pending delayed write fired; the write is now guaranteed to happen first
+- **Proxy listener releases its port faster on restart** — enabled `SO_REUSEADDR` on route listeners, avoiding `Address already in use` errors when restarting shortly after a previous run
+
 ## [0.6.9] - 2026-04-25
 
 ### UI improvements
