@@ -189,6 +189,16 @@ function buildPayloadHeader(title, timestamp, size, chunkText, direction, ttfb, 
   return header;
 }
 
+function responseEmptyMessage(data) {
+  const events = Array.isArray(data?.events) ? data.events : [];
+  const failEvent = events.find(e => e.type === 'TARGET_CONNECT_FAILED' || e.type === 'DROP');
+  if (failEvent) {
+    const reason = failEvent.details?.error || failEvent.details?.reason;
+    return reason ? `No response — ${reason}` : 'No response — the target connection failed.';
+  }
+  return 'No response payload captured yet.';
+}
+
 function buildPayloadEmptySection(message) {
   const section = document.createElement('div');
   section.className = 'payload-section muted';
@@ -568,9 +578,12 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
   const article = document.createElement('article');
   article.className = 'payload-card';
   if (!payload) {
+    const emptyMessage = title === 'Response'
+      ? responseEmptyMessage(data)
+      : `No ${title.toLowerCase()} payload captured yet.`;
     article.append(
       buildPayloadHeader(title, '', 0, '', expectedDirection, null),
-      buildPayloadEmptySection(`No ${title.toLowerCase()} payload captured yet.`)
+      buildPayloadEmptySection(emptyMessage)
     );
     return article;
   }
@@ -846,6 +859,10 @@ function timelineConfig(event) {
       return { icon: '\u2715', dotClass: 'dot-danger', label: 'TLS inbound failed', detail: details.error || '' };
     case 'TLS_OUTBOUND_FAILED':
       return { icon: '\u2715', dotClass: 'dot-danger', label: 'TLS outbound failed', detail: details.error || '' };
+    case 'TARGET_CONNECT_FAILED':
+      return { icon: '\u2715', dotClass: 'dot-danger', label: 'Target connection failed', detail: details.error || '' };
+    case 'DROP':
+      return { icon: '\u2715', dotClass: 'dot-danger', label: 'Request dropped', detail: details.reason || '' };
     case 'PAYLOAD': {
       const isOut = isClientToTarget(dir);
       const startLine = decoded.startLine || '';

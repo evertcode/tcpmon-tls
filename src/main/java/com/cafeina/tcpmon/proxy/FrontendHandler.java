@@ -91,12 +91,10 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECT_FAILED", Map.of("error", future.cause().toString()));
                 log.warn("Target connection failed routeId={} sessionId={} target={}:{} error={}",
                         route.id(), sessionId, route.target().host(), route.target().port(), future.cause().toString());
-                if (!liveRoute().mockRules().isEmpty()) {
-                    inboundChannel.config().setAutoRead(true);
-                    inboundChannel.read();
-                } else {
-                    inboundChannel.close();
-                }
+                // Read whatever the client already sent so it gets captured (as a mock match, or as a
+                // dropped/no-response request below) instead of silently vanishing from the session list.
+                inboundChannel.config().setAutoRead(true);
+                inboundChannel.read();
             }
         });
     }
@@ -128,9 +126,12 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         byte[] outboundPayload = rewriteResult.payload();
 
         if (outboundChannel == null || !outboundChannel.isActive()) {
+            sessionStore.recordPayloadAsync(sessionId, Direction.CLIENT_TO_TARGET, outboundPayload, null,
+                    Map.of("intercepted", false, "hostRewritten", rewriteResult.rewritten()));
             sessionStore.recordLifecycleAsync(sessionId, "DROP", Map.of("reason", "outbound channel unavailable"));
             log.warn("Dropping client payload routeId={} sessionId={} bytes={} reason=outbound channel unavailable",
                     route.id(), sessionId, outboundPayload.length);
+            closeOnFlush(context.channel());
             return;
         }
         boolean intercept = shouldIntercept(liveRoute, outboundPayload);
