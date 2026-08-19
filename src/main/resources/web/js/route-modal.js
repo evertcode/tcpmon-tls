@@ -6,10 +6,57 @@ let pendingDeleteRouteId = null;
 
 function toggleListenerTls(val) {
   document.getElementById('listener-tls-fields').style.display = val === 'TLS' ? '' : 'none';
+  document.getElementById('rm-listener-tls-advanced-wrap').style.display = val === 'TLS' ? '' : 'none';
+  updateConnectionGridLayout();
 }
 
 function toggleTargetTls(val) {
   document.getElementById('target-tls-fields').style.display = val === 'TLS' ? '' : 'none';
+  document.getElementById('rm-target-tls-advanced-wrap').style.display = val === 'TLS' ? '' : 'none';
+  updateConnectionGridLayout();
+}
+
+function updateConnectionGridLayout() {
+  const grid = document.getElementById('rm-connection-grid');
+  if (!grid) return;
+  const listenerTls = routeModalFieldValue('rm-listener-transport', 'PLAIN') === 'TLS';
+  const targetTls = routeModalFieldValue('rm-target-transport', 'PLAIN') === 'TLS';
+  grid.classList.toggle('stacked', listenerTls || targetTls);
+}
+
+const ROUTE_MODAL_TABS = ['connection', 'behavior'];
+
+function switchRouteModalTab(tab) {
+  if (!ROUTE_MODAL_TABS.includes(tab)) return;
+  for (const t of ROUTE_MODAL_TABS) {
+    const panel = document.getElementById(`route-modal-tab-${t}`);
+    const btn = document.getElementById(`route-modal-tab-btn-${t}`);
+    const active = t === tab;
+    if (panel) panel.hidden = !active;
+    if (btn) {
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.tabIndex = active ? 0 : -1;
+    }
+  }
+  const box = document.querySelector('#route-modal .modal-box');
+  if (box) box.scrollTop = 0;
+}
+
+function revealFieldTab(field) {
+  const panel = field && field.closest ? field.closest('[role="tabpanel"]') : null;
+  if (!panel) return;
+  switchRouteModalTab(panel.id.replace('route-modal-tab-', ''));
+}
+
+function updateBehaviorTabIndicator() {
+  const dot = document.getElementById('route-modal-tab-behavior-dot');
+  if (!dot) return;
+  const hasBehaviorContent = document.getElementById('rm-mock-enabled')?.checked
+    || !!routeModalFieldValue('rm-intercept-method')
+    || !!routeModalFieldValue('rm-intercept-path')
+    || (parseInt(routeModalFieldValue('rm-request-delay', '0'), 10) || 0) > 0
+    || (parseInt(routeModalFieldValue('rm-response-delay', '0'), 10) || 0) > 0;
+  dot.classList.toggle('visible', hasBehaviorContent);
 }
 
 function toggleMockFields(enabled) {
@@ -86,6 +133,7 @@ function updateRouteModalSummary() {
     pill.textContent = label;
     summary.appendChild(pill);
   }
+  updateBehaviorTabIndicator();
 }
 
 function openAddRouteModal() {
@@ -98,6 +146,7 @@ function openAddRouteModal() {
   document.getElementById('rm-listener-port').value = '';
   document.getElementById('rm-listener-transport').value = 'PLAIN';
   document.getElementById('listener-tls-fields').style.display = 'none';
+  document.getElementById('rm-listener-tls-advanced-wrap').style.display = 'none';
   document.getElementById('rm-listener-tls-cert').value = '';
   document.getElementById('rm-listener-tls-key').value = '';
   document.getElementById('rm-listener-tls-keystore').value = '';
@@ -118,6 +167,7 @@ function openAddRouteModal() {
   document.getElementById('rm-target-port').value = '';
   document.getElementById('rm-target-transport').value = 'PLAIN';
   document.getElementById('target-tls-fields').style.display = 'none';
+  document.getElementById('rm-target-tls-advanced-wrap').style.display = 'none';
   document.getElementById('rm-target-tls-cert').value = '';
   document.getElementById('rm-target-tls-key').value = '';
   document.getElementById('rm-target-tls-keystore').value = '';
@@ -148,6 +198,8 @@ function openAddRouteModal() {
   document.getElementById('rm-simulation-details').open = false;
   document.getElementById('rm-intercept-details').open = false;
   checkAllTlsConflicts();
+  updateConnectionGridLayout();
+  switchRouteModalTab('connection');
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -233,6 +285,8 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-simulation-details').open = !!(route.requestDelayMs || route.responseDelayMs);
   document.getElementById('rm-intercept-details').open = !!(route.interceptMethod || route.interceptPathContains);
   checkAllTlsConflicts();
+  updateConnectionGridLayout();
+  switchRouteModalTab('connection');
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -456,6 +510,7 @@ function validateRouteForm(payload) {
 
   if (errors.length) {
     showRouteModalError('Review the highlighted fields before saving.');
+    revealFieldTab(errors[0]);
     errors[0].focus();
     return false;
   }

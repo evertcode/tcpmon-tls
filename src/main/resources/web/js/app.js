@@ -307,6 +307,21 @@ function bindUiEvents() {
     });
   }
 
+  const routeModalTabs = document.getElementById('route-modal') && document.getElementById('route-modal').querySelectorAll('.modal-tab');
+  if (routeModalTabs) {
+    routeModalTabs.forEach((tabBtn, index) => {
+      tabBtn.addEventListener('click', () => switchRouteModalTab(ROUTE_MODAL_TABS[index]));
+      tabBtn.addEventListener('keydown', event => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (index + delta + ROUTE_MODAL_TABS.length) % ROUTE_MODAL_TABS.length;
+        switchRouteModalTab(ROUTE_MODAL_TABS[nextIndex]);
+        document.getElementById(`route-modal-tab-btn-${ROUTE_MODAL_TABS[nextIndex]}`).focus();
+      });
+    });
+  }
+
   for (const fieldId of [
     'rm-listener-tls-cert', 'rm-listener-tls-key', 'rm-listener-tls-keystore',
     'rm-listener-replay-tls-cert', 'rm-listener-replay-tls-key', 'rm-listener-replay-tls-keystore',
