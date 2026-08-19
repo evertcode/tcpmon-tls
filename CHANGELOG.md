@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.11] - 2026-08-18
+
+### Bug fixes
+
+- **Request table no longer shows a silent blank row when a request never gets a response** — the "Response" column now shows a `Pending` badge while a session is still open and waiting, or a `No response` badge once it's closed without ever receiving one (e.g. recapturing into a route whose target didn't answer in time). Previously the row just showed empty status/duration/size with no indication of what happened. Rows where a real (non-HTTP) response did arrive still show duration/size as before, without a misleading "No response" label.
+
 ## [0.6.10] - 2026-08-18
 
 ### Features

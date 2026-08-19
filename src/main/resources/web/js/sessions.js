@@ -361,7 +361,7 @@ function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex,
     }
     row.appendChild(buildMethodCell(request.requestMethod || ''));
     row.appendChild(buildPathCell(request));
-    row.appendChild(buildStatusCell(request.responseStatusCode));
+    row.appendChild(buildStatusCell(request));
     row.appendChild(buildDurationCell(request.durationMs));
     row.appendChild(buildBytesCell(request.responseSizeBytes));
     row.appendChild(buildTextCell(request.clientAddress || '', 'mono'));
@@ -451,17 +451,24 @@ function buildPathCell(session) {
   return cell;
 }
 
-function buildStatusCell(code) {
+function buildStatusCell(request) {
   const cell = document.createElement('td');
-  const value = String(code ?? '');
-  if (!value) {
+  const value = String(request.responseStatusCode ?? '');
+  const badge = document.createElement('span');
+  if (value) {
+    const first = value.charAt(0);
+    const cls = first === '2' ? 'status-2xx' : first === '3' ? 'status-3xx' : first === '4' ? 'status-4xx' : first === '5' ? 'status-5xx' : 'status-other';
+    badge.className = `status-badge ${cls}`;
+    badge.textContent = value;
+  } else if (request.live) {
+    badge.className = 'status-badge status-pending';
+    badge.textContent = 'Pending';
+  } else if (request.durationMs == null && request.responseSizeBytes == null) {
+    badge.className = 'status-badge status-no-response';
+    badge.textContent = 'No response';
+  } else {
     return cell;
   }
-  const badge = document.createElement('span');
-  const first = value.charAt(0);
-  const cls = first === '2' ? 'status-2xx' : first === '3' ? 'status-3xx' : first === '4' ? 'status-4xx' : first === '5' ? 'status-5xx' : 'status-other';
-  badge.className = `status-badge ${cls}`;
-  badge.textContent = value;
   cell.appendChild(badge);
   return cell;
 }

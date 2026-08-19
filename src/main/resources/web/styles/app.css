@@ -475,6 +475,8 @@ button.action-edit {
 .status-4xx { background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 20%, transparent); }
 .status-5xx { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 20%, transparent); }
 .status-other { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text-muted); }
+.status-pending { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 20%, transparent); }
+.status-no-response { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 20%, transparent); }
 .timing-fast { color: var(--ok); font-weight: 600; }
 .timing-medium { color: var(--warn); font-weight: 600; }
 .timing-slow { color: var(--danger); font-weight: 600; }
