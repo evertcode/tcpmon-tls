@@ -67,7 +67,7 @@ public final class TcpMonProxy implements AutoCloseable {
                         if (inboundTlsContext != null) {
                             channel.pipeline().addLast("ssl", inboundTlsContext.newHandler(channel.alloc()));
                         }
-                        channel.pipeline().addLast("frontend", new FrontendHandler(config, route, sessionStore, outboundTlsContext));
+                        channel.pipeline().addLast("frontend", new FrontendHandler(config, route, registry, sessionStore, outboundTlsContext));
                     }
                 });
 

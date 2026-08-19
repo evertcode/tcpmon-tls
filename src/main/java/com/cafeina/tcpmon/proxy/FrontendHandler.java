@@ -32,16 +32,28 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
     private static final Logger log = LoggerFactory.getLogger(FrontendHandler.class);
     private final ProxyConfig config;
     private final RouteConfig route;
+    private final RouteRegistry registry;
     private final SessionStore sessionStore;
     private final SslContext outboundSslContext;
     private volatile Channel outboundChannel;
     private volatile String sessionId;
 
-    FrontendHandler(ProxyConfig config, RouteConfig route, SessionStore sessionStore, SslContext outboundSslContext) {
+    FrontendHandler(ProxyConfig config, RouteConfig route, RouteRegistry registry, SessionStore sessionStore, SslContext outboundSslContext) {
         this.config = config;
         this.route = route;
+        this.registry = registry;
         this.sessionStore = sessionStore;
         this.outboundSslContext = outboundSslContext;
+    }
+
+    /**
+     * Mock/intercept/delay settings must reflect the latest control-plane update even for
+     * connections accepted before that update, so they are re-read from the registry per
+     * request instead of relying on {@link #route}, which is fixed at connection-accept time
+     * (target/listener/TLS identity legitimately stays pinned to the connection).
+     */
+    private RouteConfig liveRoute() {
+        return registry.findById(route.id()).orElse(route);
     }
 
     @Override
@@ -77,7 +89,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 sessionStore.recordLifecycleAsync(sessionId, "TARGET_CONNECT_FAILED", Map.of("error", future.cause().toString()));
                 log.warn("Target connection failed routeId={} sessionId={} target={}:{} error={}",
                         route.id(), sessionId, route.target().host(), route.target().port(), future.cause().toString());
-                if (route.mockStatusCode() > 0) {
+                if (liveRoute().mockStatusCode() > 0) {
                     inboundChannel.config().setAutoRead(true);
                     inboundChannel.read();
                 } else {
@@ -98,10 +110,11 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         buffer.readBytes(payload);
         buffer.release();
 
-        if (route.mockStatusCode() > 0) {
+        RouteConfig liveRoute = liveRoute();
+        if (liveRoute.mockStatusCode() > 0) {
             HttpRequestRewriter.RequestLine requestLine = HttpRequestRewriter.parseRequestLine(payload);
-            if (matchesMock(requestLine)) {
-                serveMock(context, payload);
+            if (matchesMock(liveRoute, requestLine)) {
+                serveMock(context, liveRoute, payload);
                 return;
             }
         }
@@ -117,7 +130,7 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                     route.id(), sessionId, outboundPayload.length);
             return;
         }
-        boolean intercept = shouldIntercept(outboundPayload);
+        boolean intercept = shouldIntercept(liveRoute, outboundPayload);
         log.trace("Forwarding client payload routeId={} sessionId={} bytes={} intercepted={}",
                 route.id(), sessionId, outboundPayload.length, intercept);
 
@@ -140,22 +153,22 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                     outboundPayload,
                     null,
                     Map.of("intercepted", false, "hostRewritten", rewriteResult.rewritten()));
-            if (route.requestDelayMs() > 0) {
+            if (liveRoute.requestDelayMs() > 0) {
                 context.executor().schedule(
                         () -> outboundChannel.writeAndFlush(Unpooled.wrappedBuffer(outboundPayload)),
-                        route.requestDelayMs(), TimeUnit.MILLISECONDS);
+                        liveRoute.requestDelayMs(), TimeUnit.MILLISECONDS);
             } else {
                 outboundChannel.writeAndFlush(Unpooled.wrappedBuffer(outboundPayload));
             }
         }
     }
 
-    private boolean shouldIntercept(byte[] payload) {
+    private boolean shouldIntercept(RouteConfig liveRoute, byte[] payload) {
         if (!config.interceptMode().intercepts(Direction.CLIENT_TO_TARGET)) {
             return false;
         }
-        String method = route.interceptMethod();
-        String pathContains = route.interceptPathContains();
+        String method = liveRoute.interceptMethod();
+        String pathContains = liveRoute.interceptPathContains();
         if (method == null && pathContains == null) {
             return true;
         }
@@ -169,22 +182,22 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         return pathContains == null || requestLine.path().contains(pathContains);
     }
 
-    private boolean matchesMock(HttpRequestRewriter.RequestLine requestLine) {
+    private boolean matchesMock(RouteConfig liveRoute, HttpRequestRewriter.RequestLine requestLine) {
         if (requestLine == null) {
             return false;
         }
-        String method = route.mockMethod();
-        String pathContains = route.mockPathContains();
+        String method = liveRoute.mockMethod();
+        String pathContains = liveRoute.mockPathContains();
         if (method != null && !method.equalsIgnoreCase(requestLine.method())) {
             return false;
         }
         return pathContains == null || requestLine.path().contains(pathContains);
     }
 
-    private void serveMock(ChannelHandlerContext context, byte[] requestPayload) {
-        byte[] responseBytes = buildMockResponse();
+    private void serveMock(ChannelHandlerContext context, RouteConfig liveRoute, byte[] requestPayload) {
+        byte[] responseBytes = buildMockResponse(liveRoute);
         log.trace("Serving mock response routeId={} sessionId={} status={} bytes={}",
-                route.id(), sessionId, route.mockStatusCode(), responseBytes.length);
+                route.id(), sessionId, liveRoute.mockStatusCode(), responseBytes.length);
         sessionStore.recordPayloadAsync(sessionId, Direction.CLIENT_TO_TARGET, requestPayload, null,
                 Map.of("intercepted", false, "hostRewritten", false));
         sessionStore.recordPayloadAsync(sessionId, Direction.TARGET_TO_CLIENT, responseBytes, null,
@@ -192,10 +205,10 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
         context.channel().writeAndFlush(Unpooled.wrappedBuffer(responseBytes));
     }
 
-    private byte[] buildMockResponse() {
+    private byte[] buildMockResponse(RouteConfig liveRoute) {
         Map<String, String> headers = new LinkedHashMap<>();
-        if (route.mockHeaders() != null) {
-            for (String line : route.mockHeaders().split("\r?\n")) {
+        if (liveRoute.mockHeaders() != null) {
+            for (String line : liveRoute.mockHeaders().split("\r?\n")) {
                 if (line.isBlank()) {
                     continue;
                 }
@@ -206,15 +219,15 @@ final class FrontendHandler extends ChannelInboundHandlerAdapter {
                 headers.put(line.substring(0, separator).trim(), line.substring(separator + 1).trim());
             }
         }
-        byte[] body = (route.mockBody() == null ? "" : route.mockBody()).getBytes(StandardCharsets.UTF_8);
+        byte[] body = (liveRoute.mockBody() == null ? "" : liveRoute.mockBody()).getBytes(StandardCharsets.UTF_8);
         boolean hasContentLength = headers.keySet().stream().anyMatch(k -> k.equalsIgnoreCase("content-length"));
         if (!hasContentLength) {
             headers.put("Content-Length", Integer.toString(body.length));
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.append("HTTP/1.1 ").append(route.mockStatusCode()).append(' ')
-                .append(REASON_PHRASES.getOrDefault(route.mockStatusCode(), "")).append("\r\n");
+        builder.append("HTTP/1.1 ").append(liveRoute.mockStatusCode()).append(' ')
+                .append(REASON_PHRASES.getOrDefault(liveRoute.mockStatusCode(), "")).append("\r\n");
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             builder.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
         }
