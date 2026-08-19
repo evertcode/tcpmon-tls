@@ -475,25 +475,30 @@ function buildRouteListItem(route, selectedRouteId) {
   const title = document.createElement('strong');
   title.className = 'route-row-title';
   title.textContent = route.routeId;
+  title.title = route.routeId;
+
+  const reqCount = document.createElement('span');
+  reqCount.className = 'route-line route-req-count';
+  reqCount.textContent = `${route.requestCount || 0} req`;
+
+  const top = document.createElement('div');
+  top.className = 'row-top';
+  top.append(title, reqCount);
 
   const bottom = document.createElement('div');
   bottom.className = 'row-bottom';
 
   const flowLine = document.createElement('span');
-  flowLine.className = 'route-line';
+  flowLine.className = 'route-line route-flow';
   const listenerAddress = route.listenerAddress || routeEndpointLabel(route.routeId, 'listener');
   const flowText = listenerAddress && route.targetAddress
     ? `${listenerAddress} → ${route.targetAddress}`
     : (route.targetAddress || listenerAddress || '');
   flowLine.textContent = flowText;
   if (flowText) flowLine.title = flowText;
+  bottom.append(flowLine);
 
-  const reqCount = document.createElement('span');
-  reqCount.className = 'route-line route-req-count';
-  reqCount.textContent = `${route.requestCount || 0} req`;
-  bottom.append(flowLine, reqCount);
-
-  select.append(title, bottom);
+  select.append(top, bottom);
 
   if (latest && (latest.requestMethod || latest.requestPath)) {
     select.appendChild(buildLatestPreview(latest));

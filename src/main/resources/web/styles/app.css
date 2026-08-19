@@ -159,7 +159,7 @@ body {
 }
 .layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -1661,7 +1661,20 @@ pre {
 .tls-alt-or { text-align:center; font-size:11px; color:var(--text-muted); margin:4px 0 8px; opacity:.7; }
 .tls-subsection-label { font-size:10px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
 .form-check { display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:8px; }
-.route-actions { display:inline-flex; gap:4px; opacity:0; transition:opacity .15s; margin-left:4px; }
+.route-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity .15s, background-color .15s;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  z-index: 2;
+  padding: 3px;
+  border-radius: 8px;
+}
 .route-row:hover .route-actions { opacity:1; }
 .route-action-btn { min-height:0; padding:2px 6px; border-radius:4px; font-size:11px; line-height:1.4; }
 .add-route-btn { min-height:24px; padding:2px 8px; font-size:13px; }
@@ -1787,6 +1800,12 @@ tr.session-entry:focus-visible {
 .route-row:hover .route-actions,
 .route-row:focus-within .route-actions {
   opacity: 1;
+  background: var(--surface-2);
+}
+
+.route-row.active:hover .route-actions,
+.route-row.active:focus-within .route-actions {
+  background: var(--accent-soft);
 }
 
 @media (hover: none) {
@@ -1864,6 +1883,11 @@ tr.session-entry:focus-visible {
 
 .route-req-count {
   flex-shrink: 0;
+}
+
+.route-flow {
+  flex: 1;
+  min-width: 0;
 }
 
 .route-card,
