@@ -470,6 +470,13 @@ function buildStatusCell(request) {
     return cell;
   }
   cell.appendChild(badge);
+  if (request.mocked) {
+    const mockedBadge = document.createElement('span');
+    mockedBadge.className = 'status-badge status-mocked';
+    mockedBadge.textContent = 'Mocked';
+    mockedBadge.title = "This response was served by the route's mock, not the target";
+    cell.appendChild(mockedBadge);
+  }
   return cell;
 }
 

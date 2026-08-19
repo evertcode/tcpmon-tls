@@ -56,8 +56,10 @@ final class SessionPayloadAggregator {
         java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
         java.util.List<Integer> chunkOffsets = new java.util.ArrayList<>();
         java.util.List<Instant> chunkTimestamps = new java.util.ArrayList<>();
+        java.util.List<Boolean> chunkMocked = new java.util.ArrayList<>();
         Instant latestTimestamp = null;
         int chunkCount = 0;
+        boolean anyMocked = false;
 
         for (SessionEvent event : events) {
             if (!"PAYLOAD".equals(event.type()) || event.direction() != direction) {
@@ -66,11 +68,14 @@ final class SessionPayloadAggregator {
             Object base64 = event.details().get("base64");
             if (base64 instanceof String encoded) {
                 byte[] chunk = Base64.getDecoder().decode(encoded);
+                boolean mocked = Boolean.TRUE.equals(event.details().get("mocked"));
                 chunkOffsets.add(buffer.size());
                 chunkTimestamps.add(event.timestamp());
+                chunkMocked.add(mocked);
                 buffer.writeBytes(chunk);
                 latestTimestamp = event.timestamp();
                 chunkCount++;
+                anyMocked = anyMocked || mocked;
             }
         }
 
@@ -86,6 +91,7 @@ final class SessionPayloadAggregator {
         aggregated.put("direction", direction);
         aggregated.put("size", payload.length);
         aggregated.put("chunkCount", chunkCount);
+        aggregated.put("mocked", anyMocked);
         aggregated.put("base64", Base64.getEncoder().encodeToString(payload));
         aggregated.put("decoded", PayloadInspector.inspectBytes(payload, fullBody));
 
@@ -99,6 +105,7 @@ final class SessionPayloadAggregator {
         java.util.List<Map<String, Object>> output = new java.util.ArrayList<>();
         for (byte[] message : messages) {
             Instant msgTimestamp = timestampAtOffset(msgOffset, chunkOffsets, chunkTimestamps, latestTimestamp);
+            boolean msgMocked = mockedAtOffset(msgOffset, chunkOffsets, chunkMocked);
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("eventId", aggregated.get("eventId") + "-" + (++count));
             entry.put("type", "PAYLOAD");
@@ -106,6 +113,7 @@ final class SessionPayloadAggregator {
             entry.put("direction", direction);
             entry.put("size", message.length);
             entry.put("chunkCount", aggregated.get("chunkCount"));
+            entry.put("mocked", msgMocked);
             entry.put("base64", Base64.getEncoder().encodeToString(message));
             entry.put("decoded", PayloadInspector.inspectBytes(message, fullBody));
             output.add(entry);
@@ -120,6 +128,19 @@ final class SessionPayloadAggregator {
         for (int i = 0; i < chunkOffsets.size(); i++) {
             if (chunkOffsets.get(i) <= offset) {
                 result = chunkTimestamps.get(i);
+            } else {
+                break;
+            }
+        }
+        return result;
+    }
+
+    private static boolean mockedAtOffset(int offset, java.util.List<Integer> chunkOffsets,
+            java.util.List<Boolean> chunkMocked) {
+        boolean result = false;
+        for (int i = 0; i < chunkOffsets.size(); i++) {
+            if (chunkOffsets.get(i) <= offset) {
+                result = chunkMocked.get(i);
             } else {
                 break;
             }

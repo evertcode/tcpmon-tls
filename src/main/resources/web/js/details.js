@@ -148,7 +148,7 @@ function buildTlsRow(key, value) {
   return row;
 }
 
-function buildPayloadHeader(title, timestamp, size, chunkText, direction, ttfb) {
+function buildPayloadHeader(title, timestamp, size, chunkText, direction, ttfb, mocked = false) {
   const header = document.createElement('div');
   header.className = 'payload-header';
 
@@ -171,11 +171,21 @@ function buildPayloadHeader(title, timestamp, size, chunkText, direction, ttfb) 
     left.appendChild(ttfbWrap);
   }
 
+  const right = document.createElement('div');
+  right.className = 'payload-header-right';
+  if (mocked) {
+    const mockedBadge = document.createElement('span');
+    mockedBadge.className = 'status-badge status-mocked';
+    mockedBadge.textContent = 'Mocked';
+    mockedBadge.title = "This response was served by the route's mock, not the target";
+    right.appendChild(mockedBadge);
+  }
   const pill = document.createElement('span');
   pill.className = 'pill route';
   pill.textContent = direction;
+  right.appendChild(pill);
 
-  header.append(left, pill);
+  header.append(left, right);
   return header;
 }
 
@@ -579,7 +589,7 @@ function buildPayloadCard(title, payload, expectedDirection, data) {
     ttfb = calcTtfb(data.events);
   }
   article.append(
-    buildPayloadHeader(title, payload.timestamp || '', payload.size || 0, chunkText, payload.direction || expectedDirection, ttfb),
+    buildPayloadHeader(title, payload.timestamp || '', payload.size || 0, chunkText, payload.direction || expectedDirection, ttfb, Boolean(payload.mocked)),
     buildStartLineSection(decoded.startLine || 'No HTTP start line', isRequest)
   );
   article.append(

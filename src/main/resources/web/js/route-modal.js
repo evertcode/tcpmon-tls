@@ -100,6 +100,14 @@ function updateMockPreview() {
   preview.textContent = document.getElementById('rm-mock-enabled').checked ? buildMockPreviewText() : '';
 }
 
+function updateMockHitCount(routeId) {
+  const el = document.getElementById('rm-mock-hit-count');
+  if (!el) return;
+  const stats = routeId ? (getState('routeStats') || {})[routeId] : null;
+  const count = stats ? Number(stats.mockedCount || 0) : 0;
+  el.textContent = count > 0 ? `Served ${count} time${count === 1 ? '' : 's'}` : '';
+}
+
 function checkTlsCertKeystoreConflict(certId, keyId, keystoreId, warningId) {
   const warning = document.getElementById(warningId);
   if (!warning) return;
@@ -234,6 +242,7 @@ function openAddRouteModal() {
   document.getElementById('rm-mock-path').value = '';
   document.getElementById('rm-mock-headers').value = '';
   document.getElementById('rm-mock-body').value = '';
+  updateMockHitCount(null);
   toggleMockFields(false);
   document.getElementById('rm-listener-tls-advanced').open = false;
   document.getElementById('rm-target-tls-advanced').open = false;
@@ -337,6 +346,7 @@ function openEditRouteModal(routeId) {
   populateRouteForm(route, { preserveSecrets: true, clearListenerPort: false });
   checkAllTlsConflicts();
   updateConnectionGridLayout();
+  updateMockHitCount(routeId);
   switchRouteModalTab('connection');
   clearRouteModalErrors();
   updateRouteModalSummary();
@@ -367,6 +377,7 @@ function openDuplicateRouteModal(routeId) {
   const hasStoredSecrets = populateRouteForm(route, { preserveSecrets: false, clearListenerPort: true });
   checkAllTlsConflicts();
   updateConnectionGridLayout();
+  updateMockHitCount(null);
   switchRouteModalTab('connection');
   clearRouteModalErrors();
   updateRouteModalSummary();

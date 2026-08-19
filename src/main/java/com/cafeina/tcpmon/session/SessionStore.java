@@ -47,7 +47,7 @@ import java.util.function.Consumer;
 public final class SessionStore implements AutoCloseable {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
-    private static final int SCHEMA_VERSION = 10;
+    private static final int SCHEMA_VERSION = 11;
     private static final Set<String> HTTP_METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT");
 
@@ -68,7 +68,8 @@ public final class SessionStore implements AutoCloseable {
             Instant timestamp,
             Direction direction,
             int size,
-            byte[] bytes) {
+            byte[] bytes,
+            boolean mocked) {
     }
 
     public SessionStore(Path rootDir, ObjectMapper objectMapper) throws IOException {
@@ -327,6 +328,7 @@ public final class SessionStore implements AutoCloseable {
                     count(*) as request_count,
                     sum(case when s.status = 'OPEN' and e.status = 'OPEN' then 1 else 0 end) as live_count,
                     sum(case when e.response_status_code like '5%' then 1 else 0 end) as error_count,
+                    sum(case when e.mocked = 1 then 1 else 0 end) as mocked_count,
                     cast(avg(e.duration_ms) as integer) as avg_duration_ms
                 from session_exchanges e
                 join sessions s on s.session_id = e.session_id
@@ -339,6 +341,7 @@ public final class SessionStore implements AutoCloseable {
                 stats.put("requestCount", rs.getLong("request_count"));
                 stats.put("liveCount", rs.getLong("live_count"));
                 stats.put("errorCount", rs.getLong("error_count"));
+                stats.put("mockedCount", rs.getLong("mocked_count"));
                 long avgDuration = rs.getLong("avg_duration_ms");
                 if (!rs.wasNull()) {
                     stats.put("avgDurationMs", avgDuration);
@@ -368,6 +371,7 @@ public final class SessionStore implements AutoCloseable {
                     e.response_size_bytes,
                     e.duration_ms,
                     e.status as exchange_status,
+                    e.mocked,
                     s.status as session_status,
                     s.client_address,
                     s.listener_address,
@@ -558,7 +562,8 @@ public final class SessionStore implements AutoCloseable {
                     timestamp,
                     direction,
                     size,
-                    payload_bytes
+                    payload_bytes,
+                    details_json
                 from session_events
                 where session_id = ?
                   and type = 'PAYLOAD'
@@ -571,11 +576,13 @@ public final class SessionStore implements AutoCloseable {
                     String direction = resultSet.getString("direction");
                     byte[] bytes = resultSet.getBytes("payload_bytes");
                     if (direction != null && bytes != null) {
+                        boolean mocked = Boolean.TRUE.equals(readMap(resultSet.getString("details_json")).get("mocked"));
                         chunks.add(new PayloadChunk(
                                 parseInstant(resultSet.getString("timestamp")),
                                 Direction.valueOf(direction),
                                 resultSet.getInt("size"),
-                                bytes));
+                                bytes,
+                                mocked));
                     }
                 }
                 return chunks;
@@ -750,6 +757,10 @@ public final class SessionStore implements AutoCloseable {
         if (currentVersion < 10) {
             migrateToVersion10();
             currentVersion = 10;
+        }
+        if (currentVersion < 11) {
+            migrateToVersion11();
+            currentVersion = 11;
         }
         if (currentVersion != SCHEMA_VERSION) {
             throw new IllegalStateException("Unsupported schema version: " + currentVersion);
@@ -933,6 +944,15 @@ public final class SessionStore implements AutoCloseable {
         writeSchemaVersion(10);
     }
 
+    private void migrateToVersion11() throws SQLException {
+        try (Statement st = connection.createStatement()) {
+            st.execute("ALTER TABLE session_exchanges ADD COLUMN mocked INTEGER NOT NULL DEFAULT 0");
+        } catch (SQLException ignored) {
+            // column already exists
+        }
+        writeSchemaVersion(11);
+    }
+
     private void createSessionExchangesTable() throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute("""
@@ -1041,8 +1061,9 @@ public final class SessionStore implements AutoCloseable {
                          request_size_bytes,
                          response_size_bytes,
                          duration_ms,
-                         status
-                     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         status,
+                         mocked
+                     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                      """)) {
             delete.setString(1, sessionId);
             delete.executeUpdate();
@@ -1073,6 +1094,7 @@ public final class SessionStore implements AutoCloseable {
                     }
                     insert.setString(12, "COMPLETE");
                 }
+                insert.setBoolean(13, response != null && response.mocked());
                 insert.executeUpdate();
             }
         } catch (SQLException exception) {
@@ -1132,7 +1154,9 @@ public final class SessionStore implements AutoCloseable {
         java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
         List<Integer> chunkOffsets = new ArrayList<>();
         List<Instant> chunkTimestamps = new ArrayList<>();
+        List<Boolean> chunkMocked = new ArrayList<>();
         Instant latestTimestamp = null;
+        boolean anyMocked = false;
 
         for (PayloadChunk chunk : chunks) {
             if (chunk.direction() != direction) {
@@ -1140,8 +1164,10 @@ public final class SessionStore implements AutoCloseable {
             }
             chunkOffsets.add(buffer.size());
             chunkTimestamps.add(chunk.timestamp());
+            chunkMocked.add(chunk.mocked());
             buffer.writeBytes(chunk.bytes());
             latestTimestamp = chunk.timestamp();
+            anyMocked = anyMocked || chunk.mocked();
         }
 
         if (latestTimestamp == null) {
@@ -1151,14 +1177,15 @@ public final class SessionStore implements AutoCloseable {
         byte[] payload = buffer.toByteArray();
         List<byte[]> messages = splitHttpMessages(payload);
         if (messages.size() <= 1) {
-            return List.of(parsePayloadSummary(payload, latestTimestamp));
+            return List.of(parsePayloadSummary(payload, latestTimestamp, anyMocked));
         }
 
         int messageOffset = 0;
         List<PayloadMessageSummary> summaries = new ArrayList<>();
         for (byte[] message : messages) {
             Instant timestamp = timestampAtOffset(messageOffset, chunkOffsets, chunkTimestamps, latestTimestamp);
-            summaries.add(parsePayloadSummary(message, timestamp));
+            boolean mocked = mockedAtOffset(messageOffset, chunkOffsets, chunkMocked);
+            summaries.add(parsePayloadSummary(message, timestamp, mocked));
             messageOffset += message.length;
         }
         return summaries;
@@ -1286,7 +1313,7 @@ public final class SessionStore implements AutoCloseable {
         return HTTP_METHODS.contains(startLine.substring(0, separator));
     }
 
-    private static PayloadMessageSummary parsePayloadSummary(byte[] payload, Instant timestamp) {
+    private static PayloadMessageSummary parsePayloadSummary(byte[] payload, Instant timestamp, boolean mocked) {
         int lineEnd = indexOf(payload, 0, "\r\n".getBytes(StandardCharsets.ISO_8859_1));
         if (lineEnd < 0) {
             lineEnd = indexOf(payload, 0, "\n".getBytes(StandardCharsets.ISO_8859_1));
@@ -1310,7 +1337,7 @@ public final class SessionStore implements AutoCloseable {
             }
         }
 
-        return new PayloadMessageSummary(timestamp, payload.length, requestMethod, requestPath, responseStatusCode);
+        return new PayloadMessageSummary(timestamp, payload.length, requestMethod, requestPath, responseStatusCode, mocked);
     }
 
     private static Instant timestampAtOffset(int offset, List<Integer> chunkOffsets, List<Instant> chunkTimestamps, Instant fallback) {
@@ -1318,6 +1345,18 @@ public final class SessionStore implements AutoCloseable {
         for (int index = 0; index < chunkOffsets.size(); index++) {
             if (chunkOffsets.get(index) <= offset) {
                 result = chunkTimestamps.get(index);
+            } else {
+                break;
+            }
+        }
+        return result;
+    }
+
+    private static boolean mockedAtOffset(int offset, List<Integer> chunkOffsets, List<Boolean> chunkMocked) {
+        boolean result = false;
+        for (int index = 0; index < chunkOffsets.size(); index++) {
+            if (chunkOffsets.get(index) <= offset) {
+                result = chunkMocked.get(index);
             } else {
                 break;
             }
@@ -1363,7 +1402,8 @@ public final class SessionStore implements AutoCloseable {
             int size,
             String requestMethod,
             String requestPath,
-            String responseStatusCode) {
+            String responseStatusCode,
+            boolean mocked) {
     }
 
     private Map<String, Object> mapRequestRow(ResultSet rs) throws SQLException {
@@ -1392,6 +1432,7 @@ public final class SessionStore implements AutoCloseable {
             row.put("responseSizeBytes", responseSize);
         }
         row.put("live", "OPEN".equalsIgnoreCase(sessionStatus) && "OPEN".equalsIgnoreCase(exchangeStatus));
+        row.put("mocked", rs.getBoolean("mocked"));
         return row;
     }
 

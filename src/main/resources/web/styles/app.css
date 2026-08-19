@@ -477,6 +477,7 @@ button.action-edit {
 .status-other { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text-muted); }
 .status-pending { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 20%, transparent); }
 .status-no-response { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 20%, transparent); }
+.status-mocked { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 20%, transparent); margin-left: 4px; }
 .timing-fast { color: var(--ok); font-weight: 600; }
 .timing-medium { color: var(--warn); font-weight: 600; }
 .timing-slow { color: var(--danger); font-weight: 600; }
@@ -1061,6 +1062,12 @@ tr.session-entry.active > td:first-child {
   display: block;
   font-size: 11px;
 }
+.payload-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
 .payload-startline-spacer {
   min-height: 16px;
   visibility: hidden;
@@ -1617,6 +1624,9 @@ pre {
   width: 12px;
   height: 12px;
   flex: none;
+}
+.mock-hit-count {
+  margin-left: auto;
 }
 .mock-response-preview {
   max-height: 200px;

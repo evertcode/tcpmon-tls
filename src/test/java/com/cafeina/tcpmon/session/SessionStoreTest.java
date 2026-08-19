@@ -384,7 +384,7 @@ class SessionStoreTest {
              Statement statement = connection.createStatement()) {
             try (ResultSet version = statement.executeQuery("pragma user_version")) {
                 assertTrue(version.next());
-                assertEquals(10, version.getInt(1));
+                assertEquals(11, version.getInt(1));
             }
             try (ResultSet columns = statement.executeQuery("pragma table_info(routes)")) {
                 List<String> names = new java.util.ArrayList<>();
