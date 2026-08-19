@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.12] - 2026-08-18
+
+### UI improvements
+
+- **Redesigned the Edit & Resend and New Request modals** — labeled fields replace unlabeled inputs, a route/listener/target summary row shows where the request is going, headers are now an editable list of Name/Value rows instead of a raw textarea, a Format button pretty-prints JSON/XML bodies, required-field validation highlights empty Method/Path before sending, and Method is now a dropdown of standard HTTP verbs (still accepts a captured request's original method even if non-standard). HAR import now feeds headers directly into the structured editor instead of a flattened block
+
+### Bug fixes
+
+- **Headers no longer show the HTTP start line as part of the header list** — `PayloadInspector`'s `headersText` incorrectly included the request/response start line as if it were a header; it's now built from the already-parsed header list, fixing this everywhere headers are copied or edited
+
 ## [0.6.11] - 2026-08-18
 
 ### Bug fixes
