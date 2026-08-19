@@ -8,6 +8,91 @@ const repoRoot = path.resolve(import.meta.dirname, '..', '..', '..');
 const webRoot = path.join(repoRoot, 'src', 'main', 'resources', 'web');
 const jsRoot = path.join(webRoot, 'js');
 
+// Minimal CSS selector engine covering what the app's JS actually uses:
+// tag/#id/.class/[attr]/[attr="value"] tokens, :not(...), descendant
+// combinators ("A B"), and comma-separated selector lists.
+function parseCompoundSelector(compound) {
+  let remaining = compound;
+  const notSelectors = [];
+  remaining = remaining.replace(/:not\(([^)]*)\)/g, (_, inner) => {
+    notSelectors.push(inner.trim());
+    return '';
+  });
+  const attrs = [];
+  remaining = remaining.replace(/\[([a-zA-Z0-9_-]+)(?:="([^"]*)")?\]/g, (_, name, value) => {
+    attrs.push({ name, value: value === undefined ? null : value });
+    return '';
+  });
+  const classes = [];
+  remaining = remaining.replace(/\.([a-zA-Z0-9_-]+)/g, (_, cls) => {
+    classes.push(cls);
+    return '';
+  });
+  let id = null;
+  remaining = remaining.replace(/#([a-zA-Z0-9_-]+)/g, (_, val) => {
+    id = val;
+    return '';
+  });
+  const tag = remaining.trim() || null;
+  return { tag, id, classes, attrs, notSelectors };
+}
+
+function elementMatchesCompound(node, parsed) {
+  if (!node || node.nodeType !== 'element') return false;
+  if (parsed.tag && node.tagName !== parsed.tag) return false;
+  if (parsed.id && node.id !== parsed.id) return false;
+  for (const cls of parsed.classes) {
+    const nodeClasses = new Set(String(node.className || '').split(/\s+/).filter(Boolean));
+    if (!nodeClasses.has(cls)) return false;
+  }
+  for (const attr of parsed.attrs) {
+    let actual = node.attributes ? node.attributes[attr.name] : undefined;
+    if (actual === undefined && attr.name === 'tabindex' && typeof node.tabIndex === 'number') {
+      actual = String(node.tabIndex);
+    }
+    if (actual === undefined && attr.name.startsWith('data-') && node.dataset) {
+      const key = attr.name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      actual = node.dataset[key];
+    }
+    if (actual === undefined) return false;
+    if (attr.value !== null && actual !== attr.value) return false;
+  }
+  for (const notSelector of parsed.notSelectors) {
+    if (elementMatchesCompound(node, parseCompoundSelector(notSelector))) return false;
+  }
+  return true;
+}
+
+function matchesSimpleSelector(node, simpleSelector) {
+  const parts = simpleSelector.trim().split(/\s+/).map(parseCompoundSelector);
+  if (!parts.length || !elementMatchesCompound(node, parts[parts.length - 1])) return false;
+  let ancestor = node.parentNode;
+  for (let i = parts.length - 2; i >= 0; i--) {
+    let found = false;
+    while (ancestor) {
+      if (elementMatchesCompound(ancestor, parts[i])) {
+        found = true;
+        break;
+      }
+      ancestor = ancestor.parentNode;
+    }
+    if (!found) return false;
+    ancestor = ancestor.parentNode;
+  }
+  return true;
+}
+
+function matchesSelector(node, selector) {
+  return selector.split(',').some(part => matchesSimpleSelector(node, part));
+}
+
+function collectMatches(root, selector, results) {
+  for (const child of root.children || []) {
+    if (matchesSelector(child, selector)) results.push(child);
+    collectMatches(child, selector, results);
+  }
+}
+
 class FakeNode {
   constructor(tagName, nodeType = 'element') {
     this.tagName = tagName;
@@ -35,6 +120,17 @@ class FakeNode {
           .filter(Boolean)
           .filter(token => !removeSet.has(token))
           .join(' ');
+      },
+      contains: token => new Set(String(this.className || '').split(/\s+/).filter(Boolean)).has(token),
+      toggle: (token, force) => {
+        const has = new Set(String(this.className || '').split(/\s+/).filter(Boolean)).has(token);
+        const shouldHave = force === undefined ? !has : Boolean(force);
+        if (shouldHave) {
+          this.classList.add(token);
+        } else {
+          this.classList.remove(token);
+        }
+        return shouldHave;
       }
     };
   }
@@ -72,6 +168,25 @@ class FakeNode {
     if (!this.parentNode) return;
     this.parentNode.children = this.parentNode.children.filter(child => child !== this);
     this.parentNode = null;
+  }
+
+  querySelectorAll(selector) {
+    const results = [];
+    collectMatches(this, selector, results);
+    return results;
+  }
+
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] || null;
+  }
+
+  closest(selector) {
+    let node = this;
+    while (node) {
+      if (matchesSelector(node, selector)) return node;
+      node = node.parentNode;
+    }
+    return null;
   }
 
   set textContent(value) {
@@ -140,6 +255,28 @@ class FakeDocument {
       this.nodesById.set(id, node);
     }
     return this.nodesById.get(id);
+  }
+
+  querySelectorAll(selector) {
+    const seen = new Set();
+    const results = [];
+    for (const root of this.nodesById.values()) {
+      if (matchesSelector(root, selector) && !seen.has(root)) {
+        seen.add(root);
+        results.push(root);
+      }
+      for (const node of root.querySelectorAll(selector)) {
+        if (!seen.has(node)) {
+          seen.add(node);
+          results.push(node);
+        }
+      }
+    }
+    return results;
+  }
+
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] || null;
   }
 }
 
