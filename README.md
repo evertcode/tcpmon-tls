@@ -4,7 +4,7 @@
 
 `tcpmon-tls` is a Java tool for debugging local and remote integrations over TCP, TLS, and HTTP/HTTPS.
 
-Current release: `0.6.13`
+Current release: `0.6.14`
 
 ![tcpmon-tls control plane](docs/images/tcpmon-tls.png) It lets you inspect `request/response` traffic, intercept payloads, edit HTTP requests, resend them to the target, recapture them through the local listener, and run multiple routes in a single process.
 
@@ -90,7 +90,7 @@ mvn -q package -DskipTests
 Resulting jar:
 
 ```text
-target/tcpmon-tls-0.6.13.jar
+target/tcpmon-tls-0.6.14.jar
 ```
 
 ## Quick start
@@ -98,7 +98,7 @@ target/tcpmon-tls-0.6.13.jar
 Start the proxy:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.13.jar
+java -jar target/tcpmon-tls-0.6.14.jar
 ```
 
 Open the UI and create routes from there:
@@ -216,15 +216,15 @@ The config file manages **application-level settings only**. Routes are stored i
 Generate an example:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.13.jar --init-config tcpmon.json
+java -jar target/tcpmon-tls-0.6.14.jar --init-config tcpmon.json
 # or
-java -jar target/tcpmon-tls-0.6.13.jar --init-config tcpmon.yaml
+java -jar target/tcpmon-tls-0.6.14.jar --init-config tcpmon.yaml
 ```
 
 Start with a config file:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.13.jar --config tcpmon.json
+java -jar target/tcpmon-tls-0.6.14.jar --config tcpmon.json
 ```
 
 ### Config file fields
@@ -278,7 +278,7 @@ logging:
 ### CLI flags
 
 ```bash
-java -jar target/tcpmon-tls-0.6.13.jar \
+java -jar target/tcpmon-tls-0.6.14.jar \
   --ui-host 127.0.0.1 \
   --ui-port 8080 \
   --ui-enabled=true \
@@ -407,7 +407,7 @@ When the flag is omitted, the API is open (default for local use).
 Provide a PKCS12 or JKS keystore to serve the UI over HTTPS:
 
 ```bash
-java -jar target/tcpmon-tls-0.6.13.jar \
+java -jar target/tcpmon-tls-0.6.14.jar \
   --ui-tls-keystore ./ui.p12 \
   --ui-tls-keystore-password changeit
 ```

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.14] - 2026-08-19
+
+### Bug fixes
+
+- **Route sidebar cards no longer truncate the route ID and listener→target address** — Edit/Duplicate/Delete were only visible on hover but still reserved space in the row's layout at all times, squeezing the readable content down to a sliver (e.g. "api-users-se…", "127.0.0.…"). The action buttons now overlay the row on hover instead of reserving permanent space, the address gets its own full-width line, and the sidebar is slightly wider
+
 ## [0.6.13] - 2026-08-19
 
 ### Features
