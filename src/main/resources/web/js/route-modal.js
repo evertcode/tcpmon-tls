@@ -12,6 +12,30 @@ function toggleTargetTls(val) {
   document.getElementById('target-tls-fields').style.display = val === 'TLS' ? '' : 'none';
 }
 
+function toggleMockFields(enabled) {
+  document.getElementById('rm-mock-fields').style.display = enabled ? '' : 'none';
+}
+
+function checkTlsCertKeystoreConflict(certId, keyId, keystoreId, warningId) {
+  const warning = document.getElementById(warningId);
+  if (!warning) return;
+  const hasCertPair = routeModalFieldValue(certId) && routeModalFieldValue(keyId);
+  const hasKeystore = routeModalFieldValue(keystoreId);
+  if (hasCertPair && hasKeystore) {
+    warning.textContent = 'Both certificate/key and keystore are set — certificate/key takes precedence, the keystore will be ignored.';
+    warning.style.display = 'block';
+  } else {
+    warning.textContent = '';
+    warning.style.display = 'none';
+  }
+}
+
+function checkAllTlsConflicts() {
+  checkTlsCertKeystoreConflict('rm-listener-tls-cert', 'rm-listener-tls-key', 'rm-listener-tls-keystore', 'rm-listener-tls-conflict-warning');
+  checkTlsCertKeystoreConflict('rm-listener-replay-tls-cert', 'rm-listener-replay-tls-key', 'rm-listener-replay-tls-keystore', 'rm-listener-replay-tls-conflict-warning');
+  checkTlsCertKeystoreConflict('rm-target-tls-cert', 'rm-target-tls-key', 'rm-target-tls-keystore', 'rm-target-tls-conflict-warning');
+}
+
 function routeModalFieldValue(id, fallback = '') {
   const field = document.getElementById(id);
   if (!field) return fallback;
@@ -39,6 +63,21 @@ function updateRouteModalSummary() {
   pills.push(`Listener ${listener}`);
   pills.push(`Target ${target}`);
   pills.push(`${listenerTransport} → ${targetTransport}`);
+
+  if (document.getElementById('rm-mock-enabled')?.checked) {
+    const status = routeModalFieldValue('rm-mock-status', '200');
+    pills.push(`Mock ${status}`);
+  }
+  const interceptMethod = routeModalFieldValue('rm-intercept-method');
+  const interceptPath = routeModalFieldValue('rm-intercept-path');
+  if (interceptMethod || interceptPath) {
+    pills.push(`Intercept ${[interceptMethod, interceptPath].filter(Boolean).join(' ')}`);
+  }
+  const requestDelay = parseInt(routeModalFieldValue('rm-request-delay', '0'), 10) || 0;
+  const responseDelay = parseInt(routeModalFieldValue('rm-response-delay', '0'), 10) || 0;
+  if (requestDelay > 0 || responseDelay > 0) {
+    pills.push(`Delay ${requestDelay}/${responseDelay}ms`);
+  }
 
   summary.replaceChildren();
   for (const label of pills) {
@@ -97,11 +136,18 @@ function openAddRouteModal() {
   document.getElementById('rm-response-delay').value = '';
   document.getElementById('rm-intercept-method').value = '';
   document.getElementById('rm-intercept-path').value = '';
+  document.getElementById('rm-mock-enabled').checked = false;
   document.getElementById('rm-mock-status').value = '';
   document.getElementById('rm-mock-method').value = '';
   document.getElementById('rm-mock-path').value = '';
   document.getElementById('rm-mock-headers').value = '';
   document.getElementById('rm-mock-body').value = '';
+  toggleMockFields(false);
+  document.getElementById('rm-listener-tls-advanced').open = false;
+  document.getElementById('rm-target-tls-advanced').open = false;
+  document.getElementById('rm-simulation-details').open = false;
+  document.getElementById('rm-intercept-details').open = false;
+  checkAllTlsConflicts();
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -171,11 +217,22 @@ function openEditRouteModal(routeId) {
   document.getElementById('rm-response-delay').value = route.responseDelayMs || '';
   document.getElementById('rm-intercept-method').value = route.interceptMethod || '';
   document.getElementById('rm-intercept-path').value = route.interceptPathContains || '';
+  const mockEnabled = !!(route.mockStatusCode && route.mockStatusCode > 0);
+  document.getElementById('rm-mock-enabled').checked = mockEnabled;
   document.getElementById('rm-mock-status').value = route.mockStatusCode || '';
   document.getElementById('rm-mock-method').value = route.mockMethod || '';
   document.getElementById('rm-mock-path').value = route.mockPathContains || '';
   document.getElementById('rm-mock-headers').value = route.mockHeaders || '';
   document.getElementById('rm-mock-body').value = route.mockBody || '';
+  toggleMockFields(mockEnabled);
+  document.getElementById('rm-listener-tls-advanced').open =
+    listenerTransport === 'TLS' && !!((route.listener.tlsProtocols || []).length || (route.listener.tlsCiphers || []).length
+      || replayIdentity.tlsCert || replayIdentity.tlsKey || replayIdentity.tlsKeystore);
+  document.getElementById('rm-target-tls-advanced').open =
+    targetTransport === 'TLS' && !!((route.target.tlsProtocols || []).length || (route.target.tlsCiphers || []).length);
+  document.getElementById('rm-simulation-details').open = !!(route.requestDelayMs || route.responseDelayMs);
+  document.getElementById('rm-intercept-details').open = !!(route.interceptMethod || route.interceptPathContains);
+  checkAllTlsConflicts();
   clearRouteModalErrors();
   updateRouteModalSummary();
   routeModalOpenerEl = document.activeElement;
@@ -268,7 +325,9 @@ function buildRoutePayload() {
     responseDelayMs: Math.max(0, parseInt(document.getElementById('rm-response-delay').value, 10) || 0),
     interceptMethod: document.getElementById('rm-intercept-method').value.trim().toUpperCase() || null,
     interceptPathContains: document.getElementById('rm-intercept-path').value.trim() || null,
-    mockStatusCode: Math.max(0, parseInt(document.getElementById('rm-mock-status').value, 10) || 0),
+    mockStatusCode: document.getElementById('rm-mock-enabled').checked
+      ? Math.max(100, parseInt(document.getElementById('rm-mock-status').value, 10) || 200)
+      : 0,
     mockMethod: document.getElementById('rm-mock-method').value.trim().toUpperCase() || null,
     mockPathContains: document.getElementById('rm-mock-path').value.trim() || null,
     mockHeaders: document.getElementById('rm-mock-headers').value.trim() || null,

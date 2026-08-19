@@ -358,6 +358,8 @@ function activeFilterSummary() {
 function setFieldInvalid(field, message) {
   if (!field) return;
   field.setAttribute('aria-invalid', 'true');
+  const details = field.closest ? field.closest('details') : null;
+  if (details) details.open = true;
   const group = field.closest ? field.closest('.form-group') : null;
   if (!group) return;
   const existing = group.querySelector ? group.querySelector('.field-error') : null;

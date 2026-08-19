@@ -136,6 +136,7 @@
               </select>
             </div>
           </div>
+          <div id="rm-listener-tls-conflict-warning" class="field-warning" style="display:none;"></div>
           <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
           <div class="form-row-3">
             <div class="form-group">
@@ -162,45 +163,49 @@
               <option value="REQUIRE">Require</option>
             </select>
           </div>
-          <div class="form-row" style="margin-top:8px;">
-            <div class="form-group">
-              <label for="rm-listener-tls-protocols">TLS protocols <span class="label-hint">(comma-separated, e.g. TLSv1.2,TLSv1.3)</span></label>
-              <input type="text" id="rm-listener-tls-protocols" placeholder="uses global default">
+          <details id="rm-listener-tls-advanced" class="tls-advanced-details">
+            <summary>Advanced (protocols, ciphers, replay identity)</summary>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="rm-listener-tls-protocols">TLS protocols <span class="label-hint">(comma-separated, e.g. TLSv1.2,TLSv1.3)</span></label>
+                <input type="text" id="rm-listener-tls-protocols" placeholder="uses global default">
+              </div>
+              <div class="form-group">
+                <label for="rm-listener-tls-ciphers">Cipher suites <span class="label-hint">(comma-separated)</span></label>
+                <input type="text" id="rm-listener-tls-ciphers" placeholder="uses global default">
+              </div>
             </div>
-            <div class="form-group">
-              <label for="rm-listener-tls-ciphers">Cipher suites <span class="label-hint">(comma-separated)</span></label>
-              <input type="text" id="rm-listener-tls-ciphers" placeholder="uses global default">
+            <div class="tls-subsection-label" style="margin-top:10px;">Recapture client identity <span class="label-hint">(used when replaying/recapturing into this listener; required if Client Authentication is Require)</span></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="rm-listener-replay-tls-cert">Certificate file</label>
+                <input type="text" id="rm-listener-replay-tls-cert" placeholder="/path/to/cert.pem">
+              </div>
+              <div class="form-group">
+                <label for="rm-listener-replay-tls-key">Private key file</label>
+                <input type="text" id="rm-listener-replay-tls-key" placeholder="/path/to/key.pem">
+              </div>
             </div>
-          </div>
-          <div class="tls-subsection-label" style="margin-top:10px;">Recapture client identity <span class="label-hint">(used when replaying/recapturing into this listener; required if Client Authentication is Require)</span></div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="rm-listener-replay-tls-cert">Certificate file</label>
-              <input type="text" id="rm-listener-replay-tls-cert" placeholder="/path/to/cert.pem">
+            <div class="tls-alt-or">- or keystore -</div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label for="rm-listener-replay-tls-keystore">Keystore file</label>
+                <input type="text" id="rm-listener-replay-tls-keystore" placeholder="/path/to/keystore.p12">
+              </div>
+              <div class="form-group">
+                <label for="rm-listener-replay-tls-keystore-pwd">Password</label>
+                <input type="password" id="rm-listener-replay-tls-keystore-pwd" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label for="rm-listener-replay-tls-keystore-type">Type</label>
+                <select id="rm-listener-replay-tls-keystore-type">
+                  <option value="PKCS12">PKCS12</option>
+                  <option value="JKS">JKS</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="rm-listener-replay-tls-key">Private key file</label>
-              <input type="text" id="rm-listener-replay-tls-key" placeholder="/path/to/key.pem">
-            </div>
-          </div>
-          <div class="tls-alt-or">- or keystore -</div>
-          <div class="form-row-3">
-            <div class="form-group">
-              <label for="rm-listener-replay-tls-keystore">Keystore file</label>
-              <input type="text" id="rm-listener-replay-tls-keystore" placeholder="/path/to/keystore.p12">
-            </div>
-            <div class="form-group">
-              <label for="rm-listener-replay-tls-keystore-pwd">Password</label>
-              <input type="password" id="rm-listener-replay-tls-keystore-pwd" autocomplete="off">
-            </div>
-            <div class="form-group">
-              <label for="rm-listener-replay-tls-keystore-type">Type</label>
-              <select id="rm-listener-replay-tls-keystore-type">
-                <option value="PKCS12">PKCS12</option>
-                <option value="JKS">JKS</option>
-              </select>
-            </div>
-          </div>
+            <div id="rm-listener-replay-tls-conflict-warning" class="field-warning" style="display:none;"></div>
+          </details>
         </div>
 
         <div class="form-section-hdr">Target</div>
@@ -268,6 +273,7 @@
               </select>
             </div>
           </div>
+          <div id="rm-target-tls-conflict-warning" class="field-warning" style="display:none;"></div>
           <div class="tls-subsection-label" style="margin-top:10px;">Truststore</div>
           <div class="form-row-3">
             <div class="form-group">
@@ -286,67 +292,80 @@
               </select>
             </div>
           </div>
-          <div class="form-row" style="margin-top:10px;">
-            <div class="form-group">
-              <label for="rm-target-tls-protocols">TLS protocols <span class="label-hint">(comma-separated, e.g. TLSv1.2,TLSv1.3)</span></label>
-              <input type="text" id="rm-target-tls-protocols" placeholder="uses global default">
+          <details id="rm-target-tls-advanced" class="tls-advanced-details">
+            <summary>Advanced (protocols, ciphers)</summary>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="rm-target-tls-protocols">TLS protocols <span class="label-hint">(comma-separated, e.g. TLSv1.2,TLSv1.3)</span></label>
+                <input type="text" id="rm-target-tls-protocols" placeholder="uses global default">
+              </div>
+              <div class="form-group">
+                <label for="rm-target-tls-ciphers">Cipher suites <span class="label-hint">(comma-separated)</span></label>
+                <input type="text" id="rm-target-tls-ciphers" placeholder="uses global default">
+              </div>
             </div>
-            <div class="form-group">
-              <label for="rm-target-tls-ciphers">Cipher suites <span class="label-hint">(comma-separated)</span></label>
-              <input type="text" id="rm-target-tls-ciphers" placeholder="uses global default">
-            </div>
-          </div>
+          </details>
         </div>
 
-        <div class="form-section-hdr">Simulation</div>
-        <div class="section-note">Optional artificial delay to simulate a slow network. Only applies to non-intercepted (immediate-forward) traffic.</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="rm-request-delay">Request delay (ms) <span class="label-hint">(client → target)</span></label>
-            <input type="number" id="rm-request-delay" placeholder="0" min="0">
+        <details id="rm-simulation-details" class="form-section-details">
+          <summary>Simulation</summary>
+          <div class="section-note">Optional artificial delay to simulate a slow network. Only applies to non-intercepted (immediate-forward) traffic.</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="rm-request-delay">Request delay (ms) <span class="label-hint">(client → target)</span></label>
+              <input type="number" id="rm-request-delay" placeholder="0" min="0">
+            </div>
+            <div class="form-group">
+              <label for="rm-response-delay">Response delay (ms) <span class="label-hint">(target → client)</span></label>
+              <input type="number" id="rm-response-delay" placeholder="0" min="0">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="rm-response-delay">Response delay (ms) <span class="label-hint">(target → client)</span></label>
-            <input type="number" id="rm-response-delay" placeholder="0" min="0">
-          </div>
-        </div>
+        </details>
 
-        <div class="form-section-hdr">Conditional Interception</div>
-        <div class="section-note">Optional filter to only pause matching requests when intercept mode is on for this route's traffic; everything else auto-forwards. Leave blank to intercept every request (current behavior).</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="rm-intercept-method">Method <span class="label-hint">(e.g. POST)</span></label>
-            <input type="text" id="rm-intercept-method" placeholder="any method">
+        <details id="rm-intercept-details" class="form-section-details">
+          <summary>Conditional Interception</summary>
+          <div class="section-note">Optional filter to only pause matching requests when intercept mode is on for this route's traffic; everything else auto-forwards. Leave blank to intercept every request (current behavior).</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="rm-intercept-method">Method <span class="label-hint">(e.g. POST)</span></label>
+              <input type="text" id="rm-intercept-method" placeholder="any method">
+            </div>
+            <div class="form-group">
+              <label for="rm-intercept-path">Path contains <span class="label-hint">(substring match)</span></label>
+              <input type="text" id="rm-intercept-path" placeholder="any path">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="rm-intercept-path">Path contains <span class="label-hint">(substring match)</span></label>
-            <input type="text" id="rm-intercept-path" placeholder="any path">
-          </div>
-        </div>
+        </details>
 
         <div class="form-section-hdr">Mock Response</div>
-        <div class="section-note">Optional stub: matching requests get this canned response instead of reaching the target. Works even if the target is unreachable. Leave status at 0 to disable.</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="rm-mock-status">Status code <span class="label-hint">(0 = disabled)</span></label>
-            <input type="number" id="rm-mock-status" placeholder="0" min="0" max="599">
-          </div>
-          <div class="form-group">
-            <label for="rm-mock-method">Method <span class="label-hint">(e.g. POST)</span></label>
-            <input type="text" id="rm-mock-method" placeholder="any method">
-          </div>
-          <div class="form-group">
-            <label for="rm-mock-path">Path contains <span class="label-hint">(substring match)</span></label>
-            <input type="text" id="rm-mock-path" placeholder="any path">
-          </div>
+        <div class="section-note">Optional stub: matching requests get this canned response instead of reaching the target, even if the target is unreachable.</div>
+        <div class="form-check">
+          <input type="checkbox" id="rm-mock-enabled">
+          <label for="rm-mock-enabled">Enable mock response for this route</label>
         </div>
-        <div class="form-group">
-          <label for="rm-mock-headers">Headers <span class="label-hint">(Name: Value per line)</span></label>
-          <textarea id="rm-mock-headers" rows="4" placeholder="Content-Type: application/json"></textarea>
-        </div>
-        <div class="form-group">
-          <label for="rm-mock-body">Body</label>
-          <textarea id="rm-mock-body" rows="6" placeholder=""></textarea>
+        <div id="rm-mock-fields" style="display:none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="rm-mock-status">Status code</label>
+              <input type="number" id="rm-mock-status" placeholder="200" min="100" max="599">
+            </div>
+            <div class="form-group">
+              <label for="rm-mock-method">Method <span class="label-hint">(e.g. POST)</span></label>
+              <input type="text" id="rm-mock-method" placeholder="any method">
+            </div>
+            <div class="form-group">
+              <label for="rm-mock-path">Path contains <span class="label-hint">(substring match)</span></label>
+              <input type="text" id="rm-mock-path" placeholder="any path">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="rm-mock-headers">Headers <span class="label-hint">(Name: Value per line)</span></label>
+            <textarea id="rm-mock-headers" rows="4" placeholder="Content-Type: application/json"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="rm-mock-body">Body</label>
+            <textarea id="rm-mock-body" rows="6" placeholder=""></textarea>
+          </div>
         </div>
 
         <div class="modal-actions" id="route-modal-actions">

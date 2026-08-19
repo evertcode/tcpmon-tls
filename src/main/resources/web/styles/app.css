@@ -1562,6 +1562,31 @@ pre {
 .form-group input[type=text], .form-group input[type=number], .form-group input[type=password] { font-family: var(--mono); font-size: 12px; font-variant-ligatures: none; }
 .form-section-hdr { display:flex; align-items:center; gap:8px; margin:18px 0 10px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
 .form-section-hdr::after { content:''; flex:1; height:1px; background:var(--border); }
+.form-section-details { margin:18px 0 10px; }
+.form-section-details > summary {
+  display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:.06em; cursor:pointer; list-style:none; user-select:none;
+}
+.form-section-details > summary::-webkit-details-marker { display:none; }
+.form-section-details > summary::before { content:'▸'; display:inline-block; font-size:9px; width:9px; }
+.form-section-details[open] > summary::before { content:'▾'; }
+.form-section-details > summary::after { content:''; flex:1; height:1px; background:var(--border); }
+.form-section-details[open] > summary { margin-bottom:10px; }
+.form-section-details .section-note:first-of-type { margin-top:0; }
+.tls-advanced-details { margin-top:10px; }
+.tls-advanced-details > summary {
+  display:flex; align-items:center; gap:6px; font-size:10px; font-weight:600; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:.05em; cursor:pointer; list-style:none; user-select:none; margin-bottom:6px;
+}
+.tls-advanced-details > summary::-webkit-details-marker { display:none; }
+.tls-advanced-details > summary::before { content:'▸'; display:inline-block; font-size:9px; width:9px; }
+.tls-advanced-details[open] > summary::before { content:'▾'; }
+.field-warning {
+  color: var(--warn);
+  font-size: 11px;
+  line-height: 1.35;
+  margin: -4px 0 10px;
+}
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .form-row-3 { display:grid; grid-template-columns:2fr 2fr 1fr; gap:8px; }
 .tls-alt-or { text-align:center; font-size:11px; color:var(--text-muted); margin:4px 0 8px; opacity:.7; }

@@ -299,6 +299,23 @@ function bindUiEvents() {
   const targetTransport = document.getElementById('rm-target-transport');
   if (targetTransport) targetTransport.addEventListener('change', event => toggleTargetTls(event.target.value));
 
+  const mockEnabled = document.getElementById('rm-mock-enabled');
+  if (mockEnabled) {
+    mockEnabled.addEventListener('change', event => {
+      toggleMockFields(event.target.checked);
+      updateRouteModalSummary();
+    });
+  }
+
+  for (const fieldId of [
+    'rm-listener-tls-cert', 'rm-listener-tls-key', 'rm-listener-tls-keystore',
+    'rm-listener-replay-tls-cert', 'rm-listener-replay-tls-key', 'rm-listener-replay-tls-keystore',
+    'rm-target-tls-cert', 'rm-target-tls-key', 'rm-target-tls-keystore'
+  ]) {
+    const field = document.getElementById(fieldId);
+    if (field) field.addEventListener('input', checkAllTlsConflicts);
+  }
+
   document.addEventListener('change', event => {
     if (event.target && event.target.id === 'theme-select') {
       applyThemePreference(event.target.value);
@@ -313,7 +330,12 @@ function bindUiEvents() {
     'rm-listener-transport',
     'rm-target-host',
     'rm-target-port',
-    'rm-target-transport'
+    'rm-target-transport',
+    'rm-mock-status',
+    'rm-intercept-method',
+    'rm-intercept-path',
+    'rm-request-delay',
+    'rm-response-delay'
   ]) {
     const field = document.getElementById(fieldId);
     if (field && typeof updateRouteModalSummary === 'function') {
