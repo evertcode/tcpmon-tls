@@ -401,14 +401,37 @@
       </div>
       <div class="modal-body replay-edit-modal-body">
         <div class="editor-grid">
-          <div class="request-grid">
-            <input id="replay-edit-method" placeholder="Method">
-            <input id="replay-edit-path" placeholder="Path">
-            <input id="replay-edit-query" placeholder="Query">
-            <input id="replay-edit-version" placeholder="Version">
+          <div id="replay-edit-summary" class="route-modal-summary" aria-live="polite"></div>
+          <div class="form-row">
+            <div class="form-group"><label for="replay-edit-method">Method</label><select id="replay-edit-method">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+              <option value="HEAD">HEAD</option>
+              <option value="OPTIONS">OPTIONS</option>
+              <option value="TRACE">TRACE</option>
+              <option value="CONNECT">CONNECT</option>
+            </select></div>
+            <div class="form-group"><label for="replay-edit-path">Path</label><input type="text" id="replay-edit-path" placeholder="/"></div>
           </div>
-          <textarea id="replay-edit-headers" rows="8" placeholder="Headers"></textarea>
-          <textarea id="replay-edit-body" rows="10" placeholder="Body"></textarea>
+          <div class="form-row">
+            <div class="form-group"><label for="replay-edit-query">Query</label><input type="text" id="replay-edit-query" placeholder="key=value"></div>
+            <div class="form-group"><label for="replay-edit-version">Version</label><input type="text" id="replay-edit-version" placeholder="HTTP/1.1"></div>
+          </div>
+          <div class="form-group">
+            <label>Headers</label>
+            <div id="replay-edit-headers-list" class="header-pairs-list"></div>
+            <button type="button" class="utility" data-action="add-header-row" data-target="replay-edit-headers-list">+ Add header</button>
+          </div>
+          <div class="form-group">
+            <div class="body-field-hdr">
+              <label for="replay-edit-body">Body</label>
+              <button type="button" class="utility" data-action="format-body-field" data-target="replay-edit-body">Format</button>
+            </div>
+            <textarea id="replay-edit-body" rows="10" placeholder="Body"></textarea>
+          </div>
         </div>
         <div class="modal-actions">
           <button id="replay-edit-cancel-btn" class="secondary">Cancel</button>
@@ -430,14 +453,37 @@
       <div class="modal-body request-builder-modal-body">
         <div class="editor-grid">
           <select id="rb-route-select" aria-label="Route"></select>
-          <div class="request-grid">
-            <input id="rb-method" placeholder="Method">
-            <input id="rb-path" placeholder="Path">
-            <input id="rb-query" placeholder="Query">
-            <input id="rb-version" placeholder="Version">
+          <div id="rb-summary" class="route-modal-summary" aria-live="polite"></div>
+          <div class="form-row">
+            <div class="form-group"><label for="rb-method">Method</label><select id="rb-method">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+              <option value="HEAD">HEAD</option>
+              <option value="OPTIONS">OPTIONS</option>
+              <option value="TRACE">TRACE</option>
+              <option value="CONNECT">CONNECT</option>
+            </select></div>
+            <div class="form-group"><label for="rb-path">Path</label><input type="text" id="rb-path" placeholder="/"></div>
           </div>
-          <textarea id="rb-headers" rows="8" placeholder="Headers"></textarea>
-          <textarea id="rb-body" rows="10" placeholder="Body"></textarea>
+          <div class="form-row">
+            <div class="form-group"><label for="rb-query">Query</label><input type="text" id="rb-query" placeholder="key=value"></div>
+            <div class="form-group"><label for="rb-version">Version</label><input type="text" id="rb-version" placeholder="HTTP/1.1"></div>
+          </div>
+          <div class="form-group">
+            <label>Headers</label>
+            <div id="rb-headers-list" class="header-pairs-list"></div>
+            <button type="button" class="utility" data-action="add-header-row" data-target="rb-headers-list">+ Add header</button>
+          </div>
+          <div class="form-group">
+            <div class="body-field-hdr">
+              <label for="rb-body">Body</label>
+              <button type="button" class="utility" data-action="format-body-field" data-target="rb-body">Format</button>
+            </div>
+            <textarea id="rb-body" rows="10" placeholder="Body"></textarea>
+          </div>
         </div>
         <div class="modal-actions">
           <button id="request-builder-cancel-btn" class="secondary">Cancel</button>

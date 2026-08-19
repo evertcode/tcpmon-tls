@@ -20,15 +20,18 @@ async function openReplayEditModal() {
   }
 
   const request = decoded.request || {};
-  document.getElementById('replay-edit-method').value = request.method || '';
+  setMethodSelectValue('replay-edit-method', request.method);
   document.getElementById('replay-edit-path').value = request.path || '';
   document.getElementById('replay-edit-query').value = request.query || '';
   document.getElementById('replay-edit-version').value = request.version || 'HTTP/1.1';
-  document.getElementById('replay-edit-headers').value = decoded.headersText || '';
+  populateHeaderPairs('replay-edit-headers-list', decoded.headers);
   document.getElementById('replay-edit-body').value = bodyText;
 
   const modal = document.getElementById('replay-edit-modal');
   modal.dataset.routeId = routeId;
+  buildComposerSummaryPills('replay-edit-summary', routeId, lastLoadedSession.listenerAddress, lastLoadedSession.targetAddress);
+  clearFieldInvalid(document.getElementById('replay-edit-method'));
+  clearFieldInvalid(document.getElementById('replay-edit-path'));
   modal.style.display = 'flex';
   modal.removeAttribute('aria-hidden');
   setTimeout(() => document.getElementById('replay-edit-method').focus(), 50);
@@ -37,6 +40,23 @@ async function openReplayEditModal() {
 async function submitReplayEdit(destination) {
   const modal = document.getElementById('replay-edit-modal');
   const routeId = modal.dataset.routeId;
+  const methodField = document.getElementById('replay-edit-method');
+  const pathField = document.getElementById('replay-edit-path');
+  clearFieldInvalid(methodField);
+  clearFieldInvalid(pathField);
+  let hasError = false;
+  if (!methodField.value.trim()) {
+    setFieldInvalid(methodField, 'Method is required.');
+    hasError = true;
+  }
+  if (!pathField.value.trim()) {
+    setFieldInvalid(pathField, 'Path is required.');
+    hasError = true;
+  }
+  if (hasError) {
+    setStatus('error', 'Review the highlighted fields before sending.');
+    return;
+  }
   const buttons = modal.querySelectorAll('[data-action="submit-replay-edit"]');
   buttons.forEach(btn => { btn.disabled = true; });
   try {
@@ -47,11 +67,11 @@ async function submitReplayEdit(destination) {
         routeId,
         destination,
         http: {
-          method: document.getElementById('replay-edit-method').value,
-          path: document.getElementById('replay-edit-path').value,
+          method: methodField.value,
+          path: pathField.value,
           query: document.getElementById('replay-edit-query').value,
           version: document.getElementById('replay-edit-version').value,
-          headersText: document.getElementById('replay-edit-headers').value,
+          headersText: serializeHeaderPairs('replay-edit-headers-list'),
           bodyText: document.getElementById('replay-edit-body').value
         }
       })

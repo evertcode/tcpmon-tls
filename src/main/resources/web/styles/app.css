@@ -1423,6 +1423,29 @@ pre {
   grid-template-columns: 120px 1fr 200px 130px;
   gap: 8px;
 }
+.header-pairs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.header-pair-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+.header-pair-remove {
+  padding: 4px 8px;
+}
+.body-field-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.body-field-hdr label {
+  margin: 0;
+}
 .empty {
   display: grid;
   place-items: center;

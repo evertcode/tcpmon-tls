@@ -50,6 +50,7 @@ function buildHarEntryPrefill(entry) {
     path,
     query,
     version: req.httpVersion || 'HTTP/1.1',
+    headers: req.headers || [],
     headersText,
     bodyText,
     startedAt: entry.startedDateTime || ''

@@ -65,6 +65,104 @@ function formatBody(decoded) {
   return bodyText;
 }
 
+function setMethodSelectValue(selectId, method) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const value = String(method || 'GET').toUpperCase();
+  const hasOption = Array.from(select.options).some(option => option.value === value);
+  if (!hasOption) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
+  }
+  select.value = value;
+}
+
+function buildHeaderPairRow(name = '', value = '') {
+  const row = document.createElement('div');
+  row.className = 'header-pair-row';
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'header-pair-name';
+  nameInput.placeholder = 'Name';
+  nameInput.value = name;
+  const valueInput = document.createElement('input');
+  valueInput.type = 'text';
+  valueInput.className = 'header-pair-value';
+  valueInput.placeholder = 'Value';
+  valueInput.value = value;
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'utility header-pair-remove';
+  removeBtn.setAttribute('aria-label', 'Remove header');
+  removeBtn.textContent = '✕';
+  removeBtn.addEventListener('click', () => row.remove());
+  row.append(nameInput, valueInput, removeBtn);
+  return row;
+}
+
+function populateHeaderPairs(containerId, headers) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.replaceChildren();
+  const list = Array.isArray(headers) && headers.length ? headers : [{ name: '', value: '' }];
+  for (const header of list) {
+    container.appendChild(buildHeaderPairRow(header.name || '', header.value || ''));
+  }
+}
+
+function addHeaderPairRow(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.appendChild(buildHeaderPairRow());
+}
+
+function serializeHeaderPairs(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return '';
+  const lines = [];
+  for (const row of container.children) {
+    const name = row.querySelector('.header-pair-name')?.value.trim();
+    const value = row.querySelector('.header-pair-value')?.value.trim() || '';
+    if (name) lines.push(`${name}: ${value}`);
+  }
+  return lines.join('\n');
+}
+
+function formatBodyFieldInPlace(textareaId) {
+  const field = document.getElementById(textareaId);
+  if (!field) return;
+  const value = field.value;
+  if (looksLikeJson(value)) {
+    try {
+      field.value = JSON.stringify(JSON.parse(value), null, 2);
+    } catch (error) {
+      setStatus('error', 'Body is not valid JSON');
+    }
+    return;
+  }
+  if (looksLikeXml(value)) {
+    field.value = prettyPrintXml(value);
+  }
+}
+
+function buildComposerSummaryPills(containerId, routeId, listenerAddr, targetAddr) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.replaceChildren();
+  const parts = [];
+  if (routeId) parts.push(routeId);
+  if (listenerAddr) parts.push(`Listener ${listenerAddr}`);
+  if (targetAddr) parts.push(`Target ${targetAddr}`);
+  for (const label of parts) {
+    const pill = document.createElement('span');
+    pill.className = 'pill route';
+    pill.textContent = label;
+    container.appendChild(pill);
+  }
+}
+
 function getHeaderValue(headers, name) {
   if (!Array.isArray(headers)) {
     return '';

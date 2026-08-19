@@ -10,6 +10,26 @@ function populateRequestBuilderRoutes() {
     option.textContent = route.id;
     return option;
   }));
+  if (!select.dataset.summaryBound) {
+    select.addEventListener('change', updateRequestBuilderSummary);
+    select.dataset.summaryBound = 'true';
+  }
+}
+
+function updateRequestBuilderSummary() {
+  const select = document.getElementById('rb-route-select');
+  const config = getState('proxyConfig');
+  const route = config ? (config.routes || []).find(r => r.id === select.value) : null;
+  if (!route) {
+    buildComposerSummaryPills('rb-summary', '', '', '');
+    return;
+  }
+  buildComposerSummaryPills(
+    'rb-summary',
+    route.id,
+    `${route.listener.host}:${route.listener.port}`,
+    `${route.target.host}:${route.target.port}`
+  );
 }
 
 function openRequestBuilderModal(prefill) {
@@ -22,12 +42,15 @@ function openRequestBuilderModal(prefill) {
 
   requestBuilderModalOpenerEl = document.activeElement;
 
-  document.getElementById('rb-method').value = prefill?.method || 'GET';
+  setMethodSelectValue('rb-method', prefill?.method);
   document.getElementById('rb-path').value = prefill?.path || '';
   document.getElementById('rb-query').value = prefill?.query || '';
   document.getElementById('rb-version').value = prefill?.version || 'HTTP/1.1';
-  document.getElementById('rb-headers').value = prefill?.headersText || '';
+  populateHeaderPairs('rb-headers-list', prefill?.headers);
   document.getElementById('rb-body').value = prefill?.bodyText || '';
+  updateRequestBuilderSummary();
+  clearFieldInvalid(document.getElementById('rb-method'));
+  clearFieldInvalid(document.getElementById('rb-path'));
 
   const modal = document.getElementById('request-builder-modal');
   modal.style.display = 'flex';
@@ -38,6 +61,23 @@ function openRequestBuilderModal(prefill) {
 async function submitRequestBuilder(destination) {
   const modal = document.getElementById('request-builder-modal');
   const routeId = document.getElementById('rb-route-select').value;
+  const methodField = document.getElementById('rb-method');
+  const pathField = document.getElementById('rb-path');
+  clearFieldInvalid(methodField);
+  clearFieldInvalid(pathField);
+  let hasError = false;
+  if (!methodField.value.trim()) {
+    setFieldInvalid(methodField, 'Method is required.');
+    hasError = true;
+  }
+  if (!pathField.value.trim()) {
+    setFieldInvalid(pathField, 'Path is required.');
+    hasError = true;
+  }
+  if (hasError) {
+    setStatus('error', 'Review the highlighted fields before sending.');
+    return;
+  }
   const buttons = modal.querySelectorAll('[data-action="submit-request-builder"]');
   buttons.forEach(btn => { btn.disabled = true; });
   try {
@@ -48,11 +88,11 @@ async function submitRequestBuilder(destination) {
         routeId,
         destination,
         http: {
-          method: document.getElementById('rb-method').value,
-          path: document.getElementById('rb-path').value,
+          method: methodField.value,
+          path: pathField.value,
           query: document.getElementById('rb-query').value,
           version: document.getElementById('rb-version').value,
-          headersText: document.getElementById('rb-headers').value,
+          headersText: serializeHeaderPairs('rb-headers-list'),
           bodyText: document.getElementById('rb-body').value
         }
       })

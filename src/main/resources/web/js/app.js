@@ -429,6 +429,12 @@ function bindUiEvents() {
       case 'submit-edited':
         await submitEdited(actionEl.dataset.pendingId);
         break;
+      case 'add-header-row':
+        addHeaderPairRow(actionEl.dataset.target);
+        break;
+      case 'format-body-field':
+        formatBodyFieldInPlace(actionEl.dataset.target);
+        break;
       default:
         break;
     }

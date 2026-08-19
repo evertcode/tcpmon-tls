@@ -110,7 +110,10 @@ final class PayloadInspector {
         decoded.put("startLine", lines[0]);
         decoded.put("request", parseRequestLine(lines[0]));
         decoded.put("headers", headers);
-        decoded.put("headersText", headersBlock);
+        String headersOnlyText = headers.stream()
+                .map(h -> h.get("name") + ": " + h.get("value"))
+                .collect(java.util.stream.Collectors.joining("\r\n"));
+        decoded.put("headersText", headersOnlyText);
         decoded.put("bodyText", sanitize(bodyText));
         if (truncated) {
             decoded.put("bodyTruncated", true);
