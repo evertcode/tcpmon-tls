@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.15] - 2026-08-21
+
+### Features
+
+- **Fleet overview screen** — a new `GET /api/overview` endpoint and screen show the health of every route at once, instead of one route at a time. 4xx responses are counted apart from 5xx, because this project treats 5xx as the error rate; a route that answers only 404s would otherwise look healthy
+- **Command palette and keyboard shortcuts** — an expert user can run the common tasks from the keyboard. A shortcuts dialog lists the available keys
+- **Sortable columns and a row density switch** — the sort applies to the current page only, because the server paginates the list
+
+### UI improvements
+
+- **Extended design token set** — spacing, typography, radius, elevation and focus scales are tokens now, so a component no longer invents its own values. The focus rings were hardcoded blue and stayed unreadable in the dark theme
+- **Skeleton, empty and error states** — an area that loads or fails now says so, instead of rendering blank
+- **Button icon names moved into the markup** as `data-icon`, so the button list is no longer duplicated between `index.html` and the boot code
+
 ## [0.6.14] - 2026-08-19
 
 ### Bug fixes
