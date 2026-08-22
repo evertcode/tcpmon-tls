@@ -26,6 +26,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -453,6 +454,67 @@ public final class SessionStore implements AutoCloseable {
             }
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to list paginated request rows for route " + (routeId == null || routeId.isBlank() ? "(all routes)" : routeId), exception);
+        }
+    }
+
+    /**
+     * Lists the exchanges that started at or after the given instant, newest first.
+     *
+     * <p>The SQL filter compares the stored ISO-8601 text. That comparison is coarse when two
+     * timestamps share a second but differ in precision, so every row is checked again in Java.</p>
+     *
+     * @param since the start of the window
+     * @param limit the maximum number of rows to read
+     * @return the matching exchanges, newest first
+     */
+    public synchronized List<OverviewExchange> overviewExchanges(Instant since, int limit) {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                select
+                    route_id,
+                    started_at,
+                    duration_ms,
+                    response_status_code,
+                    request_method,
+                    request_path
+                from session_exchanges
+                where started_at is not null and started_at >= ?
+                order by started_at desc
+                limit ?
+                """)) {
+            statement.setString(1, since.toString());
+            statement.setInt(2, Math.max(1, limit));
+            try (ResultSet rs = statement.executeQuery()) {
+                List<OverviewExchange> rows = new ArrayList<>();
+                while (rs.next()) {
+                    Instant startedAt = parseInstantOrNull(rs.getString("started_at"));
+                    if (startedAt == null || startedAt.isBefore(since)) {
+                        continue;
+                    }
+                    int duration = rs.getInt("duration_ms");
+                    Integer durationMs = rs.wasNull() ? null : duration;
+                    rows.add(new OverviewExchange(
+                            rs.getString("route_id"),
+                            startedAt,
+                            durationMs,
+                            rs.getString("response_status_code"),
+                            rs.getString("request_method"),
+                            rs.getString("request_path")));
+                }
+                return rows;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to list overview exchanges since " + since, exception);
+        }
+    }
+
+    private static Instant parseInstantOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException exception) {
+            return null;
         }
     }
 

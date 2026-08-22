@@ -455,4 +455,169 @@ class ControlPlaneServerTest {
         assertEquals("font/otf", ControlPlaneServer.assetContentType("ibm-plex-sans-600.otf"));
         assertEquals("application/octet-stream", ControlPlaneServer.assetContentType("binary.bin"));
     }
+
+    @Test
+    void overviewEndpointReturnsTotalsAndPerRouteRows(@TempDir Path tempDir) throws Exception {
+        ProxyConfig config = overviewConfig(tempDir, 8080, "token");
+        RouteConfig healthy = overviewRoute("route-ok", 9000, "ok.example.com");
+        RouteConfig broken = overviewRoute("route-bad", 9001, "bad.example.com");
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            recordExchange(store, "route-ok", "GET /health", "200 OK");
+            recordExchange(store, "route-ok", "GET /health", "200 OK");
+            recordExchange(store, "route-bad", "POST /charge", "500 Internal Server Error");
+            recordExchange(store, "route-bad", "GET /missing", "404 Not Found");
+
+            OverviewAggregator.OverviewReport report = new OverviewAggregator(store).aggregate(60);
+
+            assertEquals(60, report.windowMinutes());
+            assertEquals(4, report.totals().requests());
+            assertEquals(1, report.totals().errors());
+            assertEquals(1, report.totals().clientErrors());
+            assertEquals(0.25, report.totals().errorRate());
+
+            Map<String, OverviewAggregator.RouteOverview> byId = new java.util.LinkedHashMap<>();
+            for (OverviewAggregator.RouteOverview route : report.routes()) {
+                byId.put(route.routeId(), route);
+            }
+            assertEquals(List.of("route-bad", "route-ok"), List.copyOf(byId.keySet()));
+
+            OverviewAggregator.RouteOverview okRoute = byId.get("route-ok");
+            assertEquals(2, okRoute.requests());
+            assertEquals(0, okRoute.errors());
+            assertEquals("healthy", okRoute.status());
+            assertEquals(OverviewAggregator.SPARKLINE_BUCKETS, okRoute.sparkline().size());
+
+            OverviewAggregator.RouteOverview badRoute = byId.get("route-bad");
+            assertEquals(1, badRoute.errors());
+            assertEquals(1, badRoute.clientErrors());
+            assertEquals(0.5, badRoute.errorRate());
+            assertEquals("failing", badRoute.status());
+
+            assertFalse(report.slowestPaths().isEmpty());
+            assertTrue(report.slowestPaths().size() <= OverviewAggregator.SLOWEST_PATH_LIMIT);
+
+            // A configured route without traffic still appears, marked idle.
+            OverviewAggregator.OverviewReport withIdle = OverviewAggregator.summarize(
+                    List.of(), List.of(healthy, broken), 60, Instant.now());
+            assertEquals(2, withIdle.routes().size());
+            assertEquals("idle", withIdle.routes().get(0).status());
+            assertEquals("127.0.0.1:9000", withIdle.routes().stream()
+                    .filter(route -> route.routeId().equals("route-ok"))
+                    .findFirst().orElseThrow().listener());
+        }
+    }
+
+    @Test
+    void overviewEndpointHonoursTheWindowParameter() {
+        Instant now = Instant.parse("2026-08-21T12:00:00Z");
+        List<com.cafeina.tcpmon.session.OverviewExchange> rows = List.of(
+                new com.cafeina.tcpmon.session.OverviewExchange(
+                        "route-a", now.minusSeconds(60), 100, "200", "GET", "/recent"),
+                new com.cafeina.tcpmon.session.OverviewExchange(
+                        "route-a", now.minusSeconds(300), 900, "200", "GET", "/older"));
+
+        OverviewAggregator.OverviewReport wide = OverviewAggregator.summarize(rows, List.of(), 60, now);
+        assertEquals(2, wide.totals().requests());
+        assertEquals(100, wide.totals().p50Ms());
+        assertEquals(900, wide.totals().p95Ms());
+
+        // The 15 minute window keeps both rows, but the sparkline places them in different buckets.
+        OverviewAggregator.OverviewReport narrow = OverviewAggregator.summarize(rows, List.of(), 15, now);
+        List<Long> sparkline = narrow.routes().get(0).sparkline();
+        assertEquals(OverviewAggregator.SPARKLINE_BUCKETS, sparkline.size());
+        assertEquals(2, sparkline.stream().mapToLong(Long::longValue).sum());
+        assertEquals(1, sparkline.get(sparkline.size() - 1));
+    }
+
+    @Test
+    void overviewEndpointRejectsAnInvalidWindow(@TempDir Path tempDir) throws Exception {
+        assertTrue(OverviewAggregator.isValidWindow(15));
+        assertTrue(OverviewAggregator.isValidWindow(60));
+        assertTrue(OverviewAggregator.isValidWindow(1440));
+        assertFalse(OverviewAggregator.isValidWindow(7));
+        assertFalse(OverviewAggregator.isValidWindow(0));
+        assertFalse(OverviewAggregator.isValidWindow(-60));
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            OverviewAggregator aggregator = new OverviewAggregator(store);
+            org.junit.jupiter.api.Assertions.assertThrows(
+                    IllegalArgumentException.class, () -> aggregator.aggregate(7));
+        }
+    }
+
+    @Test
+    void overviewEndpointRequiresAuthentication(@TempDir Path tempDir) throws Exception {
+        int port;
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
+            port = probe.getLocalPort();
+        }
+        ProxyConfig config = overviewConfig(tempDir, port, "secret-token");
+        RouteConfig route = overviewRoute("route-a", 9000, "example.com");
+
+        try (SessionStore store = new SessionStore(tempDir.resolve("sessions"), JsonSupport.objectMapper())) {
+            recordExchange(store, "route-a", "GET /health", "200 OK");
+            ControlPlaneServer server = new ControlPlaneServer(
+                    config,
+                    new RouteRegistry(List.of(route), store),
+                    (TcpMonProxy) null,
+                    store,
+                    new ReplayService(config, new RouteRegistry(List.of(route), null)));
+            server.start();
+            try {
+                java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+                java.net.URI uri = java.net.URI.create(
+                        "http://127.0.0.1:" + port + "/api/overview?windowMinutes=60");
+
+                java.net.http.HttpResponse<String> anonymous = client.send(
+                        java.net.http.HttpRequest.newBuilder(uri).GET().build(),
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                assertEquals(401, anonymous.statusCode());
+
+                java.net.http.HttpResponse<String> authorized = client.send(
+                        java.net.http.HttpRequest.newBuilder(uri)
+                                .header("Authorization", "Bearer secret-token")
+                                .GET().build(),
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                assertEquals(200, authorized.statusCode());
+                assertTrue(authorized.body().contains("\"windowMinutes\":60"));
+                assertTrue(authorized.body().contains("\"routeId\":\"route-a\""));
+
+                java.net.http.HttpResponse<String> badWindow = client.send(
+                        java.net.http.HttpRequest.newBuilder(
+                                        java.net.URI.create("http://127.0.0.1:" + port + "/api/overview?windowMinutes=7"))
+                                .header("Authorization", "Bearer secret-token")
+                                .GET().build(),
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                assertEquals(400, badWindow.statusCode());
+            } finally {
+                server.close();
+            }
+        }
+    }
+
+    private static ProxyConfig overviewConfig(Path tempDir, int port, String token) {
+        return new ProxyConfig(
+                new UiConfig("127.0.0.1", port, true, token, null),
+                tempDir,
+                com.cafeina.tcpmon.InterceptMode.NONE,
+                List.of("TLSv1.3"),
+                List.of());
+    }
+
+    private static RouteConfig overviewRoute(String id, int listenerPort, String targetHost) {
+        return new RouteConfig(
+                id,
+                new ListenerConfig("127.0.0.1", listenerPort, TransportMode.PLAIN, ClientAuthMode.NONE, null, List.of(), List.of(), null),
+                new TargetConfig(targetHost, 443, TransportMode.TLS, targetHost, false, true, false, null, List.of(), List.of()),
+                0, 0, null, null, List.of());
+    }
+
+    private static void recordExchange(SessionStore store, String routeId, String requestLine, String statusLine) {
+        String sessionId = store.openSession(routeId, "client", "listener", "target");
+        store.recordPayload(sessionId, Direction.CLIENT_TO_TARGET,
+                (requestLine + " HTTP/1.1\r\nHost: example.com\r\n\r\n").getBytes(), null, Map.of());
+        store.recordPayload(sessionId, Direction.TARGET_TO_CLIENT,
+                ("HTTP/1.1 " + statusLine + "\r\nContent-Length: 2\r\n\r\nOK").getBytes(), null, Map.of());
+    }
 }

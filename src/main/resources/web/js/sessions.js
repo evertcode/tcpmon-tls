@@ -90,7 +90,14 @@ async function loadRequestsForRoute(routeId) {
   });
 }
 
+function showRequestTableSkeleton() {
+  const container = document.getElementById('request-table');
+  if (!container) return;
+  container.replaceChildren(buildSkeleton('table', Number(getState('requestPageSize')) > 10 ? 6 : 4));
+}
+
 async function loadRequestsPage(routeId, cursor, resetStack) {
+  showRequestTableSkeleton();
   const method = getState('requestMethodFilterValue');
   const statusCode = getState('requestStatusCodeFilterValue');
   const q = getState('requestSearchValue').trim();
@@ -102,7 +109,20 @@ async function loadRequestsPage(routeId, cursor, resetStack) {
   if (statusCode) params.set('statusCode', statusCode);
   if (q) params.set('q', q);
 
-  const requestsData = await fetchJson('/api/requests?' + params);
+  let requestsData;
+  try {
+    requestsData = await fetchJson('/api/requests?' + params);
+  } catch (error) {
+    const container = document.getElementById('request-table');
+    if (container) {
+      container.replaceChildren(buildErrorState(
+        'Could not load this data.',
+        'Retry',
+        () => loadRequestsPage(routeId, cursor, resetStack)
+      ));
+    }
+    throw error;
+  }
 
   if (resetStack) {
     patchState({ requestCursorStack: [] });
@@ -200,7 +220,9 @@ function renderRequestTable() {
   const methodFilter = buildSelectElement('request-method-filter', renderMethodOptions());
   const statusCodeFilter = buildSelectElement('request-status-code-filter', renderStatusCodeOptions());
   const pageSizeFilter = buildSelectElement('request-page-size', renderPageSizeOptions());
-  toolbar.append(methodFilter, statusCodeFilter, pageSizeFilter);
+  const densityFilter = buildSelectElement('request-density', renderDensityOptions());
+  densityFilter.setAttribute('aria-label', 'Row density');
+  toolbar.append(methodFilter, statusCodeFilter, pageSizeFilter, densityFilter);
 
   if (hasActiveFilters) {
     const clearBtn = document.createElement('button');
@@ -242,7 +264,11 @@ function renderRequestTableContent(requestRows, showRoute = false) {
   const fragment = document.createDocumentFragment();
   const scroller = document.createElement('div');
   scroller.className = 'request-table-scroll';
-  scroller.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex, showRoute));
+  scroller.appendChild(buildRequestTableElement(requestRows, activeSession, activeExchangeIndex, showRoute, {
+    sortKey: getState('requestSortKey'),
+    sortDirection: getState('requestSortDirection'),
+    density: getState('tableDensity')
+  }));
   fragment.appendChild(scroller);
   fragment.appendChild(buildRequestTableFooter(rangeStart, rangeEnd, totalRequests, hasPrev, hasMore));
   return fragment;
@@ -258,6 +284,51 @@ function renderMethodOptions() {
       label: method,
       selected: method === requestMethodFilterValue
     })));
+}
+
+function renderDensityOptions() {
+  const current = getState('tableDensity') === 'compact' ? 'compact' : 'comfortable';
+  return [
+    { value: 'comfortable', label: 'Comfortable', selected: current === 'comfortable' },
+    { value: 'compact', label: 'Compact', selected: current === 'compact' }
+  ];
+}
+
+function toggleRequestSort(sortKey) {
+  if (!REQUEST_SORT_ACCESSORS[sortKey]) return;
+  const currentKey = getState('requestSortKey');
+  const currentDirection = getState('requestSortDirection');
+  if (currentKey === sortKey && currentDirection === 'desc') {
+    patchState({ requestSortDirection: 'asc' });
+  } else if (currentKey === sortKey && currentDirection === 'asc') {
+    patchState({ requestSortKey: null, requestSortDirection: 'desc' });
+  } else {
+    patchState({ requestSortKey: sortKey, requestSortDirection: 'desc' });
+  }
+  renderRequestTable();
+}
+
+const TABLE_DENSITY_STORAGE_KEY = 'tcpmon-table-density';
+
+function initializeTableDensity() {
+  let stored = null;
+  try {
+    stored = localStorage.getItem(TABLE_DENSITY_STORAGE_KEY);
+  } catch (_) {
+    stored = null;
+  }
+  setState('tableDensity', stored === 'compact' ? 'compact' : 'comfortable');
+}
+
+function setTableDensity(density) {
+  const next = density === 'compact' ? 'compact' : 'comfortable';
+  setState('tableDensity', next);
+  try {
+    localStorage.setItem(TABLE_DENSITY_STORAGE_KEY, next);
+  } catch (_) {
+    // A browser that blocks storage still applies the density for this page load.
+  }
+  renderRequestTable();
 }
 
 function renderPageSizeOptions() {
@@ -329,23 +400,90 @@ async function changeRequestPage(delta) {
   renderRequestTable();
 }
 
-function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex, showRoute = false) {
+const REQUEST_SORT_ACCESSORS = {
+  route: row => String(row.routeId || ''),
+  method: row => String(row.requestMethod || ''),
+  path: row => String(row.requestPath || ''),
+  response: row => Number(row.responseStatusCode) || 0,
+  duration: row => (row.durationMs == null ? -1 : Number(row.durationMs)),
+  size: row => Number(row.responseSizeBytes || 0),
+  client: row => String(row.clientAddress || ''),
+  started: row => String(row.startedAt || '')
+};
+
+const REQUEST_TABLE_COLUMNS = [
+  ['route', 'Route'],
+  ['method', 'Method'],
+  ['path', 'Path'],
+  ['response', 'Response'],
+  ['duration', 'Duration'],
+  ['size', 'Size'],
+  ['client', 'Client'],
+  ['started', 'Started']
+];
+
+/**
+ * Sorts the rows of the current page. The sort is stable: rows that compare
+ * equal keep the order the server sent.
+ */
+function sortRequestRows(rows, sortKey, sortDirection) {
+  const list = Array.isArray(rows) ? rows.slice() : [];
+  const accessor = REQUEST_SORT_ACCESSORS[sortKey];
+  if (!accessor) return list;
+  const factor = sortDirection === 'asc' ? 1 : -1;
+  return list
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => {
+      const a = accessor(left.row);
+      const b = accessor(right.row);
+      if (a < b) return -factor;
+      if (a > b) return factor;
+      return left.index - right.index;
+    })
+    .map(entry => entry.row);
+}
+
+function buildRequestSortHeader(key, label, sortKey, sortDirection) {
+  const th = document.createElement('th');
+  th.dataset.action = 'sort-requests';
+  th.dataset.sortKey = key;
+  th.tabIndex = 0;
+  th.className = 'sortable-header';
+  th.title = 'Sort the requests on this page';
+  const isActive = key === sortKey;
+  th.setAttribute('aria-sort', isActive ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
+  if (isActive) th.classList.add('is-sorted');
+
+  const text = document.createElement('span');
+  text.textContent = label;
+  th.appendChild(text);
+  if (isActive) {
+    th.appendChild(buildIcon(sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'));
+  }
+  return th;
+}
+
+function buildRequestTableElement(pageItems, activeSession, activeExchangeIndex, showRoute = false, viewOptions = {}) {
+  const sortKey = viewOptions.sortKey || null;
+  const sortDirection = viewOptions.sortDirection === 'asc' ? 'asc' : 'desc';
+  const density = viewOptions.density === 'compact' ? 'compact' : 'comfortable';
+
   const table = document.createElement('table');
-  table.className = 'request-table';
+  table.className = 'request-table' + (density === 'compact' ? ' request-table-compact' : '');
+  table.dataset.density = density;
+
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  const labels = showRoute
-    ? ['Route', 'Method', 'Path', 'Response', 'Duration', 'Size', 'Client', 'Started']
-    : ['Method', 'Path', 'Response', 'Duration', 'Size', 'Client', 'Started'];
-  for (const label of labels) {
-    const th = document.createElement('th');
-    th.textContent = label;
-    headerRow.appendChild(th);
+  const columns = showRoute
+    ? REQUEST_TABLE_COLUMNS
+    : REQUEST_TABLE_COLUMNS.filter(column => column[0] !== 'route');
+  for (const [key, label] of columns) {
+    headerRow.appendChild(buildRequestSortHeader(key, label, sortKey, sortDirection));
   }
   thead.appendChild(headerRow);
 
   const tbody = document.createElement('tbody');
-  for (const request of pageItems) {
+  for (const request of sortRequestRows(pageItems, sortKey, sortDirection)) {
     const row = document.createElement('tr');
     const exchangeIndex = Number(request.exchangeIndex || 0);
     row.className = `session-entry${request.sessionId === activeSession && exchangeIndex === activeExchangeIndex ? ' active' : ''}`;
@@ -488,7 +626,7 @@ function buildDurationCell(ms) {
     span.className = 'muted';
     span.textContent = '—';
   } else {
-    span.className = value < 200 ? 'timing-fast' : value < 1000 ? 'timing-medium' : 'timing-slow';
+    span.className = latencyClass(value);
     span.textContent = value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(1)} s`;
   }
   cell.appendChild(span);

@@ -207,13 +207,33 @@ function formatTime(value) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+const LATENCY_MODERATE_MS = 300;
+const LATENCY_SLOW_MS = 1000;
+const LATENCY_LEVEL_CLASS = {
+  fast: 'timing-fast',
+  moderate: 'timing-medium',
+  slow: 'timing-slow'
+};
+
+function latencyLevel(durationMs) {
+  if (durationMs == null) return null;
+  const value = Number(durationMs);
+  if (Number.isNaN(value)) return null;
+  if (value >= LATENCY_SLOW_MS) return 'slow';
+  if (value >= LATENCY_MODERATE_MS) return 'moderate';
+  return 'fast';
+}
+
+function latencyClass(durationMs) {
+  return LATENCY_LEVEL_CLASS[latencyLevel(durationMs)] || 'muted';
+}
+
 function formatDuration(ms) {
   if (ms == null) return '<span class="muted">—</span>';
   const n = Number(ms);
   if (isNaN(n)) return '<span class="muted">—</span>';
-  const cls = n < 200 ? 'timing-fast' : n < 1000 ? 'timing-medium' : 'timing-slow';
   const label = n < 1000 ? n + ' ms' : (n / 1000).toFixed(1) + ' s';
-  return `<span class="${cls}">${escapeHtml(label)}</span>`;
+  return `<span class="${latencyClass(n)}">${escapeHtml(label)}</span>`;
 }
 
 function formatBytes(bytes) {
@@ -290,7 +310,14 @@ const ICON_PATHS = {
   grip: '<circle cx="9" cy="6" r="1.2"/><circle cx="9" cy="12" r="1.2"/><circle cx="9" cy="18" r="1.2"/><circle cx="15" cy="6" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="15" cy="18" r="1.2"/>',
   expand: '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>',
   upload: '<path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/>',
-  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  warning: '<path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  check: '<path d="m20 6-11 11-5-5"/>',
+  'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+  'chevron-up': '<path d="m18 15-6-6-6 6"/>',
+  command: '<path d="M15 6a3 3 0 1 1 3 3h-3Zm0 0v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12"/>',
+  activity: '<path d="M3 12h4l3 8 4-16 3 8h4"/>'
 };
 
 function buildIcon(name) {
@@ -324,6 +351,72 @@ function setButtonContent(button, label, iconName = '', options = {}) {
     button.title = options.title;
   }
   return button;
+}
+
+const SKELETON_VARIANTS = {
+  'route-list': ['skeleton-line-md', 'skeleton-line-lg', 'skeleton-line-sm'],
+  table: ['skeleton-line-sm', 'skeleton-line-lg', 'skeleton-line-md'],
+  payload: ['skeleton-line-lg', 'skeleton-line-lg', 'skeleton-line-md']
+};
+
+function buildSkeleton(variant, rowCount = 3) {
+  const widths = SKELETON_VARIANTS[variant] || SKELETON_VARIANTS.table;
+  const rows = Math.max(1, Number(rowCount) || 1);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'skeleton skeleton-' + (SKELETON_VARIANTS[variant] ? variant : 'table');
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.dataset.skeletonRows = String(rows);
+  for (let index = 0; index < rows; index += 1) {
+    const row = document.createElement('div');
+    row.className = 'skeleton-row';
+    widths.forEach(width => {
+      const line = document.createElement('div');
+      line.className = 'skeleton-line ' + width;
+      row.appendChild(line);
+    });
+    wrapper.appendChild(row);
+  }
+  return wrapper;
+}
+
+function buildErrorState(message, retryLabel = 'Retry', onRetry = null) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'error-state';
+  wrapper.setAttribute('role', 'alert');
+
+  const iconWrap = document.createElement('div');
+  iconWrap.className = 'error-state-icon';
+  iconWrap.appendChild(buildIcon('warning'));
+  wrapper.appendChild(iconWrap);
+
+  const text = document.createElement('strong');
+  text.className = 'error-state-message';
+  text.textContent = message;
+  wrapper.appendChild(text);
+
+  if (onRetry) {
+    const retry = document.createElement('button');
+    retry.className = 'utility';
+    retry.dataset.action = 'retry';
+    setButtonContent(retry, retryLabel, 'refresh');
+    retry.addEventListener('click', onRetry);
+    wrapper.appendChild(retry);
+  }
+  return wrapper;
+}
+
+function hydrateStaticIcons(root = document) {
+  const targets = root.querySelectorAll('[data-icon]');
+  targets.forEach(target => {
+    const iconName = target.dataset.icon;
+    if (!iconName) return;
+    const label = target.dataset.iconLabel || '';
+    setButtonContent(target, label, iconName, {
+      ariaLabel: target.getAttribute('aria-label') || '',
+      title: target.title || ''
+    });
+  });
+  return targets.length;
 }
 
 function markStoredSecret(hintId, configured) {

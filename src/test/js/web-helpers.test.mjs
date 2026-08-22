@@ -160,6 +160,12 @@ class FakeNode {
     this.attributes[name] = String(value);
   }
 
+  getAttribute(name) {
+    return Object.prototype.hasOwnProperty.call(this.attributes, name)
+      ? this.attributes[name]
+      : null;
+  }
+
   addEventListener(type, listener) {
     this.listeners[type] = listener;
   }
@@ -313,6 +319,8 @@ function loadWebHelpers() {
   loadScript(context, 'route-modal.js');
   loadScript(context, 'sessions.js');
   loadScript(context, 'details.js');
+  loadScript(context, 'overview.js');
+  loadScript(context, 'command-palette.js');
   loadScript(context, 'actions.js');
   return context;
 }
@@ -885,4 +893,339 @@ test('buildRouteHeaderViewModel splits route health from active selection contex
   assert.equal(model.activeSelection.clientAddress, '127.0.0.1:54000');
   assert.equal(model.activeSelection.statusCode, '');
   assert.equal(model.activeSelection.durationMs, null);
+});
+
+test('buildIcon returns an svg element with the requested name', () => {
+  const ctx = loadWebHelpers();
+
+  const svg = ctx.buildIcon('search');
+
+  assert.equal(svg.tagName, 'svg');
+  assert.equal(svg.attributes.class, 'icon');
+  assert.equal(svg.attributes.viewBox, '0 0 24 24');
+  assert.equal(svg.attributes['aria-hidden'], 'true');
+  assert.ok(svg.innerHTML.includes('circle'));
+});
+
+test('buildIcon falls back to a generic glyph for an unknown name', () => {
+  const ctx = loadWebHelpers();
+
+  const unknown = ctx.buildIcon('definitely-not-an-icon');
+  const fallback = ctx.buildIcon('file');
+
+  assert.equal(unknown.innerHTML, fallback.innerHTML);
+});
+
+test('buildSkeleton renders the requested row count', () => {
+  const ctx = loadWebHelpers();
+
+  const skeleton = ctx.buildSkeleton('table', 5);
+
+  assert.equal(skeleton.className, 'skeleton skeleton-table');
+  assert.equal(skeleton.attributes['aria-hidden'], 'true');
+  assert.equal(skeleton.children.length, 5);
+  assert.ok(skeleton.children.every(row => row.className === 'skeleton-row'));
+  assert.ok(skeleton.children[0].children.every(line => line.className.startsWith('skeleton-line')));
+
+  const unknownVariant = ctx.buildSkeleton('nope', 0);
+  assert.equal(unknownVariant.className, 'skeleton skeleton-table');
+  assert.equal(unknownVariant.children.length, 1);
+});
+
+test('buildErrorState renders the message and wires the retry action', () => {
+  const ctx = loadWebHelpers();
+  let retries = 0;
+
+  const state = ctx.buildErrorState('Could not load this data.', 'Retry', () => { retries += 1; });
+
+  assert.equal(state.className, 'error-state');
+  assert.equal(state.attributes.role, 'alert');
+  const message = state.children.find(child => child.className === 'error-state-message');
+  assert.equal(message.textContent, 'Could not load this data.');
+
+  const retryButton = state.children.find(child => child.dataset.action === 'retry');
+  assert.ok(retryButton, 'expected a retry button');
+  retryButton.listeners.click();
+  assert.equal(retries, 1);
+
+  const withoutRetry = ctx.buildErrorState('Could not load this data.', 'Retry', null);
+  assert.equal(withoutRetry.children.some(child => child.dataset.action === 'retry'), false);
+});
+
+test('hydrateStaticIcons wires every data-icon button', () => {
+  const ctx = loadWebHelpers();
+
+  const iconOnly = ctx.document.getElementById('add-route-btn');
+  iconOnly.dataset.icon = 'plus';
+  iconOnly.setAttribute('aria-label', 'Add route');
+
+  const labelled = ctx.document.getElementById('refresh-routes-btn');
+  labelled.dataset.icon = 'refresh';
+  labelled.dataset.iconLabel = 'Refresh';
+
+  const untouched = ctx.document.getElementById('route-search');
+
+  const hydrated = ctx.hydrateStaticIcons(ctx.document);
+
+  assert.equal(hydrated, 2);
+
+  assert.equal(iconOnly.children.length, 1);
+  assert.equal(iconOnly.children[0].tagName, 'svg');
+  assert.equal(iconOnly.classList.contains('icon-only'), true);
+  assert.equal(iconOnly.attributes['aria-label'], 'Add route');
+
+  assert.equal(labelled.children.length, 2);
+  assert.equal(labelled.children[0].tagName, 'svg');
+  assert.equal(labelled.children[1].className, 'button-label');
+  assert.equal(labelled.children[1].textContent, 'Refresh');
+  assert.equal(labelled.classList.contains('icon-only'), false);
+
+  assert.equal(untouched.children.length, 0);
+});
+
+test('buildOverviewViewModel computes the error rate per route', () => {
+  const ctx = loadWebHelpers();
+
+  const viewModel = ctx.buildOverviewViewModel({
+    windowMinutes: 60,
+    totals: { requests: 10, errors: 2, clientErrors: 1, p50Ms: 120, p95Ms: 900 },
+    routes: [
+      { routeId: 'route-a', listener: '127.0.0.1:9000', target: 'a.example.com:443',
+        status: 'healthy', requests: 8, errors: 0, clientErrors: 1, sparkline: [1, 2, 5] },
+      { routeId: 'route-b', listener: '127.0.0.1:9001', target: 'b.example.com:443',
+        status: 'failing', requests: 2, errors: 2, clientErrors: 0, sparkline: [0, 2] }
+    ],
+    slowestPaths: [{ method: 'GET', path: '/slow', routeId: 'route-a', p95Ms: 900, count: 3 }]
+  });
+
+  assert.equal(viewModel.empty, false);
+  assert.equal(viewModel.windowMinutes, 60);
+  assert.equal(viewModel.totals.requests, 10);
+  assert.equal(viewModel.totals.errorRate, 0.2);
+
+  assert.equal(viewModel.routes[0].routeId, 'route-a');
+  assert.equal(viewModel.routes[0].errorRate, 0);
+  assert.equal(viewModel.routes[1].routeId, 'route-b');
+  assert.equal(viewModel.routes[1].errorRate, 1);
+
+  assert.equal(viewModel.slowestPaths.length, 1);
+  assert.equal(viewModel.slowestPaths[0].path, '/slow');
+  assert.equal(viewModel.slowestPaths[0].count, 3);
+});
+
+test('buildOverviewViewModel marks a route as degraded above the error threshold', () => {
+  const ctx = loadWebHelpers();
+
+  const viewModel = ctx.buildOverviewViewModel({
+    windowMinutes: 15,
+    totals: { requests: 3, errors: 1 },
+    routes: [
+      { routeId: 'healthy-route', status: 'healthy', requests: 1, errors: 0, sparkline: [] },
+      { routeId: 'degraded-route', status: 'degraded', requests: 1, errors: 0, sparkline: [] },
+      { routeId: 'failing-route', status: 'failing', requests: 1, errors: 1, sparkline: [] },
+      { routeId: 'idle-route', status: 'idle', requests: 0, errors: 0, sparkline: [] }
+    ],
+    slowestPaths: []
+  });
+
+  const byId = Object.fromEntries(viewModel.routes.map(route => [route.routeId, route]));
+  assert.equal(byId['healthy-route'].degraded, false);
+  assert.equal(byId['degraded-route'].degraded, true);
+  assert.equal(byId['failing-route'].degraded, true);
+  assert.equal(byId['idle-route'].degraded, false);
+  assert.equal(byId['idle-route'].errorRate, 0);
+});
+
+test('buildSparkline renders one point per bucket', () => {
+  const ctx = loadWebHelpers();
+
+  const sparkline = ctx.buildSparkline([0, 3, 1, 6], { width: 80, height: 20 });
+
+  assert.equal(sparkline.tagName, 'svg');
+  assert.equal(sparkline.attributes['aria-hidden'], 'true');
+  assert.equal(sparkline.children.length, 4);
+  assert.equal(sparkline.children[0].attributes.class, 'sparkline-bar sparkline-bar-empty');
+  assert.equal(sparkline.children[3].attributes.class, 'sparkline-bar');
+  // The tallest bucket fills the full height.
+  assert.equal(sparkline.children[3].attributes.height, '20');
+  assert.equal(sparkline.children[3].attributes.y, '0');
+
+  assert.equal(ctx.buildSparkline([], {}).children.length, 0);
+});
+
+test('buildOverviewViewModel returns an empty state flag when there is no traffic', () => {
+  const ctx = loadWebHelpers();
+
+  const viewModel = ctx.buildOverviewViewModel({
+    windowMinutes: 1440,
+    totals: { requests: 0, errors: 0, p50Ms: null, p95Ms: null },
+    routes: [{ routeId: 'route-a', status: 'idle', requests: 0, errors: 0, sparkline: [0, 0] }],
+    slowestPaths: []
+  });
+
+  assert.equal(viewModel.empty, true);
+  assert.equal(viewModel.totals.errorRate, 0);
+  assert.equal(viewModel.routes[0].status, 'idle');
+
+  const missingPayload = ctx.buildOverviewViewModel(null);
+  assert.equal(missingPayload.empty, true);
+  assert.equal(missingPayload.routes.length, 0);
+  assert.equal(missingPayload.slowestPaths.length, 0);
+});
+
+function requestRow(overrides = {}) {
+  return {
+    sessionId: overrides.sessionId || 's-1',
+    exchangeIndex: 0,
+    routeId: 'route-a',
+    requestMethod: 'GET',
+    requestPath: '/one',
+    responseStatusCode: '200',
+    durationMs: 100,
+    responseSizeBytes: 100,
+    clientAddress: '127.0.0.1:1',
+    startedAt: '2026-08-21T12:00:00Z',
+    ...overrides
+  };
+}
+
+test('sortRequestRows orders by duration in both directions', () => {
+  const ctx = loadWebHelpers();
+  const rows = [
+    requestRow({ sessionId: 's-a', durationMs: 500 }),
+    requestRow({ sessionId: 's-b', durationMs: 20 }),
+    requestRow({ sessionId: 's-c', durationMs: 1500 })
+  ];
+
+  const descending = ctx.sortRequestRows(rows, 'duration', 'desc');
+  assert.deepEqual(Array.from(descending, row => row.sessionId), ['s-c', 's-a', 's-b']);
+
+  const ascending = ctx.sortRequestRows(rows, 'duration', 'asc');
+  assert.deepEqual(Array.from(ascending, row => row.sessionId), ['s-b', 's-a', 's-c']);
+
+  // An unknown key leaves the server order untouched.
+  assert.deepEqual(
+    Array.from(ctx.sortRequestRows(rows, 'nope', 'desc'), row => row.sessionId),
+    ['s-a', 's-b', 's-c']
+  );
+  // The input array is not mutated.
+  assert.deepEqual(Array.from(rows, row => row.sessionId), ['s-a', 's-b', 's-c']);
+});
+
+test('sortRequestRows keeps a stable order for equal keys', () => {
+  const ctx = loadWebHelpers();
+  const rows = [
+    requestRow({ sessionId: 's-a', durationMs: 100 }),
+    requestRow({ sessionId: 's-b', durationMs: 100 }),
+    requestRow({ sessionId: 's-c', durationMs: 100 }),
+    requestRow({ sessionId: 's-d', durationMs: 900 })
+  ];
+
+  assert.deepEqual(
+    Array.from(ctx.sortRequestRows(rows, 'duration', 'desc'), row => row.sessionId),
+    ['s-d', 's-a', 's-b', 's-c']
+  );
+  assert.deepEqual(
+    Array.from(ctx.sortRequestRows(rows, 'duration', 'asc'), row => row.sessionId),
+    ['s-a', 's-b', 's-c', 's-d']
+  );
+});
+
+test('latencyLevel classifies a duration against the thresholds', () => {
+  const ctx = loadWebHelpers();
+
+  assert.equal(ctx.latencyLevel(0), 'fast');
+  assert.equal(ctx.latencyLevel(299), 'fast');
+  assert.equal(ctx.latencyLevel(300), 'moderate');
+  assert.equal(ctx.latencyLevel(999), 'moderate');
+  assert.equal(ctx.latencyLevel(1000), 'slow');
+  assert.equal(ctx.latencyLevel(5000), 'slow');
+  assert.equal(ctx.latencyLevel(null), null);
+  assert.equal(ctx.latencyLevel('oops'), null);
+
+  assert.equal(ctx.latencyClass(50), 'timing-fast');
+  assert.equal(ctx.latencyClass(500), 'timing-medium');
+  assert.equal(ctx.latencyClass(2000), 'timing-slow');
+  assert.equal(ctx.latencyClass(null), 'muted');
+});
+
+test('buildRequestTableElement applies the compact density class', () => {
+  const ctx = loadWebHelpers();
+  const rows = [requestRow()];
+
+  const compact = ctx.buildRequestTableElement(rows, null, 0, false, { density: 'compact' });
+  assert.equal(compact.className, 'request-table request-table-compact');
+  assert.equal(compact.dataset.density, 'compact');
+
+  const comfortable = ctx.buildRequestTableElement(rows, null, 0, false, { density: 'comfortable' });
+  assert.equal(comfortable.className, 'request-table');
+  assert.equal(comfortable.dataset.density, 'comfortable');
+
+  // An unknown density falls back to comfortable.
+  assert.equal(ctx.buildRequestTableElement(rows, null, 0, false, {}).dataset.density, 'comfortable');
+});
+
+test('buildRequestTableElement marks the active sort column', () => {
+  const ctx = loadWebHelpers();
+  const rows = [requestRow()];
+
+  const table = ctx.buildRequestTableElement(rows, null, 0, false, {
+    sortKey: 'duration',
+    sortDirection: 'asc'
+  });
+  const headers = table.querySelectorAll('th');
+  assert.equal(headers.length, 7);
+
+  const durationHeader = headers.find(header => header.dataset.sortKey === 'duration');
+  assert.equal(durationHeader.attributes['aria-sort'], 'ascending');
+  assert.equal(durationHeader.classList.contains('is-sorted'), true);
+  assert.equal(durationHeader.dataset.action, 'sort-requests');
+
+  const pathHeader = headers.find(header => header.dataset.sortKey === 'path');
+  assert.equal(pathHeader.attributes['aria-sort'], 'none');
+  assert.equal(pathHeader.classList.contains('is-sorted'), false);
+
+  // The route column only appears when the table shows every route.
+  const withRoute = ctx.buildRequestTableElement(rows, null, 0, true, {});
+  assert.equal(withRoute.querySelectorAll('th').length, 8);
+});
+
+test('buildPaletteCommands includes one command per route', () => {
+  const ctx = loadWebHelpers();
+
+  const withoutRoutes = ctx.buildPaletteCommands({});
+  const routeCommands = withoutRoutes.filter(command => command.id.startsWith('open-route:'));
+  assert.equal(routeCommands.length, 0);
+  assert.ok(withoutRoutes.some(command => command.label === 'Go to Overview'));
+  assert.ok(withoutRoutes.some(command => command.label === 'Clear filters'));
+  assert.ok(withoutRoutes.some(command => command.label === 'Toggle theme'));
+
+  const withRoutes = ctx.buildPaletteCommands({
+    proxyConfig: { routes: [{ id: 'route-a' }, { id: 'route-b' }] }
+  });
+  const openCommands = withRoutes.filter(command => command.id.startsWith('open-route:'));
+  assert.equal(openCommands.length, 2);
+  assert.deepEqual(Array.from(openCommands, command => command.label),
+    ['Open route: route-a', 'Open route: route-b']);
+  assert.ok(openCommands.every(command => typeof command.run === 'function'));
+});
+
+test('filterPaletteCommands matches on the command label', () => {
+  const ctx = loadWebHelpers();
+  const commands = ctx.buildPaletteCommands({
+    proxyConfig: { routes: [{ id: 'payments-api' }, { id: 'billing-api' }] }
+  });
+
+  assert.deepEqual(
+    Array.from(ctx.filterPaletteCommands(commands, 'payments'), command => command.label),
+    ['Open route: payments-api']
+  );
+  // The match ignores case and surrounding blanks.
+  assert.deepEqual(
+    Array.from(ctx.filterPaletteCommands(commands, '  THEME  '), command => command.label),
+    ['Toggle theme']
+  );
+  assert.equal(ctx.filterPaletteCommands(commands, '').length, commands.length);
+  assert.equal(ctx.filterPaletteCommands(commands, 'no-such-command').length, 0);
+  assert.equal(ctx.filterPaletteCommands(null, 'x').length, 0);
 });
