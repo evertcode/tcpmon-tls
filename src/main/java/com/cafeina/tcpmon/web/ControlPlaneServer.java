@@ -80,6 +80,7 @@ public final class ControlPlaneServer implements AutoCloseable {
     private final UiConfig config;
     private final SessionStore sessionStore;
     private final ReplayService replayService;
+    private final OverviewAggregator overviewAggregator;
     private final ObjectMapper objectMapper = JsonSupport.objectMapper();
     private final CopyOnWriteArrayList<SseClient> sseClients = new CopyOnWriteArrayList<>();
     private final SessionChangeListener changeListener = this::broadcastSessionChange;
@@ -98,6 +99,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         this.registry = registry;
         this.proxy = proxy;
         this.config = proxyConfig.ui();
+        this.overviewAggregator = new OverviewAggregator(sessionStore);
         this.sessionStore = sessionStore;
         this.replayService = replayService;
     }
@@ -121,6 +123,7 @@ public final class ControlPlaneServer implements AutoCloseable {
         server.createContext("/api/sessions", this::handleSessions);
         server.createContext("/api/requests", this::handleRequests);
         server.createContext("/api/request-facets", this::handleRequestFacets);
+        server.createContext("/api/overview", this::handleOverview);
         server.createContext("/api/pending/", this::handlePending);
         server.createContext("/api/replay", this::handleReplay);
         server.createContext("/api/config", this::handleConfig);
@@ -300,6 +303,41 @@ public final class ControlPlaneServer implements AutoCloseable {
         Map<String, String> params = parseQueryParams(exchange.getRequestURI().getQuery());
         String routeId = params.getOrDefault("routeId", "").trim();
         sendJson(exchange, 200, sessionStore.requestFacets(routeId));
+    }
+
+    private void handleOverview(HttpExchange exchange) throws IOException {
+        if (!requireAuth(exchange)) return;
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendJson(exchange, 405, Map.of("error", "method not allowed"));
+            return;
+        }
+        Map<String, String> params = parseQueryParams(exchange.getRequestURI().getQuery());
+        int windowMinutes = 60;
+        String requested = params.get("windowMinutes");
+        if (requested != null && !requested.isBlank()) {
+            try {
+                windowMinutes = Integer.parseInt(requested.trim());
+            } catch (NumberFormatException exception) {
+                sendJson(exchange, 400, Map.of("error", "windowMinutes must be an integer"));
+                return;
+            }
+        }
+        if (!OverviewAggregator.isValidWindow(windowMinutes)) {
+            sendJson(exchange, 400, Map.of(
+                    "error", "unsupported windowMinutes",
+                    "allowed", List.copyOf(OverviewAggregator.ALLOWED_WINDOW_MINUTES)));
+            return;
+        }
+        long start = System.currentTimeMillis();
+        OverviewAggregator.OverviewReport report = overviewAggregator.aggregate(windowMinutes);
+        if (metricsLog.isInfoEnabled()) {
+            metricsLog.info("/api/overview windowMinutes={} dbMs={} routes={} requests={}",
+                    windowMinutes,
+                    System.currentTimeMillis() - start,
+                    report.routes().size(),
+                    report.totals().requests());
+        }
+        sendJson(exchange, 200, report);
     }
 
     private void handleEvents(HttpExchange exchange) throws IOException {

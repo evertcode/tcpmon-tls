@@ -196,15 +196,19 @@ function renderRouteList() {
   container.setAttribute('role', 'list');
   container.setAttribute('aria-label', 'Routes');
   if (!routes.length) {
+    if (getState('proxyConfig') === null) {
+      container.replaceChildren(buildSkeleton('route-list', 4));
+      return;
+    }
     const query = document.getElementById('route-search').value.trim();
     if (query) {
       container.replaceChildren(buildEmptyState(`No route matches "${query}".`, 'Search checks route ID, target address, and client address.'));
     } else {
       const addBtn = document.createElement('button');
       addBtn.className = 'primary';
-      addBtn.textContent = '+ Add route';
+      setButtonContent(addBtn, 'Add route', 'plus');
       addBtn.addEventListener('click', () => openAddRouteModal());
-      container.replaceChildren(buildEmptyState('No listeners configured.', 'Add a route to bind a local listener and forward traffic to a target.', addBtn));
+      container.replaceChildren(buildEmptyState('No routes yet', 'Create your first route to start capturing traffic.', addBtn));
     }
     return;
   }
@@ -411,6 +415,24 @@ function renderConfigButton() {
   const wrap = document.createElement('div');
   wrap.className = 'topbar-tools';
 
+  const activeView = getState('activeView');
+  const viewSwitch = document.createElement('div');
+  viewSwitch.className = 'view-switch';
+  viewSwitch.setAttribute('role', 'group');
+  viewSwitch.setAttribute('aria-label', 'View');
+  for (const [view, label, iconName] of [
+    ['overview', 'Overview', 'activity'],
+    ['routes', 'Routes', 'grip']
+  ]) {
+    const viewButton = document.createElement('button');
+    viewButton.className = 'view-switch-btn' + (activeView === view ? ' is-active' : '');
+    viewButton.dataset.action = 'show-view';
+    viewButton.dataset.view = view;
+    viewButton.setAttribute('aria-pressed', activeView === view ? 'true' : 'false');
+    setButtonContent(viewButton, label, iconName);
+    viewSwitch.appendChild(viewButton);
+  }
+
   const themeCluster = document.createElement('div');
   themeCluster.className = 'theme-cluster';
 
@@ -442,7 +464,7 @@ function renderConfigButton() {
   button.className = 'utility';
   button.dataset.action = 'toggle-config-panel';
   setButtonContent(button, 'Config', 'settings');
-  wrap.append(themeCluster, button);
+  wrap.append(viewSwitch, themeCluster, button);
   el.replaceChildren(wrap);
 }
 

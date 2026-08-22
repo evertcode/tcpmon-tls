@@ -1,6 +1,11 @@
 async function loadSessionDetails(sessionId) {
   const payloadsEl = document.getElementById('payloads');
-  if (payloadsEl) payloadsEl.classList.add('loading-overlay');
+  if (payloadsEl) {
+    if (!payloadsEl.children.length) {
+      payloadsEl.replaceChildren(buildSkeleton('payload', 2));
+    }
+    payloadsEl.classList.add('loading-overlay');
+  }
   const data = await fetchJson('/api/sessions/' + sessionId);
   setState('lastLoadedSession', data);
   if (getState('activeSession') === sessionId) {

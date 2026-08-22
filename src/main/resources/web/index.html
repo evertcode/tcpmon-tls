@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="/assets/styles/app.css">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <div class="app">
     <header class="topbar">
       <div class="topbar-title">
@@ -37,29 +38,32 @@
     </header>
     <div id="config-panel-container"></div>
 
+    <section id="overview" class="overview" aria-label="Fleet overview" hidden></section>
+
     <div id="app-layout" class="layout">
-      <aside class="sidebar">
+      <nav class="sidebar" aria-label="Routes">
         <div class="sidebar-section">
           <div class="sidebar-header">
             <h2>Routes</h2>
             <div class="sidebar-header-actions">
-              <button id="new-request-btn" class="utility add-route-btn" title="New request" aria-label="New request">✎</button>
-              <button id="import-har-btn" class="utility add-route-btn" title="Import HAR" aria-label="Import HAR">⇧</button>
-              <button id="add-route-btn" class="utility add-route-btn" title="Add route" aria-label="Add route">+</button>
+              <button id="new-request-btn" class="utility add-route-btn" title="New request" aria-label="New request" data-icon="send"></button>
+              <button id="import-har-btn" class="utility add-route-btn" title="Import HAR" aria-label="Import HAR" data-icon="upload"></button>
+              <button id="add-route-btn" class="utility add-route-btn" title="Add route" aria-label="Add route" data-icon="plus"></button>
             </div>
             <input type="file" id="har-import-file-input" accept=".har,application/json" style="display:none;">
           </div>
         </div>
         <div class="sidebar-section">
           <div class="toolbar">
+            <label class="sr-only" for="route-search">Filter routes</label>
             <input id="route-search" type="search" placeholder="Search route or target">
-            <button id="refresh-routes-btn" class="utility">Refresh</button>
+            <button id="refresh-routes-btn" class="utility" data-icon="refresh" data-icon-label="Refresh"></button>
           </div>
         </div>
         <div id="routes" class="route-list"></div>
-      </aside>
+      </nav>
 
-      <main class="content">
+      <main id="main-content" class="content" tabindex="-1">
         <div id="status-banner" aria-live="polite" aria-atomic="false"></div>
         <div id="route-header"></div>
         <div id="request-table"></div>
@@ -76,7 +80,7 @@
           <strong id="route-modal-title" style="font-size:15px;">Add Route</strong>
           <div id="route-modal-summary" class="route-modal-summary" aria-live="polite"></div>
         </div>
-        <button id="route-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+        <button id="route-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog" data-icon="close"></button>
       </div>
       <div class="modal-body">
         <div id="route-modal-error" class="modal-error" role="alert"></div>
@@ -385,13 +389,13 @@
     <div class="modal-box confirm-modal-box">
       <div class="modal-hdr">
         <strong id="confirm-modal-title">Confirm action</strong>
-        <button id="confirm-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+        <button id="confirm-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog" data-icon="close"></button>
       </div>
       <div class="modal-body">
         <p id="confirm-modal-message" class="confirm-modal-message"></p>
         <div class="modal-actions">
           <button id="confirm-modal-cancel-btn" class="secondary">Cancel</button>
-          <button id="confirm-modal-confirm-btn" class="danger" data-action="confirm-delete-route">Delete route</button>
+          <button id="confirm-modal-confirm-btn" class="danger" data-action="confirm-delete-route" data-icon="trash" data-icon-label="Delete route"></button>
         </div>
       </div>
     </div>
@@ -403,12 +407,12 @@
         <div class="modal-hdr-main">
           <strong id="body-view-modal-title">Request body</strong>
         </div>
-        <button id="body-view-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+        <button id="body-view-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog" data-icon="close"></button>
       </div>
       <div class="modal-body body-view-modal-body">
         <div class="body-view-modal-toolbar">
-          <button id="body-view-modal-copy-headers-btn" class="utility" data-action="copy-current-headers">Copy headers</button>
-          <button id="body-view-modal-copy-body-btn" class="utility" data-action="copy-current-body">Copy body</button>
+          <button id="body-view-modal-copy-headers-btn" class="utility" data-action="copy-current-headers" data-icon="copy" data-icon-label="Copy headers"></button>
+          <button id="body-view-modal-copy-body-btn" class="utility" data-action="copy-current-body" data-icon="copy" data-icon-label="Copy body"></button>
         </div>
         <div id="body-view-modal-viewer-container" class="body-view-modal-viewer-container"></div>
       </div>
@@ -421,7 +425,7 @@
         <div class="modal-hdr-main">
           <strong id="replay-edit-modal-title">Edit &amp; Resend Request</strong>
         </div>
-        <button id="replay-edit-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+        <button id="replay-edit-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog" data-icon="close"></button>
       </div>
       <div class="modal-body replay-edit-modal-body">
         <div class="editor-grid">
@@ -472,7 +476,7 @@
         <div class="modal-hdr-main">
           <strong id="request-builder-modal-title">New Request</strong>
         </div>
-        <button id="request-builder-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+        <button id="request-builder-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog" data-icon="close"></button>
       </div>
       <div class="modal-body request-builder-modal-body">
         <div class="editor-grid">
@@ -524,7 +528,7 @@
         <div class="modal-hdr-main">
           <strong id="har-import-modal-title">Import HAR</strong>
         </div>
-        <button id="har-import-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog">✕</button>
+        <button id="har-import-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog" data-icon="close"></button>
       </div>
       <div class="modal-body har-import-modal-body">
         <p class="har-import-hint">Choose which captured request to open in the request builder.</p>
@@ -532,6 +536,35 @@
         <div class="modal-actions">
           <button id="har-import-cancel-btn" class="secondary">Cancel</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="command-palette" class="modal-overlay palette-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Command palette" aria-hidden="true">
+    <div class="modal-box palette-box">
+      <div class="palette-search">
+        <label class="sr-only" for="command-palette-input">Search routes and actions</label>
+        <input id="command-palette-input" type="search" placeholder="Search routes and actions..." autocomplete="off">
+      </div>
+      <div id="command-palette-list" class="palette-list" role="listbox" aria-label="Commands"></div>
+    </div>
+  </div>
+
+  <div id="shortcuts-modal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title" aria-hidden="true">
+    <div class="modal-box">
+      <div class="modal-hdr">
+        <strong id="shortcuts-modal-title">Keyboard shortcuts</strong>
+        <button id="shortcuts-modal-close-btn" class="utility modal-close-btn" aria-label="Close dialog" data-icon="close"></button>
+      </div>
+      <div class="modal-body">
+        <dl class="shortcut-list">
+          <dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Open command palette</dd>
+          <dt><kbd>?</kbd></dt><dd>Show keyboard shortcuts</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close dialog</dd>
+          <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between rows</dd>
+          <dt><kbd>Alt</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Reorder route</dd>
+          <dt><kbd>/</kbd></dt><dd>Focus route search</dd>
+        </dl>
       </div>
     </div>
   </div>
@@ -548,6 +581,8 @@
   <script defer src="/assets/js/replay-edit-modal.js"></script>
   <script defer src="/assets/js/request-builder-modal.js"></script>
   <script defer src="/assets/js/har-import-modal.js"></script>
+  <script defer src="/assets/js/overview.js"></script>
+  <script defer src="/assets/js/command-palette.js"></script>
   <script defer src="/assets/js/app.js"></script>
 </body>
 </html>

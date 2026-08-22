@@ -37,6 +37,15 @@ window.uiState = {
   requestTableRefreshInFlight: false,
   authPromptInFlight: null,
   configPanelOpen: false,
+  activeView: 'routes',
+  overviewData: null,
+  overviewWindowMinutes: 60,
+  overviewRefreshInFlight: false,
+  scheduledOverviewRefreshTimer: null,
+  requestSortKey: null,
+  requestSortDirection: 'desc',
+  tableDensity: 'comfortable',
+  paletteOpen: false,
   payloadHeadersExpanded: {
     Request: true,
     Response: true

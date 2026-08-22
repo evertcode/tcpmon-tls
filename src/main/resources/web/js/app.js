@@ -41,6 +41,27 @@ function renderBanner() {
   el.replaceChildren(...fragments);
 }
 
+function applyActiveView() {
+  const view = getState('activeView');
+  const overview = document.getElementById('overview');
+  const layout = document.getElementById('app-layout');
+  if (overview) overview.hidden = view !== 'overview';
+  if (layout) layout.hidden = view === 'overview';
+}
+
+function setActiveView(view) {
+  const next = view === 'overview' ? 'overview' : 'routes';
+  if (getState('activeView') === next) return Promise.resolve();
+  setState('activeView', next);
+  applyActiveView();
+  renderConfigButton();
+  updateTopbarSubtitle();
+  if (next === 'overview') {
+    return loadOverview();
+  }
+  return renderApp();
+}
+
 function renderApp(options = {}) {
   const activeSession = getState('activeSession');
   const settings = {
@@ -51,8 +72,12 @@ function renderApp(options = {}) {
     detailEmptyMessage: 'No requests for the selected route.',
     ...options
   };
+  applyActiveView();
   if (settings.banner) {
     renderBanner();
+  }
+  if (getState('activeView') === 'overview') {
+    return Promise.resolve();
   }
   if (settings.list) {
     renderRouteList();
@@ -94,46 +119,7 @@ function parseBooleanAttr(value) {
 }
 
 function initializeStaticButtonIcons() {
-  setButtonContent(document.getElementById('add-route-btn'), '', 'plus', {
-    title: 'Add route',
-    ariaLabel: 'Add route'
-  });
-  setButtonContent(document.getElementById('refresh-routes-btn'), 'Refresh', 'refresh');
-  setButtonContent(document.getElementById('route-modal-close-btn'), '', 'close', {
-    title: 'Close dialog',
-    ariaLabel: 'Close dialog'
-  });
-  setButtonContent(document.getElementById('confirm-modal-close-btn'), '', 'close', {
-    title: 'Close dialog',
-    ariaLabel: 'Close dialog'
-  });
-  setButtonContent(document.getElementById('confirm-modal-confirm-btn'), 'Delete route', 'trash');
-  setButtonContent(document.getElementById('body-view-modal-close-btn'), '', 'close', {
-    title: 'Close dialog',
-    ariaLabel: 'Close dialog'
-  });
-  setButtonContent(document.getElementById('body-view-modal-copy-headers-btn'), 'Copy headers', 'copy');
-  setButtonContent(document.getElementById('body-view-modal-copy-body-btn'), 'Copy body', 'copy');
-  setButtonContent(document.getElementById('replay-edit-modal-close-btn'), '', 'close', {
-    title: 'Close dialog',
-    ariaLabel: 'Close dialog'
-  });
-  setButtonContent(document.getElementById('new-request-btn'), '', 'send', {
-    title: 'New request',
-    ariaLabel: 'New request'
-  });
-  setButtonContent(document.getElementById('request-builder-modal-close-btn'), '', 'close', {
-    title: 'Close dialog',
-    ariaLabel: 'Close dialog'
-  });
-  setButtonContent(document.getElementById('import-har-btn'), '', 'upload', {
-    title: 'Import HAR',
-    ariaLabel: 'Import HAR'
-  });
-  setButtonContent(document.getElementById('har-import-modal-close-btn'), '', 'close', {
-    title: 'Close dialog',
-    ariaLabel: 'Close dialog'
-  });
+  return hydrateStaticIcons(document);
 }
 
 const THEME_STORAGE_KEY = 'tcpmon-theme-preference';
@@ -202,6 +188,23 @@ function bindUiEvents() {
     routesContainer.addEventListener('drop', handleRouteDrop);
     routesContainer.addEventListener('dragend', handleRouteDragEnd);
   }
+
+  const commandPalette = document.getElementById('command-palette');
+  if (commandPalette) {
+    commandPalette.addEventListener('click', event => {
+      if (event.target === commandPalette) closeCommandPalette();
+    });
+  }
+
+  const shortcutsModal = document.getElementById('shortcuts-modal');
+  if (shortcutsModal) {
+    shortcutsModal.addEventListener('click', event => {
+      if (event.target === shortcutsModal) closeShortcutsDialog();
+    });
+  }
+
+  const shortcutsCloseBtn = document.getElementById('shortcuts-modal-close-btn');
+  if (shortcutsCloseBtn) shortcutsCloseBtn.addEventListener('click', () => closeShortcutsDialog());
 
   const refreshRoutesBtn = document.getElementById('refresh-routes-btn');
   if (refreshRoutesBtn) refreshRoutesBtn.addEventListener('click', () => refreshSessions(true));
@@ -342,6 +345,9 @@ function bindUiEvents() {
       applyThemePreference(event.target.value);
       renderConfigButton();
     }
+    if (event.target && event.target.id === 'overview-window') {
+      setOverviewWindow(event.target.value);
+    }
   });
 
   for (const fieldId of [
@@ -369,6 +375,23 @@ function bindUiEvents() {
     if (!actionEl) return;
     const { action } = actionEl.dataset;
     switch (action) {
+      case 'show-view':
+        setActiveView(actionEl.dataset.view);
+        break;
+      case 'sort-requests':
+        toggleRequestSort(actionEl.dataset.sortKey);
+        break;
+      case 'run-palette-command':
+        runPaletteCommand(actionEl.dataset.commandId);
+        break;
+      case 'refresh-overview':
+        setState('overviewData', null);
+        loadOverview();
+        break;
+      case 'open-route':
+        await setActiveView('routes');
+        selectRoute(actionEl.dataset.routeId);
+        break;
       case 'select-route':
         selectRoute(actionEl.dataset.routeId);
         break;
@@ -488,6 +511,51 @@ function bindUiEvents() {
 
   document.addEventListener('keydown', event => {
     const modal = getOpenModal();
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (getState('paletteOpen')) {
+        closeCommandPalette();
+      } else {
+        openCommandPalette();
+      }
+      return;
+    }
+
+    if (getState('paletteOpen')) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        movePaletteSelection(1);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        movePaletteSelection(-1);
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        runActivePaletteCommand();
+        return;
+      }
+    }
+
+    if (!modal && !isTextEntryTarget(event.target)) {
+      if (event.key === '?') {
+        event.preventDefault();
+        openShortcutsDialog();
+        return;
+      }
+      if (event.key === '/') {
+        const search = document.getElementById('route-search');
+        if (search) {
+          event.preventDefault();
+          search.focus();
+          return;
+        }
+      }
+    }
+
     if (event.key === 'Escape') {
       if (modal) {
         if (modal.id === 'route-modal') {
@@ -502,6 +570,10 @@ function bindUiEvents() {
           closeRequestBuilderModal();
         } else if (modal.id === 'har-import-modal') {
           closeHarImportModal();
+        } else if (modal.id === 'command-palette') {
+          closeCommandPalette();
+        } else if (modal.id === 'shortcuts-modal') {
+          closeShortcutsDialog();
         }
       }
     }
@@ -532,11 +604,18 @@ function bindUiEvents() {
     if (event.target.id === 'request-search') {
       debounceRequestSearch();
     }
+    if (event.target.id === 'command-palette-input') {
+      renderPaletteResults();
+    }
   });
 
   document.addEventListener('change', event => {
     if (event.target.id === 'request-search-all-routes') {
       toggleSearchAllRoutes(event.target.checked);
+      return;
+    }
+    if (event.target.id === 'request-density') {
+      setTableDensity(event.target.value);
       return;
     }
     if (event.target.id === 'request-method-filter' || event.target.id === 'request-status-code-filter' || event.target.id === 'request-page-size') {
@@ -567,6 +646,12 @@ function moveListFocus(event, selector) {
     next.scrollIntoView({ block: 'nearest' });
   }
   return true;
+}
+
+function isTextEntryTarget(target) {
+  if (!target || !target.tagName) return false;
+  const tag = String(target.tagName).toLowerCase();
+  return tag === 'input' || tag === 'textarea' || target.isContentEditable === true;
 }
 
 function getOpenModal() {
@@ -658,6 +743,10 @@ async function handleSessionChange(event) {
   } catch (error) {
     return;
   }
+  if (getState('activeView') === 'overview') {
+    scheduleOverviewRefresh();
+    return;
+  }
   const activeSession = getState('activeSession');
   const activeRoute = getState('activeRoute');
   const affectsActiveSession = Boolean(activeSession && payload.sessionId === activeSession);
@@ -694,6 +783,17 @@ async function handleSessionChange(event) {
   if (affectsActiveRoute) {
     scheduleListRefresh();
   }
+}
+
+function scheduleOverviewRefresh() {
+  if (getState('scheduledOverviewRefreshTimer')) return;
+  setState('scheduledOverviewRefreshTimer', setTimeout(() => {
+    setState('scheduledOverviewRefreshTimer', null);
+    if (getState('activeView') !== 'overview') return;
+    loadOverview().catch(() => {
+      // The error state is already rendered by loadOverview.
+    });
+  }, 2000));
 }
 
 function scheduleDetailRefresh() {
@@ -810,6 +910,10 @@ function scheduleRequestTableRefresh() {
 function updateTopbarSubtitle() {
   const el = document.getElementById('topbar-subtitle');
   if (!el) return;
+  if (getState('activeView') === 'overview') {
+    el.textContent = 'Fleet health across every route. Select a row to inspect that route.';
+    return;
+  }
   if (getState('searchAllRoutes')) {
     const facets = getState('requestFacets') || {};
     const total = Number(facets.totalRequests || getState('requestRows').length || 0);
@@ -858,5 +962,8 @@ async function clearRequestFilters() {
 bindUiEvents();
 initializeTheme();
 initializeRouteOrder();
+initializeOverviewWindow();
+initializeTableDensity();
 initializeStaticButtonIcons();
+applyActiveView();
 initApp();
